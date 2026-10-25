@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="fr">
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bun · HLS lab</title>
+  <style>
+    body {
+      background: #10191b;
+      color: #e3efed;
+      font: 16px system-ui;
+      margin: 0;
+      padding: 32px;
+      max-width: 1100px;
+      margin: auto;
+    }
+    h1 {
+      font-size: 42px;
+    }
+    section {
+      background: #1c292b;
+      border: 1px solid #35504d;
+      padding: 24px;
+      border-radius: 18px;
+      margin: 18px 0;
+    }
+    button,
+    input {
+      font: inherit;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #66817e;
+    }
+    button {
+      background: #a3eed9;
+      color: #10201c;
+      cursor: pointer;
+    }
+    input {
+      background: #10191b;
+      color: white;
+      width: 65%;
+      box-sizing: border-box;
+    }
+    video,
+    canvas {
+      width: 100%;
+      max-height: 400px;
+      background: #000;
+      border-radius: 12px;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #b8dbd2;
+    }
+    small {
+      color: #a1b8b3;
+    }
+    a {
+      color: #a3eed9;
+    }
+  </style>
+  <h1>Bun · HLS lab</h1>
+  <p>Chrome réel · cookies Bun · adaptateur HLS du fork · exploration vidéo</p>
+  <section>
+    <h2>État préchargé</h2>
+    <pre id="status">Chargement…</pre>
+    <a href="https://www.crunchyroll.com/fr/watch/GE00389313JAJP/the-god-who-destroys" target="_blank" rel="noreferrer"
+      >Ouvrir la vidéo Crunchyroll dans Chrome</a
+    >
+    <p>
+      <small
+        >Les cookies restent côté Bun. La lecture réelle nécessite le manifeste autorisé du lecteur officiel. Les
+        résultats synthétiques ne prouvent pas une migration API.</small
+      >
+    </p>
+  </section>
+  <section>
+    <h2>Lecteur HLS</h2>
+    <input id="source" placeholder="URL .m3u8 autorisée" /><button id="load">Charger</button>
+    <p id="hlsStatus">Décodeur local préchargé.</p>
+    <video id="player" controls playsinline></video>
+    <pre id="mediaInfo"></pre>
+  </section>
+  <section>
+    <h2>Video explore</h2>
+    <input id="file" type="file" accept="video/*" /><button id="demo">Créer une vidéo locale</button>
+    <p><small>Métadonnées, codecs, lecture et image de la vidéo sélectionnée.</small></p>
+    <canvas id="frame" width="640" height="360"></canvas><button id="capture">Capturer l’image courante</button>
+    <pre id="explore"></pre>
+  </section>
+  <script src="./hls.js"></script>
+  <script type="module">
+    import { attachHlsPlayback } from "./adapter.js";
+    const player = document.querySelector("#player"),
+      report = document.querySelector("#explore");
+    const status = await (await fetch("./status")).json();
+    document.querySelector("#status").textContent = JSON.stringify(status, null, 2);
+    let playback, blobURL;
+    function clear() {
+      playback?.destroy();
+      playback = undefined;
+      if (blobURL) {
+        URL.revokeObjectURL(blobURL);
+        blobURL = undefined;
+      }
+      player.removeAttribute("src");
+      player.load();
+    }
+    function inspect() {
+      const quality = player.getVideoPlaybackQuality();
+      report.textContent = JSON.stringify(
+        {
+          width: player.videoWidth,
+          height: player.videoHeight,
+          duration: Number.isFinite(player.duration) ? player.duration : null,
+          currentTime: player.currentTime,
+          readyState: player.readyState,
+          decodedFrames: quality.totalVideoFrames,
+          droppedFrames: quality.droppedVideoFrames,
+          codecs: {
+            h264: player.canPlayType('video/mp4; codecs="avc1.42E01E"'),
+            vp9: player.canPlayType('video/webm; codecs="vp9"'),
+          },
+          mse: typeof MediaSource !== "undefined",
+        },
+        null,
+        2,
+      );
+    }
+    for (const event of ["loadedmetadata", "timeupdate", "error"]) player.addEventListener(event, inspect);
+    function loadHls(src) {
+      clear();
+      document.querySelector("#hlsStatus").textContent = "Chargement du manifeste…";
+      playback = attachHlsPlayback(player, Hls, {
+        src: new URL(src, location.origin).href,
+        config: { enableWorker: false },
+        beforeStart(h) {
+          h.on(Hls.Events.MANIFEST_PARSED, () => {
+            document.querySelector("#hlsStatus").textContent = "Manifeste chargé · " + h.levels.length + " qualité(s)";
+            document.querySelector("#mediaInfo").textContent = JSON.stringify(
+              h.levels.map(l => ({
+                width: l.width,
+                height: l.height,
+                bitrate: l.bitrate,
+                videoCodec: l.videoCodec,
+                audioCodec: l.audioCodec,
+              })),
+              null,
+              2,
+            );
+            player.play().catch(() => {});
+          });
+          h.on(Hls.Events.ERROR, (_, e) => {
+            document.querySelector("#hlsStatus").textContent =
+              "HLS: " + e.type + " / " + e.details + (e.fatal ? " · fatal" : "");
+          });
+        },
+      });
+    }
+    document.querySelector("#load").onclick = async () => {
+      try {
+        const response = await fetch("./source", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ src: document.querySelector("#source").value }),
+        });
+        if (!response.ok) throw Error("URL invalide");
+        loadHls((await response.json()).manifestPath);
+      } catch (e) {
+        document.querySelector("#hlsStatus").textContent = e.message;
+      }
+    };
+    document.querySelector("#file").onchange = e => {
+      const f = e.target.files[0];
+      if (f) {
+        clear();
+        blobURL = URL.createObjectURL(f);
+        player.src = blobURL;
+      }
+    };
+    document.querySelector("#capture").onclick = () => {
+      if (player.readyState < 2) return;
+      document.querySelector("#frame").getContext("2d").drawImage(player, 0, 0, 640, 360);
+      inspect();
+    };
+    document.querySelector("#demo").onclick = async () => {
+      try {
+        clear();
+        const canvas = document.querySelector("#frame"),
+          ctx = canvas.getContext("2d"),
+          stream = canvas.captureStream(24),
+          chunks = [];
+        const recorder = new MediaRecorder(stream, { mimeType: "video/webm;codecs=vp9" });
+        recorder.ondataavailable = e => chunks.push(e.data);
+        const stopped = new Promise(resolve => (recorder.onstop = resolve));
+        recorder.start();
+        const start = performance.now();
+        await new Promise(resolve => {
+          function draw(now) {
+            const t = (now - start) / 1000;
+            ctx.fillStyle = "#143d36";
+            ctx.fillRect(0, 0, 640, 360);
+            ctx.fillStyle = "#a3eed9";
+            ctx.font = "36px system-ui";
+            ctx.fillText("Bun × Chrome · " + t.toFixed(2) + " s", 40, 90);
+            ctx.fillRect(40 + ((t * 180) % 500), 180, 80, 80);
+            if (t < 2) requestAnimationFrame(draw);
+            else resolve();
+          }
+          requestAnimationFrame(draw);
+        });
+        recorder.stop();
+        await stopped;
+        stream.getTracks().forEach(t => t.stop());
+        blobURL = URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType }));
+        player.src = blobURL;
+        player.play().catch(() => {});
+      } catch (e) {
+        report.textContent = "Capture locale indisponible: " + e.message;
+      }
+    };
+    window.bunLab = { status, loadHls, inspect, player };
+    if (status.manifestPath) loadHls(status.manifestPath);
+    else
+      document.querySelector("#hlsStatus").textContent =
+        "Prêt · manifeste .m3u8 à renseigner. Aucun manifeste inventé.";
+  </script>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "bun-video-showcase",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "r2_buckets": [{ "binding": "SHOWCASE", "bucket_name": "aphrody-video" }],
+  "vars": { "SHOWCASE_PREFIX": "showcase/20261022-v3" },
+  "routes": [{ "pattern": "video.aphrody.com/*", "zone_name": "aphrody.com" }],
+}

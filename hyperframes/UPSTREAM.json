@@ -1,0 +1,21 @@
+{
+  "migration": {
+    "version": "0.7.0",
+    "mode": "aggressive",
+    "nativeAdapter": "packages/engine/src/services/nativeWebViewCapture.ts",
+    "workspaces": "aphrody/workspaces.json",
+    "tool": "bun n2b",
+    "review": "aphrody/reviewed-edits.json"
+  },
+  "excludedTrackedFiles": [],
+  "importDate": "2026-10-10",
+  "repository": "https://github.com/heygen-com/hyperframes",
+  "trackedFiles": 9092,
+  "commit": "063c2f8d61b4e989274b6526b370edc588b37e4a",
+  "lfs": {
+    "files": 171,
+    "hydrate": "Fetch objects from the pinned upstream checkout using git lfs pull; copy hydrated assets only into an ignored render workspace.",
+    "representation": "exact upstream pointer blobs"
+  },
+  "license": "LICENSE"
+}

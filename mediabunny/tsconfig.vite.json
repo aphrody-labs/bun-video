@@ -1,0 +1,20 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"moduleResolution": "nodenext",
+		"module": "NodeNext",
+		"composite": true,
+		"noEmit": false,
+		"paths": {
+			"mediabunny": ["./src/index.ts"],
+		},
+		"types": ["vite/client"]
+	},
+	"include": [
+		"./vite.config.ts",
+		"./examples/**/*.ts"
+	],
+	"references": [
+        { "path": "./src" }
+    ]
+}

@@ -1,0 +1,425 @@
+import React, {
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from 'react';
+import {Internals} from 'remotion';
+import {StudioServerConnectionCtx} from '../helpers/client-id';
+import {BACKGROUND, TIMELINE_BLUE} from '../helpers/colors';
+import {
+	createFolderTree,
+	sortFolderTreeAlphabetically,
+} from '../helpers/create-folder-tree';
+import {ExpandedFoldersContext} from '../helpers/persist-open-folders';
+import {FolderContext} from '../state/folders';
+import {SetSelectedModalContext} from '../state/modals';
+import {useZIndex} from '../state/z-index';
+import {
+	type CompositionSelectorActiveDrag,
+	compositionSelectorDragDataToSymbolicatedStack,
+	hasCompositionSelectorDragData,
+	parseCompositionSelectorDragData,
+} from './composition-selector-drag-data';
+import {CompositionSelectorItem} from './CompositionSelectorItem';
+import {ContextMenuForTarget} from './ContextMenu';
+import {useSelectComposition} from './InitialCompositionLoader';
+import {showNotification} from './Notifications/NotificationCenter';
+import {ExplorerQuickSwitcherTrigger} from './QuickSwitcher/ExplorerQuickSwitcherTrigger';
+import {moveComposition, moveFolder} from './RenderQueue/actions';
+import {getRootCompositionMenuItems} from './root-composition-menu-items';
+
+export const useCompositionNavigation = () => {
+	const {compositions, canvasContent} = useContext(
+		Internals.CompositionManager,
+	);
+	const selectComposition = useSelectComposition();
+
+	const navigateToNextComposition = useCallback(() => {
+		if (
+			!canvasContent ||
+			canvasContent.type !== 'composition' ||
+			compositions.length <= 1
+		) {
+			return;
+		}
+
+		const currentIndex = compositions.findIndex(
+			(c) => c.id === canvasContent.compositionId,
+		);
+		if (currentIndex === -1) {
+			return;
+		}
+
+		const nextIndex = (currentIndex + 1) % compositions.length;
+		const nextComposition = compositions[nextIndex];
+		selectComposition(nextComposition, true);
+	}, [canvasContent, compositions, selectComposition]);
+
+	const navigateToPreviousComposition = useCallback(() => {
+		if (
+			!canvasContent ||
+			canvasContent.type !== 'composition' ||
+			compositions.length <= 1
+		) {
+			return;
+		}
+
+		const currentIndex = compositions.findIndex(
+			(c) => c.id === canvasContent.compositionId,
+		);
+		if (currentIndex === -1) {
+			return;
+		}
+
+		const previousIndex =
+			(currentIndex - 1 + compositions.length) % compositions.length;
+		const previousComposition = compositions[previousIndex];
+		selectComposition(previousComposition, true);
+	}, [canvasContent, compositions, selectComposition]);
+
+	return useMemo(
+		() => ({
+			navigateToNextComposition,
+			navigateToPreviousComposition,
+		}),
+		[navigateToNextComposition, navigateToPreviousComposition],
+	);
+};
+
+const container: React.CSSProperties = {
+	display: 'flex',
+	flexDirection: 'column',
+	flex: 1,
+	overflow: 'hidden',
+	backgroundColor: BACKGROUND,
+};
+
+const list: React.CSSProperties = {
+	flex: 1,
+	overflowY: 'auto',
+	paddingTop: 4,
+	paddingBottom: 4,
+	backgroundColor: BACKGROUND,
+};
+
+const rootReorderLine: React.CSSProperties = {
+	backgroundColor: TIMELINE_BLUE,
+	height: 2,
+	pointerEvents: 'none',
+	width: '100%',
+};
+
+const autoScrollThreshold = 70;
+const maxAutoScrollSpeed = 18;
+
+const getAutoScrollSpeed = ({
+	clientY,
+	element,
+}: {
+	clientY: number;
+	element: HTMLElement;
+}) => {
+	const {top, bottom} = element.getBoundingClientRect();
+	const threshold = Math.min(autoScrollThreshold, element.clientHeight / 2);
+	if (threshold <= 0) {
+		return 0;
+	}
+
+	const distanceToTop = clientY - top;
+	const distanceToBottom = bottom - clientY;
+
+	if (distanceToTop < threshold) {
+		const progress = Math.min(1, (threshold - distanceToTop) / threshold);
+		return -Math.ceil(progress * maxAutoScrollSpeed);
+	}
+
+	if (distanceToBottom < threshold) {
+		const progress = Math.min(1, (threshold - distanceToBottom) / threshold);
+		return Math.ceil(progress * maxAutoScrollSpeed);
+	}
+
+	return 0;
+};
+
+export const CompositionSelector: React.FC = () => {
+	const {compositions, canvasContent, folders} = useContext(
+		Internals.CompositionManager,
+	);
+	const {foldersExpanded} = useContext(ExpandedFoldersContext);
+	const {compositionSortOrder, setCompositionSortOrder} =
+		useContext(FolderContext);
+	const {setSelectedModal} = useContext(SetSelectedModalContext);
+	const connectionStatus = useContext(StudioServerConnectionCtx)
+		.previewServerState.type;
+	const getRootContextMenuItems = useCallback(() => {
+		return getRootCompositionMenuItems({
+			connectionStatus,
+			readOnlyStudio: window.remotion_isReadOnlyStudio,
+			setSelectedModal,
+			compositionSortOrder,
+			setCompositionSortOrder,
+		});
+	}, [
+		compositionSortOrder,
+		connectionStatus,
+		setCompositionSortOrder,
+		setSelectedModal,
+	]);
+	const [rootDragHovered, setRootDragHovered] = useState(false);
+	const activeDragRef = useRef<CompositionSelectorActiveDrag | null>(null);
+	const listRef = useRef<HTMLDivElement>(null);
+	const autoScrollAnimation = useRef<number | null>(null);
+	const autoScrollSpeed = useRef(0);
+
+	const {tabIndex} = useZIndex();
+	const selectComposition = useSelectComposition();
+
+	const items = useMemo(() => {
+		const tree = createFolderTree(compositions, folders, foldersExpanded);
+
+		return compositionSortOrder === 'alphabetical'
+			? sortFolderTreeAlphabetically(tree)
+			: tree;
+	}, [compositionSortOrder, compositions, folders, foldersExpanded]);
+
+	const toggleFolder = useCallback(
+		(folderName: string, parentName: string | null) => {
+			Internals.compositionSelectorRef.current?.toggleFolder(
+				folderName,
+				parentName,
+			);
+		},
+		[],
+	);
+
+	const clearRootDragHover = useCallback(() => {
+		setRootDragHovered(false);
+	}, []);
+
+	const stopCompositionListAutoScroll = useCallback(() => {
+		autoScrollSpeed.current = 0;
+		if (autoScrollAnimation.current !== null) {
+			cancelAnimationFrame(autoScrollAnimation.current);
+			autoScrollAnimation.current = null;
+		}
+	}, []);
+
+	const runCompositionListAutoScroll = useCallback(() => {
+		const listElement = listRef.current;
+		const speed = autoScrollSpeed.current;
+
+		if (listElement === null || speed === 0) {
+			autoScrollAnimation.current = null;
+			return;
+		}
+
+		const scrollTopBefore = listElement.scrollTop;
+		listElement.scrollTop += speed;
+
+		if (listElement.scrollTop === scrollTopBefore) {
+			autoScrollAnimation.current = null;
+			return;
+		}
+
+		autoScrollAnimation.current = requestAnimationFrame(
+			runCompositionListAutoScroll,
+		);
+	}, []);
+
+	const setCompositionListAutoScrollSpeed = useCallback(
+		(speed: number) => {
+			if (speed === 0) {
+				stopCompositionListAutoScroll();
+				return;
+			}
+
+			autoScrollSpeed.current = speed;
+			if (autoScrollAnimation.current === null) {
+				autoScrollAnimation.current = requestAnimationFrame(
+					runCompositionListAutoScroll,
+				);
+			}
+		},
+		[runCompositionListAutoScroll, stopCompositionListAutoScroll],
+	);
+
+	const onCompositionListDragOverCapture = useCallback(
+		(event: React.DragEvent<HTMLElement>) => {
+			if (
+				window.remotion_isReadOnlyStudio ||
+				!hasCompositionSelectorDragData(event.dataTransfer.types)
+			) {
+				stopCompositionListAutoScroll();
+				return;
+			}
+
+			const listElement = listRef.current;
+			if (listElement === null) {
+				stopCompositionListAutoScroll();
+				return;
+			}
+
+			setCompositionListAutoScrollSpeed(
+				getAutoScrollSpeed({clientY: event.clientY, element: listElement}),
+			);
+		},
+		[setCompositionListAutoScrollSpeed, stopCompositionListAutoScroll],
+	);
+
+	useEffect(() => {
+		return stopCompositionListAutoScroll;
+	}, [stopCompositionListAutoScroll]);
+
+	const onRootDragOver = useCallback((event: React.DragEvent<HTMLElement>) => {
+		if (
+			window.remotion_isReadOnlyStudio ||
+			!hasCompositionSelectorDragData(event.dataTransfer.types)
+		) {
+			return;
+		}
+
+		if (
+			activeDragRef.current === null ||
+			activeDragRef.current.parentFolderPath === null
+		) {
+			setRootDragHovered(false);
+			return;
+		}
+
+		event.preventDefault();
+		event.dataTransfer.dropEffect = 'move';
+		setRootDragHovered(true);
+	}, []);
+
+	const onRootDragLeave = useCallback(
+		(event: React.DragEvent<HTMLElement>) => {
+			const {relatedTarget} = event;
+			if (
+				relatedTarget instanceof Node &&
+				event.currentTarget.contains(relatedTarget)
+			) {
+				return;
+			}
+
+			stopCompositionListAutoScroll();
+			setRootDragHovered(false);
+		},
+		[stopCompositionListAutoScroll],
+	);
+
+	const onRootDrop = useCallback(
+		async (event: React.DragEvent<HTMLElement>) => {
+			if (window.remotion_isReadOnlyStudio) {
+				return;
+			}
+
+			const dragData = parseCompositionSelectorDragData(event.dataTransfer);
+			if (dragData === null) {
+				return;
+			}
+
+			if (
+				activeDragRef.current === null ||
+				activeDragRef.current.parentFolderPath === null
+			) {
+				event.stopPropagation();
+				setRootDragHovered(false);
+				return;
+			}
+
+			event.preventDefault();
+			event.stopPropagation();
+			stopCompositionListAutoScroll();
+			setRootDragHovered(false);
+			const controller = new AbortController();
+
+			try {
+				const source = dragData.item;
+				const common = {
+					destination: {type: 'root'} as const,
+					symbolicatedStack:
+						compositionSelectorDragDataToSymbolicatedStack(dragData),
+					undoRedoNavigation: null,
+				};
+				const result = await (source.type === 'composition'
+					? moveComposition(
+							{...common, compositionId: source.compositionId},
+							controller.signal,
+						)
+					: moveFolder(
+							{
+								...common,
+								folderName: source.folderName,
+								parentName: source.parentName,
+							},
+							controller.signal,
+						));
+				if (!result.success) {
+					showNotification(result.reason, 4000);
+				}
+			} catch (error) {
+				showNotification(
+					error instanceof Error ? error.message : String(error),
+					4000,
+				);
+			}
+		},
+		[stopCompositionListAutoScroll],
+	);
+
+	return (
+		<div style={container}>
+			<ContextMenuForTarget
+				triggerRef={listRef}
+				getItems={getRootContextMenuItems}
+			/>
+			<ExplorerQuickSwitcherTrigger
+				mode="compositions"
+				showShortcut
+				tabIndex={tabIndex}
+				getActions={getRootContextMenuItems}
+			/>
+			<div
+				ref={listRef}
+				className="__remotion-vertical-scrollbar"
+				style={list}
+				onDragOverCapture={onCompositionListDragOverCapture}
+				onDragEndCapture={stopCompositionListAutoScroll}
+				onDragOver={onRootDragOver}
+				onDragLeave={onRootDragLeave}
+				onDropCapture={stopCompositionListAutoScroll}
+				onDrop={onRootDrop}
+			>
+				{items.map((c, index) => {
+					return (
+						<CompositionSelectorItem
+							key={c.key + c.type}
+							level={0}
+							currentComposition={
+								canvasContent && canvasContent.type === 'composition'
+									? canvasContent.compositionId
+									: null
+							}
+							selectComposition={selectComposition}
+							toggleFolder={toggleFolder}
+							clearRootDragHover={clearRootDragHover}
+							canReorder={compositionSortOrder === 'registration'}
+							tabIndex={tabIndex}
+							item={c}
+							activeDragRef={activeDragRef}
+							parentFolderPath={null}
+							previousSibling={index === 0 ? null : items[index - 1]}
+							nextSibling={index === items.length - 1 ? null : items[index + 1]}
+						/>
+					);
+				})}
+				{rootDragHovered ? (
+					<div data-composition-root-reorder-line style={rootReorderLine} />
+				) : null}
+			</div>
+		</div>
+	);
+};

@@ -1,0 +1,99 @@
+import React, {useEffect, useMemo, useState} from 'react';
+import {WHITE_ALPHA_80} from '../helpers/colors';
+import {InspectorOpenInEditor} from './InspectorOpenInEditor';
+import {Spacing} from './layout';
+import {Spinner} from './Spinner';
+
+const cwd: React.CSSProperties = {
+	fontSize: 13,
+	color: WHITE_ALPHA_80,
+	display: 'flex',
+	alignItems: 'center',
+	justifyContent: 'center',
+	userSelect: 'none',
+	WebkitUserSelect: 'none',
+	whiteSpace: 'nowrap',
+};
+
+const spinnerSize = 14;
+
+const spinner: React.CSSProperties = {
+	opacity: 0.8,
+	position: 'relative',
+	width: spinnerSize,
+};
+
+const openInEditor: React.CSSProperties = {
+	display: 'flex',
+	opacity: 0.8,
+};
+
+const noSpinner: React.CSSProperties = {
+	position: 'relative',
+	width: spinnerSize,
+};
+
+export const MenuBuildIndicator: React.FC<{
+	readonly mobileLayout: boolean;
+}> = ({mobileLayout}) => {
+	const [isBuilding, setIsBuilding] = useState(false);
+	const folderLocation = useMemo(() => {
+		return {
+			source: window.remotion_cwd,
+			line: 1,
+			column: 1,
+		};
+	}, []);
+
+	useEffect(() => {
+		window.remotion_isBuilding = () => {
+			setIsBuilding(true);
+		};
+
+		window.remotion_finishedBuilding = () => {
+			setIsBuilding(false);
+		};
+
+		return () => {
+			window.remotion_isBuilding = undefined;
+			window.remotion_finishedBuilding = undefined;
+		};
+	}, []);
+
+	return (
+		<div role="group" style={cwd} aria-label={window.remotion_cwd}>
+			<Spacing x={mobileLayout ? 0.5 : 2} />
+			{window.remotion_projectName}
+			<Spacing x={0.5} />
+			<div style={openInEditor}>
+				<InspectorOpenInEditor
+					annotationName={null}
+					location={folderLocation}
+					locationType="folder"
+					showTooltips
+				/>
+			</div>
+			{mobileLayout ? null : <Spacing x={0.5} />}
+			{mobileLayout ? (
+				isBuilding ? (
+					<>
+						<Spacing x={0.5} />
+						<div style={spinner}>
+							<Spinner
+								duration={0.5}
+								size={spinnerSize}
+								color={WHITE_ALPHA_80}
+							/>
+						</div>
+					</>
+				) : null
+			) : isBuilding ? (
+				<div style={spinner}>
+					<Spinner duration={0.5} size={spinnerSize} color={WHITE_ALPHA_80} />
+				</div>
+			) : (
+				<div style={noSpinner} />
+			)}
+		</div>
+	);
+};

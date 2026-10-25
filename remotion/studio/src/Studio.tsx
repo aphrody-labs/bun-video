@@ -1,0 +1,86 @@
+import {interpolatePaths} from '@remotion/paths';
+import React, {useLayoutEffect} from 'react';
+import {createPortal} from 'react-dom';
+import {Internals} from 'remotion';
+import {Editor} from './components/Editor';
+import {EditorContexts} from './components/EditorContexts';
+import {ServerDisconnected} from './components/Notifications/ServerDisconnected';
+import {SequenceActivitySettingsProvider} from './components/SequenceActivitySettingsProvider';
+import {StaticFilesProvider} from './components/use-static-files';
+import {FastRefreshProvider} from './FastRefreshProvider';
+import {injectCSS} from './helpers/inject-css';
+import {ResolveCompositionConfigInStudio} from './ResolveCompositionConfigInStudio';
+import {CompositionListProvider} from './state/composition-list';
+
+Internals.setInterpolatePaths(interpolatePaths);
+
+declare global {
+	interface Window {
+		remotion_experimentalKeepAudioContextAlive: boolean | undefined;
+	}
+}
+
+const getServerDisconnectedDomElement = () => {
+	return document.getElementById('server-disconnected-overlay');
+};
+
+const StudioInner: React.FC<{
+	readonly rootComponent: React.FC;
+	readonly readOnly: boolean;
+}> = ({rootComponent, readOnly}) => {
+	return (
+		<Internals.CompositionManagerProvider
+			onlyRenderComposition={null}
+			currentCompositionMetadata={null}
+			initialCompositions={[]}
+			initialCanvasContent={null}
+		>
+			<Internals.RemotionRootContexts
+				frameState={null}
+				audioEnabled={window.remotion_audioEnabled}
+				videoEnabled={window.remotion_videoEnabled}
+				logLevel={window.remotion_logLevel ?? 'info'}
+				numberOfAudioTags={window.remotion_numberOfAudioTags}
+				audioLatencyHint={window.remotion_audioLatencyHint ?? 'playback'}
+				previewSampleRate={window.remotion_previewSampleRate}
+				_experimentalKeepAudioContextAlive={
+					window.remotion_experimentalKeepAudioContextAlive ?? false
+				}
+			>
+				<StaticFilesProvider>
+					<ResolveCompositionConfigInStudio>
+						<EditorContexts>
+							<CompositionListProvider>
+								<Editor readOnlyStudio={readOnly} Root={rootComponent} />
+							</CompositionListProvider>
+							{readOnly
+								? null
+								: createPortal(
+										<ServerDisconnected />,
+										getServerDisconnectedDomElement() as HTMLElement,
+									)}
+						</EditorContexts>
+					</ResolveCompositionConfigInStudio>
+				</StaticFilesProvider>
+			</Internals.RemotionRootContexts>
+		</Internals.CompositionManagerProvider>
+	);
+};
+
+export const Studio: React.FC<{
+	readonly rootComponent: React.FC;
+	readonly readOnly: boolean;
+}> = ({rootComponent, readOnly}) => {
+	useLayoutEffect(() => {
+		injectCSS();
+		window.remotion_studioStartup?.dismiss();
+	}, []);
+
+	return (
+		<FastRefreshProvider>
+			<SequenceActivitySettingsProvider>
+				<StudioInner rootComponent={rootComponent} readOnly={readOnly} />
+			</SequenceActivitySettingsProvider>
+		</FastRefreshProvider>
+	);
+};

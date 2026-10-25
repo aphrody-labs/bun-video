@@ -1,0 +1,324 @@
+import type {DefaultCodingAgent} from '@remotion/renderer';
+import type {
+	CompositionComponentInfoResponse,
+	EditorPickerId,
+	GitClientId,
+	OpenInTerminalResponse,
+	SymbolicatedStackFrame,
+	TerminalId,
+} from '@remotion/studio-shared';
+import {useEffect} from 'react';
+import {callApi} from '../components/call-api';
+import {getSourceMapFilesForSource} from '../components/Timeline/TimelineStack/get-stack';
+import type {
+	CodePosition,
+	OriginalPosition,
+} from '../error-overlay/react-overlay/utils/get-source-map';
+import {codingAgentHistory, editorHistory} from '../state/recently-used-apps';
+import {getBrowserStudioOperations} from './browser-studio-operations';
+import {useSyncExternalStore} from './use-sync-external-store';
+
+export const openInEditor = async (
+	stack: SymbolicatedStackFrame,
+	editorId: EditorPickerId,
+) => {
+	const {
+		originalFileName,
+		originalLineNumber,
+		originalColumnNumber,
+		originalFunctionName,
+		originalScriptCode,
+	} = stack;
+
+	const response = await callApi('/api/open-in-editor', {
+		editorId,
+		stack: {
+			originalFileName,
+			originalLineNumber,
+			originalColumnNumber,
+			originalFunctionName,
+			originalScriptCode,
+		},
+	});
+	if (response.success) {
+		editorHistory.remember(editorId);
+	}
+
+	return response;
+};
+
+export const openInCodingAgent = async (
+	codingAgentId: DefaultCodingAgent,
+	prompt: string | null,
+) => {
+	const response = await callApi('/api/open-in-coding-agent', {
+		codingAgentId,
+		prompt,
+	});
+	if (response.success) {
+		codingAgentHistory.remember(codingAgentId);
+	}
+
+	return response;
+};
+
+export const openInTerminal = (
+	terminalId: TerminalId,
+	directory: string,
+): Promise<OpenInTerminalResponse> => {
+	return callApi('/api/open-in-terminal', {directory, terminalId});
+};
+
+export const openInGitClient = (gitClientId: GitClientId) => {
+	return callApi('/api/open-in-git-client', {gitClientId});
+};
+
+export const openOriginalPositionInEditor = async (
+	originalPosition: OriginalPosition,
+	editorId: EditorPickerId,
+) => {
+	const response = await openInEditor(
+		{
+			originalColumnNumber: originalPosition.column,
+			originalFileName: originalPosition.source,
+			originalFunctionName: null,
+			originalLineNumber: originalPosition.line,
+			originalScriptCode: null,
+		},
+		editorId,
+	);
+	if (!response.success) {
+		throw new Error('Could not open the file in the editor.');
+	}
+};
+
+export const findOriginalPositionInFileAtProperty = async ({
+	originalPosition,
+	property,
+}: {
+	originalPosition: CodePosition;
+	property: string;
+}): Promise<CodePosition> => {
+	const request = {
+		fileName: originalPosition.source,
+		lineNumber: originalPosition.line,
+		columnNumber: originalPosition.column,
+		search: property,
+	};
+	const browserStudioOperations = getBrowserStudioOperations();
+	const position = browserStudioOperations
+		? await browserStudioOperations.findInFile(request)
+		: await callApi('/api/find-in-file', request);
+
+	return {
+		source: originalPosition.source,
+		line: position.lineNumber,
+		column: position.columnNumber,
+	};
+};
+
+export const openOriginalPositionInEditorAtProperty = async ({
+	editorId,
+	originalPosition,
+	property,
+}: {
+	editorId: EditorPickerId;
+	originalPosition: CodePosition;
+	property: string;
+}) => {
+	const position = await findOriginalPositionInFileAtProperty({
+		originalPosition,
+		property,
+	});
+
+	await openOriginalPositionInEditor(position, editorId);
+};
+
+type ResolvedCompositionComponentInfo = {
+	location: CompositionComponentInfoResponse['location'];
+	canAddSequence: boolean;
+};
+
+const componentResolutionCache = new Map<
+	string,
+	Promise<ResolvedCompositionComponentInfo>
+>();
+const componentResolutionResults = new Map<
+	string,
+	ResolvedCompositionComponentInfo
+>();
+const componentResolutionListeners = new Set<() => void>();
+
+const getComponentResolutionCacheKey = ({
+	compositionFile,
+	compositionId,
+}: {
+	compositionFile: string;
+	compositionId: string;
+}) => {
+	return `${compositionFile}::${compositionId}`;
+};
+
+const notifyComponentResolutionListeners = () => {
+	for (const listener of componentResolutionListeners) {
+		listener();
+	}
+};
+
+export const subscribeToCompositionComponentInfo = (listener: () => void) => {
+	componentResolutionListeners.add(listener);
+
+	return () => {
+		componentResolutionListeners.delete(listener);
+	};
+};
+
+export const getCachedCompositionComponentInfo = ({
+	compositionFile,
+	compositionId,
+}: {
+	compositionFile: string;
+	compositionId: string;
+}) => {
+	return (
+		componentResolutionResults.get(
+			getComponentResolutionCacheKey({compositionFile, compositionId}),
+		) ?? null
+	);
+};
+
+export const useCachedCompositionComponentInfo = ({
+	compositionFile,
+	compositionId,
+}: {
+	compositionFile: string | null;
+	compositionId: string | null;
+}) => {
+	const result = useSyncExternalStore(
+		subscribeToCompositionComponentInfo,
+		() => {
+			if (compositionFile === null || compositionId === null) {
+				return null;
+			}
+
+			return getCachedCompositionComponentInfo({
+				compositionFile,
+				compositionId,
+			});
+		},
+		() => null,
+	);
+
+	useEffect(() => {
+		if (
+			!getBrowserStudioOperations() ||
+			compositionFile === null ||
+			compositionId === null
+		) {
+			return;
+		}
+
+		preloadCompositionComponentInfo({
+			compositionFile,
+			compositionId,
+		});
+	}, [compositionFile, compositionId]);
+
+	return result;
+};
+
+export const loadCompositionComponentInfo = async ({
+	compositionFile,
+	compositionId,
+}: {
+	compositionFile: string;
+	compositionId: string;
+}) => {
+	const cacheKey = getComponentResolutionCacheKey({
+		compositionFile,
+		compositionId,
+	});
+	const existing = componentResolutionCache.get(cacheKey);
+	if (existing) {
+		return existing;
+	}
+
+	const promise = (async () => {
+		const request = {
+			compositionFile,
+			compositionId,
+		};
+		const browserStudioOperations = getBrowserStudioOperations();
+		const body = browserStudioOperations
+			? await browserStudioOperations.getCompositionComponentInfo(request)
+			: typeof window !== 'undefined' && window.remotion_isReadOnlyStudio
+				? await (async () => {
+						const files = getSourceMapFilesForSource(compositionFile);
+						if (files === null) {
+							throw new Error(
+								`Could not find source map contents for ${compositionFile}`,
+							);
+						}
+
+						const {resolveCompositionComponentLocation} =
+							await import('@remotion/codemods/resolve-composition-component-location');
+						return {
+							canAddSequence: false,
+							location: resolveCompositionComponentLocation({
+								compositionFile,
+								compositionId,
+								project: {files, rootDir: '.'},
+							}),
+						};
+					})()
+				: await callApi('/api/composition-component-info', request);
+
+		const result = {
+			location: body.location,
+			canAddSequence: body.canAddSequence,
+		};
+		componentResolutionResults.set(cacheKey, result);
+		notifyComponentResolutionListeners();
+
+		return result;
+	})();
+	componentResolutionCache.set(cacheKey, promise);
+
+	try {
+		return await promise;
+	} catch (err) {
+		componentResolutionCache.delete(cacheKey);
+		componentResolutionResults.delete(cacheKey);
+		notifyComponentResolutionListeners();
+		throw err;
+	}
+};
+
+export const preloadCompositionComponentInfo = ({
+	compositionFile,
+	compositionId,
+}: {
+	compositionFile: string;
+	compositionId: string;
+}) => {
+	loadCompositionComponentInfo({
+		compositionFile,
+		compositionId,
+	}).catch(() => undefined);
+};
+
+export const openCompositionComponentInEditor = async ({
+	compositionFile,
+	compositionId,
+	editorId,
+}: {
+	compositionFile: string;
+	compositionId: string;
+	editorId: EditorPickerId;
+}) => {
+	const info = await loadCompositionComponentInfo({
+		compositionFile,
+		compositionId,
+	});
+	await openOriginalPositionInEditor(info.location, editorId);
+};

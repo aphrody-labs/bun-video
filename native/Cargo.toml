@@ -1,0 +1,46 @@
+[package]
+name = "bun-video-native"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT"
+
+[features]
+default = []
+filmcraft = ["dep:filmcraft-lib", "dep:filmcraft-codecs", "dep:filmcraft-frame", "dep:filmcraft-media", "dep:filmcraft-time", "dep:filmcraft-isobmff", "dep:gif"]
+filmcraft-encode = ["filmcraft", "filmcraft-lib/encode"]
+gpu = ["dep:gpu-video"]
+libav = ["dep:ffmpeg-sys-next", "dep:serde_json", "dep:sha2"]
+mpv = ["dep:libloading"]
+
+[dependencies]
+gif = { version = "=0.14.2", optional = true }
+filmcraft-codecs = { path = "../../../src/media/filmcraft/crates/codecs", optional = true }
+filmcraft-frame = { path = "../../../src/media/filmcraft/crates/frame", optional = true }
+filmcraft-media = { path = "../../../src/media/filmcraft/crates/media", optional = true }
+filmcraft-time = { path = "../../../src/media/filmcraft/crates/time", optional = true }
+filmcraft-isobmff = { path = "../../../src/media/filmcraft/crates/isobmff", optional = true }
+filmcraft-lib = { path = "../../../src/media/filmcraft/crates/lib", default-features = false, features = ["container"], optional = true }
+ffmpeg-sys-next = { version = "=9.0.1", optional = true, default-features = false, features = ["avcodec", "avformat", "swscale"] }
+gpu-video = { git = "https://github.com/software-mansion/smelter.git", rev = "6637f3df71282c816140cd3bb9821d69b30be2ba", package = "gpu-video", default-features = true, optional = true }
+png = "=0.17.16"
+libloading = { version = "=0.8.9", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+serde_json = { version = "=1.0.151", optional = true }
+sha2 = { version = "=0.11.0", optional = true }
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_LibraryLoader"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "=0.2.190"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[[bin]]
+name = "bun-video-native"
+path = "src/main.rs"
+
+[lints]
+workspace = true

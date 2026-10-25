@@ -1,0 +1,136 @@
+import {useCallback, useImperativeHandle, useRef, useState} from 'react';
+import {BACKGROUND} from '../helpers/colors';
+import {isAssetUploadDragEvent} from '../helpers/use-asset-drag-events';
+import {AssetSelector} from './AssetSelector';
+import {CompositionSelector} from './CompositionSelector';
+import {CompSelectorRef} from './CompSelectorRef';
+import {
+	explorerSidebarTabs,
+	type ExplorerSidebarPanel,
+} from './ExplorerPanelRef';
+import {Tab, Tabs} from './Tabs';
+
+const container: React.CSSProperties = {
+	height: '100%',
+	width: '100%',
+	maxWidth: '100%',
+	display: 'flex',
+	flexDirection: 'column',
+	flex: 1,
+};
+
+const localStorageKey = 'remotion.sidebarPanel';
+
+const getSelectedPanel = (): ExplorerSidebarPanel => {
+	const panel = localStorage.getItem(localStorageKey);
+	if (panel === 'assets') {
+		return 'assets';
+	}
+
+	return 'compositions';
+};
+
+const tabsContainer: React.CSSProperties = {
+	backgroundColor: BACKGROUND,
+};
+
+const persistSelectedOptionsSidebarPanel = (panel: ExplorerSidebarPanel) => {
+	localStorage.setItem(localStorageKey, panel);
+};
+
+export const ExplorerPanel: React.FC<{
+	readOnlyStudio: boolean;
+}> = ({readOnlyStudio}) => {
+	const [panel, setPanel] = useState<ExplorerSidebarPanel>(() =>
+		getSelectedPanel(),
+	);
+	const assetTabFocusTimer = useRef<number | null>(null);
+	const onCompositionsSelected = useCallback(() => {
+		setPanel('compositions');
+		persistSelectedOptionsSidebarPanel('compositions');
+	}, []);
+
+	const onAssetsSelected = useCallback(() => {
+		setPanel('assets');
+		persistSelectedOptionsSidebarPanel('assets');
+	}, []);
+	const onAssetDragEnter = useCallback(
+		(event: React.DragEvent<HTMLDivElement>) => {
+			if (
+				isAssetUploadDragEvent(event) &&
+				assetTabFocusTimer.current === null
+			) {
+				assetTabFocusTimer.current = window.setTimeout(() => {
+					onAssetsSelected();
+					assetTabFocusTimer.current = null;
+				}, 500);
+			}
+		},
+		[onAssetsSelected],
+	);
+	const onAssetDragLeave = useCallback(
+		(event: React.DragEvent<HTMLDivElement>) => {
+			if (
+				isAssetUploadDragEvent(event) &&
+				assetTabFocusTimer.current !== null
+			) {
+				window.clearTimeout(assetTabFocusTimer.current);
+				assetTabFocusTimer.current = null;
+			}
+		},
+		[],
+	);
+
+	useImperativeHandle(explorerSidebarTabs, () => {
+		return {
+			getSelectedPanel: () => panel,
+			selectAssetsPanel: () => {
+				setPanel('assets');
+				persistSelectedOptionsSidebarPanel('assets');
+			},
+			selectCompositionPanel: () => {
+				setPanel('compositions');
+				persistSelectedOptionsSidebarPanel('compositions');
+			},
+		};
+	}, [panel]);
+
+	const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+		// Prevent deselection of currently selected items
+		e.stopPropagation();
+	}, []);
+
+	return (
+		<CompSelectorRef>
+			<div
+				style={container}
+				className="css-reset"
+				onPointerDown={onPointerDown}
+			>
+				<div style={tabsContainer}>
+					<Tabs>
+						<Tab
+							selected={panel === 'compositions'}
+							onClick={onCompositionsSelected}
+						>
+							Compositions
+						</Tab>
+						<Tab
+							selected={panel === 'assets'}
+							onClick={onAssetsSelected}
+							onDragEnter={onAssetDragEnter}
+							onDragLeave={onAssetDragLeave}
+						>
+							Assets
+						</Tab>
+					</Tabs>
+				</div>
+				{panel === 'compositions' ? (
+					<CompositionSelector />
+				) : (
+					<AssetSelector readOnlyStudio={readOnlyStudio} />
+				)}
+			</div>
+		</CompSelectorRef>
+	);
+};

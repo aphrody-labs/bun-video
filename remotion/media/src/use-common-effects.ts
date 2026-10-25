@@ -1,0 +1,260 @@
+import type React from 'react';
+import {useContext, useLayoutEffect, useRef} from 'react';
+import type {LogLevel} from 'remotion';
+import {Internals} from 'remotion';
+import type {MediaPlayer} from './media-player';
+
+export const useCommonEffects = ({
+	mediaPlayerRef,
+	mediaPlayerReady,
+	currentTimeRef,
+	playing,
+	isPlayerBuffering,
+	frame,
+	trimBefore,
+	trimAfter,
+	effectiveMuted,
+	userPreferredVolume,
+	playbackRate,
+	toneFrequency,
+	globalPlaybackRate,
+	fps,
+	sequenceOffset,
+	loop,
+	durationInFrames,
+	isPremounting,
+	isPostmounting,
+	currentTime,
+	logLevel,
+	label,
+}: {
+	readonly mediaPlayerRef: React.RefObject<MediaPlayer | null>;
+	readonly mediaPlayerReady: boolean;
+	readonly currentTimeRef: React.RefObject<number>;
+	readonly playing: boolean;
+	readonly isPlayerBuffering: boolean;
+	readonly frame: number;
+	readonly trimBefore: number | undefined;
+	readonly trimAfter: number | undefined;
+	readonly effectiveMuted: boolean;
+	readonly userPreferredVolume: number;
+	readonly playbackRate: number;
+	readonly toneFrequency: number;
+	readonly globalPlaybackRate: number;
+	readonly fps: number;
+	readonly sequenceOffset: number;
+	readonly loop: boolean;
+	readonly durationInFrames: number;
+	readonly isPremounting: boolean;
+	readonly isPostmounting: boolean;
+	readonly currentTime: number;
+	readonly logLevel: LogLevel;
+	readonly label: string;
+}) => {
+	const sharedAudioContext = useContext(Internals.SharedAudioContext);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer) return;
+
+		if (playing && !isPlayerBuffering) {
+			mediaPlayer.play();
+		} else {
+			mediaPlayer.pause();
+		}
+	}, [
+		isPlayerBuffering,
+		playing,
+		logLevel,
+		mediaPlayerReady,
+		frame,
+		mediaPlayerRef,
+	]);
+
+	useLayoutEffect(() => {
+		if (!sharedAudioContext) return;
+
+		const {remove} = sharedAudioContext.audioSyncAnchorEmitter.subscribe(
+			(event) => {
+				if (event === 'changed') {
+					mediaPlayerRef.current
+						?.audioSyncAnchorChanged(currentTimeRef.current)
+						.catch(() => {
+							// Might be disposed
+						});
+				}
+			},
+		);
+
+		return () => {
+			remove();
+		};
+	}, [sharedAudioContext, mediaPlayerRef, currentTimeRef]);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer || !mediaPlayerReady) {
+			return;
+		}
+
+		mediaPlayer.setTrimRange(trimBefore, trimAfter, currentTimeRef.current);
+	}, [trimAfter, trimBefore, mediaPlayerReady, mediaPlayerRef, currentTimeRef]);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer || !mediaPlayerReady) return;
+
+		mediaPlayer.setMuted(effectiveMuted);
+	}, [effectiveMuted, mediaPlayerReady, mediaPlayerRef]);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer || !mediaPlayerReady) {
+			return;
+		}
+
+		mediaPlayer.setVolume(userPreferredVolume);
+	}, [userPreferredVolume, mediaPlayerReady, mediaPlayerRef]);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer || !mediaPlayerReady) {
+			return;
+		}
+
+		mediaPlayer.setPlaybackRate(playbackRate, currentTimeRef.current);
+	}, [playbackRate, mediaPlayerReady, mediaPlayerRef, currentTimeRef]);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer || !mediaPlayerReady) {
+			return;
+		}
+
+		mediaPlayer.setToneFrequency(toneFrequency, currentTimeRef.current);
+	}, [toneFrequency, mediaPlayerReady, mediaPlayerRef, currentTimeRef]);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer || !mediaPlayerReady) {
+			return;
+		}
+
+		mediaPlayer.setGlobalPlaybackRate(
+			globalPlaybackRate,
+			currentTimeRef.current,
+		);
+	}, [globalPlaybackRate, mediaPlayerReady, mediaPlayerRef, currentTimeRef]);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer || !mediaPlayerReady) {
+			return;
+		}
+
+		mediaPlayer.setLoop(loop, currentTimeRef.current);
+	}, [loop, mediaPlayerReady, mediaPlayerRef, currentTimeRef]);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer || !mediaPlayerReady) {
+			return;
+		}
+
+		mediaPlayer.setSequenceDurationInFrames(
+			durationInFrames,
+			currentTimeRef.current,
+		);
+	}, [durationInFrames, mediaPlayerReady, mediaPlayerRef, currentTimeRef]);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer) {
+			return;
+		}
+
+		mediaPlayer.setIsPremounting(isPremounting);
+	}, [isPremounting, mediaPlayerReady, mediaPlayerRef]);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer) {
+			return;
+		}
+
+		mediaPlayer.setIsPostmounting(isPostmounting);
+	}, [isPostmounting, mediaPlayerReady, mediaPlayerRef]);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer || !mediaPlayerReady) {
+			return;
+		}
+
+		mediaPlayer.setFps(fps, currentTimeRef.current);
+	}, [fps, mediaPlayerReady, mediaPlayerRef, currentTimeRef]);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer || !mediaPlayerReady) {
+			return;
+		}
+
+		mediaPlayer.setSequenceOffset(sequenceOffset, currentTimeRef.current);
+	}, [sequenceOffset, mediaPlayerReady, mediaPlayerRef, currentTimeRef]);
+
+	const {seek} = useContext(Internals.SetTimelineContext);
+	const revision = seek?.revision.current ?? null;
+	const lastRequest = useRef<{
+		player: MediaPlayer;
+		time: number;
+		revision: number | null;
+		isPremounting: boolean;
+		muted: boolean;
+	} | null>(null);
+
+	useLayoutEffect(() => {
+		const mediaPlayer = mediaPlayerRef.current;
+		if (!mediaPlayer || !mediaPlayerReady) return;
+
+		// Pausing or buffering at the same target must not supersede an in-flight
+		// playback request with a scrub. A same-frame explicit seek still counts.
+		const previous = lastRequest.current;
+		if (
+			previous?.player === mediaPlayer &&
+			previous.time === currentTime &&
+			previous.revision === revision &&
+			previous.isPremounting === isPremounting &&
+			previous.muted === effectiveMuted
+		) {
+			return;
+		}
+
+		lastRequest.current = {
+			player: mediaPlayer,
+			time: currentTime,
+			revision,
+			isPremounting,
+			muted: effectiveMuted,
+		};
+		mediaPlayer
+			.seekTo(currentTime, revision === null ? null : {revision, playing})
+			.catch(() => {
+				// Might be disposed
+			});
+		Internals.Log.trace(
+			{logLevel, tag: '@remotion/media'},
+			`[${label}] Updating target time to ${currentTime.toFixed(3)}s`,
+		);
+	}, [
+		currentTime,
+		effectiveMuted,
+		isPremounting,
+		logLevel,
+		mediaPlayerReady,
+		label,
+		mediaPlayerRef,
+		playing,
+		revision,
+	]);
+};

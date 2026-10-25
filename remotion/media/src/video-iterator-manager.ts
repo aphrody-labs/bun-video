@@ -1,0 +1,375 @@
+import type {InputVideoTrack, WrappedCanvas} from 'mediabunny';
+import {CanvasSink} from 'mediabunny';
+import type {
+	EffectChainState,
+	EffectDefinitionAndStack,
+	LogLevel,
+} from 'remotion';
+import {Internals} from 'remotion';
+import type {DelayPlaybackIfNotPremounting} from './delay-playback-if-not-premounting';
+import {roundTo4Digits} from './helpers/round-to-4-digits';
+import type {Nonce} from './nonce-manager';
+import {makePrewarmedVideoIteratorCache} from './prewarm-iterator-for-looping';
+import type {MaxCanvasSinkFrameSize} from './video/props';
+import {
+	createVideoIterator,
+	type VideoIterator,
+} from './video/video-preview-iterator';
+
+const {runEffectChain} = Internals;
+
+export const isSequentialMediaTimeAdvance = ({
+	previousTime,
+	newTime,
+	fps,
+	playbackRate,
+	isPlaying,
+}: {
+	previousTime: number;
+	newTime: number;
+	fps: number;
+	playbackRate: number;
+	isPlaying: boolean;
+}) => {
+	if (!isPlaying || newTime < previousTime) {
+		return false;
+	}
+
+	// Legacy fallback for hosts without explicit preview seek intent.
+	const maximumSequentialAdvance = Math.abs(playbackRate) / fps;
+	return (
+		roundTo4Digits(newTime - previousTime) <=
+		roundTo4Digits(maximumSequentialAdvance)
+	);
+};
+
+export const videoIteratorManager = async ({
+	delayPlaybackHandleIfNotPremounting,
+	canvas,
+	context,
+	drawDebugOverlay,
+	logLevel,
+	getOnVideoFrameCallback,
+	videoTrack,
+	getLoopSegmentMediaEndTimestamp,
+	getStartTime,
+	getIsLooping,
+	getEffects,
+	getEffectChainState,
+	maxCanvasSinkFrameSize,
+}: {
+	videoTrack: InputVideoTrack;
+	delayPlaybackHandleIfNotPremounting: () => DelayPlaybackIfNotPremounting;
+	context: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
+	canvas: OffscreenCanvas | HTMLCanvasElement | null;
+	getOnVideoFrameCallback: () => null | ((frame: CanvasImageSource) => void);
+	logLevel: LogLevel;
+	drawDebugOverlay: () => void;
+	getLoopSegmentMediaEndTimestamp: () => number;
+	getStartTime: () => number;
+	getIsLooping: () => boolean;
+	getEffects: () => EffectDefinitionAndStack<unknown>[];
+	getEffectChainState: (
+		width: number,
+		height: number,
+	) => EffectChainState | null;
+	maxCanvasSinkFrameSize: MaxCanvasSinkFrameSize | null;
+}) => {
+	let videoIteratorsCreated = 0;
+	let videoFrameIterator: VideoIterator | null = null;
+	let framesRendered = 0;
+	let currentDelayHandle: {unblock: () => void} | null = null;
+	let lastDrawnFrame: WrappedCanvas | null = null;
+	let currentSeek: number | null = null;
+	let destroyed = false;
+
+	const clearLastDrawnFrame = () => {
+		lastDrawnFrame = null;
+	};
+
+	const displayWidth = await videoTrack.getDisplayWidth();
+	const displayHeight = await videoTrack.getDisplayHeight();
+	if (canvas) {
+		if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+			canvas.width = displayWidth;
+			canvas.height = displayHeight;
+		}
+	}
+
+	const maxWidth = maxCanvasSinkFrameSize?.width ?? Infinity;
+	const maxHeight = maxCanvasSinkFrameSize?.height ?? Infinity;
+	// Only pass the side that limits the size, Mediabunny derives the other one
+	// from the aspect ratio. Never upscale. 'fill' stretches over the rounding of
+	// the derived side instead of leaving a semi-transparent edge.
+	const frameSize =
+		maxWidth / displayWidth < Math.min(1, maxHeight / displayHeight)
+			? {width: maxWidth, fit: 'fill' as const}
+			: maxHeight < displayHeight
+				? {height: maxHeight, fit: 'fill' as const}
+				: {};
+
+	const canvasSink = new CanvasSink(videoTrack, {
+		// Match the preview look-ahead buffer size. CanvasSink may reuse pooled
+		// canvas objects for later decoded frames, so Remotion copies pixels into
+		// stable canvases before retaining frames across seeks/peeks.
+		poolSize: 3,
+		fit: 'contain',
+		alpha: true,
+		...frameSize,
+	});
+
+	// Effects expect a source with the size of the output.
+	let upscaledFrame: OffscreenCanvas | null = null;
+
+	const prewarmedVideoIteratorCache =
+		makePrewarmedVideoIteratorCache(canvasSink);
+
+	const paintFrame = async (frame: WrappedCanvas): Promise<void> => {
+		if (context && canvas) {
+			const effects = getEffects();
+			const chainState = getEffectChainState(canvas.width, canvas.height);
+			if (
+				effects.length > 0 &&
+				chainState &&
+				canvas instanceof HTMLCanvasElement
+			) {
+				let source: CanvasImageSource = frame.canvas;
+				if (
+					frame.canvas.width !== canvas.width ||
+					frame.canvas.height !== canvas.height
+				) {
+					upscaledFrame ??= new OffscreenCanvas(canvas.width, canvas.height);
+					const upscaledContext = upscaledFrame.getContext('2d')!;
+					upscaledContext.clearRect(0, 0, canvas.width, canvas.height);
+					upscaledContext.drawImage(
+						frame.canvas,
+						0,
+						0,
+						canvas.width,
+						canvas.height,
+					);
+					source = upscaledFrame;
+				}
+
+				await runEffectChain({
+					state: chainState,
+					source,
+					effects,
+					output: canvas,
+					width: canvas.width,
+					height: canvas.height,
+				});
+			} else {
+				context.clearRect(0, 0, canvas.width, canvas.height);
+				context.drawImage(frame.canvas, 0, 0, canvas.width, canvas.height);
+			}
+		}
+	};
+
+	const drawFrame = async (frame: WrappedCanvas): Promise<void> => {
+		await paintFrame(frame);
+		lastDrawnFrame = frame;
+
+		framesRendered++;
+
+		drawDebugOverlay();
+		const callback = getOnVideoFrameCallback();
+		if (callback) {
+			callback(frame.canvas);
+		}
+
+		Internals.Log.trace(
+			{logLevel, tag: '@remotion/media'},
+			`[MediaPlayer] Drew frame ${frame.timestamp.toFixed(3)}s`,
+		);
+	};
+
+	const redrawCurrentFrame = async (): Promise<void> => {
+		if (!lastDrawnFrame) {
+			return;
+		}
+
+		await paintFrame(lastDrawnFrame);
+
+		drawDebugOverlay();
+		const callback = getOnVideoFrameCallback();
+		if (callback) {
+			callback(lastDrawnFrame.canvas);
+		}
+
+		Internals.Log.trace(
+			{logLevel, tag: '@remotion/media'},
+			`[MediaPlayer] Redrew frame ${lastDrawnFrame.timestamp.toFixed(3)}s with updated effects`,
+		);
+	};
+
+	const startVideoIterator = async (
+		timeToSeek: number,
+		nonce: Nonce,
+	): Promise<void> => {
+		clearLastDrawnFrame();
+		videoFrameIterator?.destroy();
+		using delayHandle = delayPlaybackHandleIfNotPremounting();
+		currentDelayHandle = delayHandle;
+		currentSeek = timeToSeek;
+
+		const iterator = await createVideoIterator(
+			timeToSeek,
+			prewarmedVideoIteratorCache,
+		);
+		videoIteratorsCreated++;
+
+		// destroy() may have run while the first frame was decoding. It could
+		// not reach this iterator yet, and nothing else references it, so it
+		// would keep pre-decoding samples that are never closed.
+		if (destroyed) {
+			iterator.destroy();
+			return;
+		}
+
+		videoFrameIterator = iterator;
+
+		if (iterator.isDestroyed()) {
+			return;
+		}
+
+		if (nonce.isStale()) {
+			// During a paused scrub, every seek goes stale before its decode
+			// lands, so returning undrawn would discard every frame and freeze
+			// the preview. Painting is safe: the newer seek always lands last.
+			if (!videoFrameIterator.isDestroyed() && iterator.initialFrame) {
+				await drawFrame(iterator.initialFrame);
+			}
+
+			return;
+		}
+
+		if (videoFrameIterator.isDestroyed()) {
+			return;
+		}
+
+		if (!iterator.initialFrame) {
+			// media ended
+			return;
+		}
+
+		await drawFrame(iterator.initialFrame);
+	};
+
+	const seek = async ({
+		newTime,
+		nonce,
+		fps,
+		playbackRate,
+		isPlaying,
+		continuousPlayback,
+	}: {
+		newTime: number;
+		nonce: Nonce;
+		fps: number;
+		playbackRate: number;
+		isPlaying: boolean;
+		continuousPlayback: boolean | null;
+	}) => {
+		if (!videoFrameIterator) {
+			return;
+		}
+
+		if (
+			currentSeek !== null &&
+			roundTo4Digits(currentSeek) === roundTo4Digits(newTime)
+		) {
+			return;
+		}
+
+		const previousTime = currentSeek;
+
+		if (getIsLooping()) {
+			// If less than 1 second from the end away, we pre-warm a new iterator
+			if (getLoopSegmentMediaEndTimestamp() - newTime < 1) {
+				prewarmedVideoIteratorCache.prewarmIteratorForLooping({
+					timeToSeek: getStartTime(),
+				});
+			}
+		}
+
+		const pendingFrameBehavior =
+			previousTime !== null &&
+			newTime >= previousTime &&
+			(continuousPlayback ??
+				isSequentialMediaTimeAdvance({
+					previousTime,
+					newTime,
+					fps,
+					playbackRate,
+					isPlaying,
+				}))
+				? 'wait'
+				: 'restart-iterator';
+		const iterator = videoFrameIterator;
+		const pending: {handle: DelayPlaybackIfNotPremounting | null} = {
+			handle: null,
+		};
+		try {
+			const result = await iterator.tryToSatisfySeek(newTime, {
+				pendingFrameBehavior,
+				onWait: () => {
+					pending.handle ??= delayPlaybackHandleIfNotPremounting();
+					currentDelayHandle = pending.handle;
+				},
+				shouldContinue: () => !nonce.isStale() && !iterator.isDestroyed(),
+			});
+
+			if (nonce.isStale() || iterator.isDestroyed()) {
+				return;
+			}
+
+			if (result.type === 'satisfied') {
+				await drawFrame(result.frame);
+				currentSeek = newTime;
+				return;
+			}
+
+			// The replacement iterator owns its own buffering handle.
+			pending.handle?.unblock();
+			pending.handle = null;
+			currentDelayHandle = null;
+			await startVideoIterator(newTime, nonce);
+		} finally {
+			pending.handle?.unblock();
+			if (currentDelayHandle === pending.handle) {
+				currentDelayHandle = null;
+			}
+		}
+	};
+
+	return {
+		startVideoIterator,
+		getVideoIteratorsCreated: () => videoIteratorsCreated,
+		seek,
+		destroy: () => {
+			destroyed = true;
+			clearLastDrawnFrame();
+			prewarmedVideoIteratorCache.destroy();
+			videoFrameIterator?.destroy();
+			if (context && canvas) {
+				context.clearRect(0, 0, canvas.width, canvas.height);
+			}
+
+			if (currentDelayHandle) {
+				currentDelayHandle.unblock();
+				currentDelayHandle = null;
+			}
+
+			videoFrameIterator = null;
+		},
+		getVideoFrameIterator: () => videoFrameIterator,
+		drawFrame,
+		redrawCurrentFrame,
+		getFramesRendered: () => framesRendered,
+	};
+};
+
+export type VideoIteratorManager = Awaited<
+	ReturnType<typeof videoIteratorManager>
+>;

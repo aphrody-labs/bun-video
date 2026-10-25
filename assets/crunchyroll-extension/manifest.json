@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_appName__",
+  "description": "__MSG_description__",
+  "version": "1.0.0",
+  "default_locale": "en",
+  "icons": { "192": "icons/icon192.png", "512": "icons/icon512.png" },
+  "action": {
+    "default_title": "__MSG_appName__",
+    "default_popup": "popup.html",
+    "default_icon": "icons/icon192.png"
+  }
+}

@@ -1,0 +1,238 @@
+import type {
+	InteractivitySchema,
+	InteractivitySchemaField,
+	InterpolateOutputType,
+} from 'remotion';
+
+export const keyframeInterpolationFunctions = [
+	'interpolate',
+	'interpolateColors',
+	'interpolatePaths',
+] as const;
+
+export type KeyframeInterpolationFunction =
+	(typeof keyframeInterpolationFunctions)[number];
+
+// Keep these tables exhaustive so every schema field requires explicit
+// keyframe and interpolation decisions.
+const KEYFRAME_FIELD_TYPE_SUPPORT = {
+	array: false,
+	asset: false,
+	boolean: true,
+	'remotion-captions': false,
+	color: true,
+	enum: true,
+	'font-family': false,
+	'font-weight': true,
+	hidden: true,
+	number: true,
+	'rotation-css': true,
+	'rotation-degrees': true,
+	scale: true,
+	'svg-path': true,
+	string: false,
+	'text-content': false,
+	'transform-origin': true,
+	translate: true,
+	'uv-coordinate': true,
+} as const satisfies Record<InteractivitySchemaField['type'], boolean>;
+
+type KeyframeInterpolationStrategy =
+	| KeyframeInterpolationFunction
+	| 'infer'
+	| 'unsupported';
+
+const KEYFRAME_FIELD_TYPE_INTERPOLATION = {
+	array: 'unsupported',
+	asset: 'unsupported',
+	boolean: 'interpolate',
+	'remotion-captions': 'unsupported',
+	color: 'interpolateColors',
+	enum: 'interpolate',
+	'font-family': 'unsupported',
+	'font-weight': 'interpolate',
+	hidden: 'infer',
+	number: 'infer',
+	'rotation-css': 'interpolate',
+	'rotation-degrees': 'infer',
+	scale: 'interpolate',
+	'svg-path': 'interpolatePaths',
+	string: 'unsupported',
+	'text-content': 'unsupported',
+	'transform-origin': 'interpolate',
+	translate: 'interpolate',
+	'uv-coordinate': 'infer',
+} as const satisfies Record<
+	InteractivitySchemaField['type'],
+	KeyframeInterpolationStrategy
+>;
+
+const KEYFRAME_FIELD_TYPE_OUTPUT_TYPE = {
+	array: null,
+	asset: null,
+	boolean: null,
+	'remotion-captions': null,
+	color: null,
+	enum: null,
+	'font-family': null,
+	'font-weight': 'font-weight',
+	hidden: null,
+	number: null,
+	'rotation-css': 'rotate',
+	'rotation-degrees': null,
+	scale: 'scale',
+	'svg-path': null,
+	string: null,
+	'text-content': null,
+	'transform-origin': 'transform-origin',
+	translate: 'translate',
+	'uv-coordinate': null,
+} as const satisfies Record<
+	InteractivitySchemaField['type'],
+	InterpolateOutputType | null
+>;
+
+const KEYFRAME_INTERPOLATION_EASING_SUPPORT = {
+	interpolate: true,
+	interpolateColors: true,
+	interpolatePaths: true,
+} as const satisfies Record<KeyframeInterpolationFunction, boolean>;
+
+export const isKeyframeInterpolationFunction = (
+	name: string,
+): name is KeyframeInterpolationFunction => {
+	return keyframeInterpolationFunctions.includes(
+		name as KeyframeInterpolationFunction,
+	);
+};
+
+export const canEditEasingForInterpolationFunction = (
+	interpolationFunction: string,
+): boolean =>
+	isKeyframeInterpolationFunction(interpolationFunction) &&
+	KEYFRAME_INTERPOLATION_EASING_SUPPORT[interpolationFunction];
+
+export const isInteractivitySchemaFieldKeyframable = (
+	field: InteractivitySchemaField | undefined,
+): boolean => {
+	if (!field) {
+		return true;
+	}
+
+	if (field.type === 'enum') {
+		return field.keyframable === true;
+	}
+
+	return KEYFRAME_FIELD_TYPE_SUPPORT[field.type] && field.keyframable !== false;
+};
+
+const findFieldInSchema = (
+	schema: InteractivitySchema,
+	key: string,
+): InteractivitySchemaField | undefined => {
+	if (key in schema) {
+		return schema[key];
+	}
+
+	for (const field of Object.values(schema)) {
+		if (field.type !== 'enum') {
+			continue;
+		}
+
+		for (const variant of Object.values(field.variants)) {
+			const found = findFieldInSchema(variant, key);
+			if (found) {
+				return found;
+			}
+		}
+	}
+
+	return undefined;
+};
+
+export const isSchemaFieldKeyframable = ({
+	schema,
+	key,
+}: {
+	schema: InteractivitySchema | null;
+	key: string;
+}): boolean => {
+	const field = schema ? findFieldInSchema(schema, key) : undefined;
+	return isInteractivitySchemaFieldKeyframable(field);
+};
+
+export const isInteractivitySchemaFieldHoldOnly = (
+	field: InteractivitySchemaField | undefined,
+): boolean => {
+	return (
+		(field?.type === 'boolean' && field.keyframable !== false) ||
+		(field?.type === 'enum' && field.keyframable === true) ||
+		(field?.type === 'number' &&
+			field.integer === true &&
+			field.keyframable !== false)
+	);
+};
+
+export const isSchemaFieldHoldOnly = ({
+	schema,
+	key,
+}: {
+	schema: InteractivitySchema | null;
+	key: string;
+}): boolean => {
+	return isInteractivitySchemaFieldHoldOnly(
+		schema ? findFieldInSchema(schema, key) : undefined,
+	);
+};
+
+export const getKeyframeInterpolationFunctionForSchemaField = ({
+	schema,
+	key,
+}: {
+	schema: InteractivitySchema | null;
+	key: string;
+}): KeyframeInterpolationFunction | null => {
+	const field = schema ? findFieldInSchema(schema, key) : undefined;
+
+	if (!field) {
+		return null;
+	}
+
+	const strategy = KEYFRAME_FIELD_TYPE_INTERPOLATION[field.type];
+	return strategy === 'infer' || strategy === 'unsupported' ? null : strategy;
+};
+
+export const getKeyframeOutputTypeForSchemaField = ({
+	schema,
+	key,
+}: {
+	schema: InteractivitySchema | null;
+	key: string;
+}): InterpolateOutputType | null => {
+	const field = schema ? findFieldInSchema(schema, key) : undefined;
+	return field ? KEYFRAME_FIELD_TYPE_OUTPUT_TYPE[field.type] : null;
+};
+
+export const getKeyframeInterpolationFunction = ({
+	schema,
+	key,
+	staticValue,
+	newValue,
+}: {
+	schema: InteractivitySchema | null;
+	key: string;
+	staticValue: unknown;
+	newValue: unknown;
+}): KeyframeInterpolationFunction => {
+	const schemaFunction = getKeyframeInterpolationFunctionForSchemaField({
+		schema,
+		key,
+	});
+	if (schemaFunction) {
+		return schemaFunction;
+	}
+
+	return typeof staticValue === 'string' && typeof newValue === 'string'
+		? 'interpolateColors'
+		: 'interpolate';
+};

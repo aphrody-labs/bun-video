@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@layer base {
+	button:not(:disabled),
+	[role="button"]:not(:disabled) {
+		cursor: pointer;
+	}
+}
+
+@theme {
+	--color-zinc-750: oklch(32.2% 0.0095 285.919);
+	--font-sans: 'Rubik Variable', sans-serif;
+}

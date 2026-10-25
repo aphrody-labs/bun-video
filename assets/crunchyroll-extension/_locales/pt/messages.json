@@ -1,0 +1,41 @@
+{
+  "appName": {
+    "message": "Atalho do Crunchyroll"
+  },
+  "description": {
+    "message": "Abra o episódio oficial na sua sessão do Chrome."
+  },
+  "title": {
+    "message": "O deus da destruição"
+  },
+  "open": {
+    "message": "Assistir no Crunchyroll"
+  },
+  "language": {
+    "message": "Idioma do aplicativo"
+  },
+  "note": {
+    "message": "Esta opção altera o idioma do atalho. O Crunchyroll controla o áudio, as legendas, a conta e a reprodução."
+  },
+  "install": {
+    "message": "Instalar este atalho"
+  },
+  "installUnavailable": {
+    "message": "A instalação fica disponível quando o Chrome a oferece. Você também pode usar o menu do navegador."
+  },
+  "offline": {
+    "message": "O atalho funciona offline; o episódio exige internet e acesso autorizado ao Crunchyroll."
+  },
+  "online": {
+    "message": "Atalho pronto. A reprodução acontece no site oficial."
+  },
+  "installed": {
+    "message": "Instalação solicitada. O Chrome confirma o resultado."
+  },
+  "installDismissed": {
+    "message": "A instalação foi cancelada. Você pode tentar novamente."
+  },
+  "shellError": {
+    "message": "Não foi possível preparar o atalho local para uso offline."
+  }
+}

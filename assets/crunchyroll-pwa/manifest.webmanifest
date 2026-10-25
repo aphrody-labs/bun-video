@@ -1,0 +1,16 @@
+{
+  "id": "/pwa/",
+  "name": "Crunchyroll shortcut · Bun",
+  "short_name": "Crunchyroll",
+  "description": "A local shortcut to the official episode. Video playback remains on Crunchyroll.",
+  "start_url": "/pwa/",
+  "scope": "/pwa/",
+  "display": "standalone",
+  "lang": "en",
+  "background_color": "#101622",
+  "theme_color": "#101622",
+  "icons": [
+    { "src": "/pwa/icons/icon192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/pwa/icons/icon512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

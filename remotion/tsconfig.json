@@ -1,0 +1,82 @@
+{
+  "compilerOptions": {
+    "target": "ES2018",
+    "module": "commonjs",
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "lib": ["es2023", "dom"],
+    "jsx": "react-jsx",
+    "noEmit": false,
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "isolatedModules": true
+  },
+  "include": [],
+  "references": [
+    {
+      "path": "./bundler"
+    },
+    {
+      "path": "./sdk"
+    },
+    {
+      "path": "./cli"
+    },
+    {
+      "path": "./core"
+    },
+    {
+      "path": "./openai-whisper"
+    },
+    {
+      "path": "./media-utils"
+    },
+    {
+      "path": "./captions"
+    },
+    {
+      "path": "./paths"
+    },
+    {
+      "path": "./player"
+    },
+    {
+      "path": "./licensing"
+    },
+    {
+      "path": "./renderer"
+    },
+    {
+      "path": "./studio"
+    },
+    {
+      "path": "./codemods"
+    },
+    {
+      "path": "./studio-server"
+    },
+    {
+      "path": "./studio-shared"
+    },
+    {
+      "path": "./streaming"
+    },
+    {
+      "path": "./zod-types"
+    },
+    {
+      "path": "./media"
+    },
+    {
+      "path": "./web-renderer"
+    },
+    {
+      "path": "./studio-protocol"
+    }
+  ]
+}

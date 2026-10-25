@@ -1,0 +1,15 @@
+area,feature,priority,status,evidence
+discovery,Search title and description,P0,implemented,Local showcase manifest
+discovery,Filter by engine and feature text,P0,implemented,Generated manifest fields
+discovery,Responsive video catalog and navigation,P0,implemented,Original Bun/Aphrody UI using public UX patterns
+watch,Native MP4 play pause seek fullscreen,P0,implemented,Published first-party R2 assets
+watch,Related videos and source evidence,P0,implemented,Showcase manifest metadata
+shorts,Full-screen snap feed with next video prefetch,P0,existing,Current Bun Video showcase timeline
+shorts,Keyboard next previous and reduced motion,P1,existing,Current Bun Video showcase timeline
+library,Local saved collection and resume state,P1,planned,Browser local storage only
+pipeline,Native Bun.Video FilmCraft and Bun.Image transform,P0,integrate,Existing Aphrody native API
+pipeline,Remotion and HyperFrames compositions,P0,existing,Generated and qualified showcase compositions
+pipeline,HLS DASH MP4 WebM MOV MKV readers,P0,integrate,Existing source and format adapters; qualify by provider
+creator,Upload local media and publish jobs,P1,planned,Requires server-side authentication limits and job lifecycle
+creator,Source URL acquisition and timeline editing,P1,planned,Existing ytdlp source adapters require explicit authorization
+trust,Shenron source provenance and private media isolation,P0,existing,Qualification docs and episode-source digest workflow

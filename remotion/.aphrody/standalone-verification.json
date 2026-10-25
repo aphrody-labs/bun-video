@@ -1,0 +1,218 @@
+{
+  "artifact": {
+    "path": "OS temp/bun-video-remotion-clean-TWISw2/remotion.exe",
+    "bytes": 234056704,
+    "sha256": "fddce5e44521fa3807f204a5501927661cf8815dfe9986a6505bea99cf023c81",
+    "platform": "win32",
+    "arch": "x64",
+    "bun": "1.4.3",
+    "revision": "41211b56872ca2957e5c037ad1756f56f8f89b7c",
+    "scope": "Preserved earlier compositor-only executable snapshot; later tmp/bun-video-build/remotion.exe differs"
+  },
+  "cleanCwd": "C:\\Users\\aphro\\AppData\\Local\\Temp\\bun-video-remotion-clean-TWISw2",
+  "noNodeModules": true,
+  "checks": [
+    {
+      "args": [
+        "--help"
+      ],
+      "exit": 0,
+      "milliseconds": 21712.1555,
+      "stdout": "@remotion/cli 4.0.534\n© 2026 Remotion AG\n\nAvailable commands:\n\nremotion studio <entry-point>?\nStart the Remotion Studio.\nhttps://www.remotion.dev/docs/cli/studio\n\nremotion render [<entry-point|serve-url>] [<composition-id>] [<output-location>]\nRender video, audio or an image sequence.\nhttps://www.remotion.dev/docs/cli/render\n\nremotion still <serve-url|entry-point>? [<composition-id>] [<output-location>]\nRender a still frame and save it as an image.\nhttps://www.remotion.dev/docs/cli/still\n\nremotion compositions <serve-url|entry-file>?\nPrint the available compositions.\nhttps://www.remotion.dev/docs/cli/compositions\n\nremotion lambda <command>\nControl Remotion Lambda.\nhttps://www.remotion.dev/docs/lambda/cli\n\nremotion bundle <serve-url|entry-file>?\nCreate a Remotion bundle to be deployed to the web.\nhttps://www.remotion.dev/docs/cli/bundle\n\nremotion browser <command>\nEnsure Remotion has a browser it can use for rendering.\nhttps://www.remotion.dev/docs/cli/browser\n\nremotion cloudrun <command>\nControl Remotion Cloud Run.\nhttps://www.remotion.dev/docs/cloudrun/cli\n\nremotion benchmark [<entry-point>] [composition-ids]\nBenchmark rendering one or more compositions.\nhttps://www.remotion.dev/docs/cli/benchmark\n\nremotion skills <add | update>\nInstall or update skills from remotion-dev/skills.\nhttps://www.remotion.dev/docs/cli/skills\n\nremotion versions\nPrint and validate versions of all Remotion packages.\nhttps://www.remotion.dev/docs/cli/versions\n\nremotion upgrade\nEnsure Remotion is on the newest version.\nhttps://www.remotion.dev/docs/cli/upgrade\n\nremotion add <package-name...>\nAdd Remotion packages with the correct version.\nhttps://www.remotion.dev/docs/cli/add\n\nremotion gpu\nPrint information about how Chrome uses the GPU.\nhttps://www.remotion.dev/docs/cli/gpu\n\nremotion ffmpeg <arguments...>\nExecute FFmpeg with all arguments forwarded.\nhttps://www.remotion.dev/docs/cli/ffmpeg\n\nremotion ffprobe <arguments...>\nExecute FFprobe with all arguments forwarded.\nhttps://www.remotion.dev",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "ffmpeg",
+        "-version"
+      ],
+      "exit": 0,
+      "milliseconds": 3840.162199999999,
+      "stdout": "You are running Remotion with Bun, which is mostly supported. Visit https://remotion.dev/bun for more information.\nffmpeg version n7.1 Copyright (c) 2000-2024 the FFmpeg developers\r\nbuilt with gcc 10-win32 (GCC) 20220113\r\nconfiguration: --prefix=remotion --target-os=mingw32 --arch=x86_64 --cross-prefix=x86_64-w64-mingw32- --disable-w32threads --disable-os2threads --extra-cflags='-Iremotion/include -Iremotion/include/opus -Iremotion/include/lame -Iremotion/include/vpx' --extra-ldflags=-Lremotion/lib --enable-small --enable-shared --enable-libdav1d --enable-libaom --enable-libzimg --enable-libfdk-aac --disable-static --disable-ffplay --disable-postproc --disable-filters --disable-libxcb --enable-filter=aformat --enable-filter=atrim --enable-filter=acopy --enable-filter=adelay --enable-filter=anullsrc --enable-filter=atempo --enable-filter=apad --enable-filter=amerge --enable-filter=amix --enable-filter=asetrate --enable-filter=asetpts --enable-filter=aresample --enable-filter=concat --enable-filter=loudnorm --enable-filter=colorspace --enable-filter=tinterlace --enable-filter=fieldorder --enable-filter=pan --enable-filter=volume --enable-filter=scale --enable-filter=sine --enable-filter=split --enable-filter=nullsrc --enable-filter=silencedetect --enable-filter=palettegen --enable-filter=paletteuse --enable-filter=zscale --enable-filter=tonemap --enable-filter=copy --disable-doc --disable-debug --enable-gpl --disable-encoders --enable-encoder=opus --enable-encoder=aac --enable-encoder=libfdk_aac --enable-encoder=png --enable-encoder=mjpeg --enable-encoder=pcm_s16le --enable-encoder=pcm_s24le --enable-encoder=libx264 --enable-encoder=libx265 --enable-encoder=libaom_av1 --enable-libvpx --enable-encoder=libvpx_vp8 --enable-encoder=libvpx_vp9 --enable-encoder=gif --enable-encoder=libmp3lame --enable-encoder=libopus --enable-encoder=prores_ks --enable-encoder=rawvideo --enable-encoder=h264_nvenc --enable-encoder=hevc_nvenc --disable-muxers --enable-muxer='webm,opus,mp4,wav",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "ffprobe",
+        "-version"
+      ],
+      "exit": 0,
+      "milliseconds": 2920.949700000001,
+      "stdout": "You are running Remotion with Bun, which is mostly supported. Visit https://remotion.dev/bun for more information.\nffprobe version n7.1 Copyright (c) 2007-2024 the FFmpeg developers\r\nbuilt with gcc 10-win32 (GCC) 20220113\r\nconfiguration: --prefix=remotion --target-os=mingw32 --arch=x86_64 --cross-prefix=x86_64-w64-mingw32- --disable-w32threads --disable-os2threads --extra-cflags='-Iremotion/include -Iremotion/include/opus -Iremotion/include/lame -Iremotion/include/vpx' --extra-ldflags=-Lremotion/lib --enable-small --enable-shared --enable-libdav1d --enable-libaom --enable-libzimg --enable-libfdk-aac --disable-static --disable-ffplay --disable-postproc --disable-filters --disable-libxcb --enable-filter=aformat --enable-filter=atrim --enable-filter=acopy --enable-filter=adelay --enable-filter=anullsrc --enable-filter=atempo --enable-filter=apad --enable-filter=amerge --enable-filter=amix --enable-filter=asetrate --enable-filter=asetpts --enable-filter=aresample --enable-filter=concat --enable-filter=loudnorm --enable-filter=colorspace --enable-filter=tinterlace --enable-filter=fieldorder --enable-filter=pan --enable-filter=volume --enable-filter=scale --enable-filter=sine --enable-filter=split --enable-filter=nullsrc --enable-filter=silencedetect --enable-filter=palettegen --enable-filter=paletteuse --enable-filter=zscale --enable-filter=tonemap --enable-filter=copy --disable-doc --disable-debug --enable-gpl --disable-encoders --enable-encoder=opus --enable-encoder=aac --enable-encoder=libfdk_aac --enable-encoder=png --enable-encoder=mjpeg --enable-encoder=pcm_s16le --enable-encoder=pcm_s24le --enable-encoder=libx264 --enable-encoder=libx265 --enable-encoder=libaom_av1 --enable-libvpx --enable-encoder=libvpx_vp8 --enable-encoder=libvpx_vp9 --enable-encoder=gif --enable-encoder=libmp3lame --enable-encoder=libopus --enable-encoder=prores_ks --enable-encoder=rawvideo --enable-encoder=h264_nvenc --enable-encoder=hevc_nvenc --disable-muxers --enable-muxer='webm,opus,mp4,wa",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "render",
+        "--help"
+      ],
+      "exit": 0,
+      "milliseconds": 360.25810000000274,
+      "stdout": "remotion render [<entry-point|serve-url>] [<composition-id>] [<output-location>]\nRender video, audio or an image sequence.\n\nOptions:\n  --props <value>                               Input Props\n  --height <value>                              Override Height\n  --width <value>                               Override Width\n  --fps <value>                                 Override FPS\n  --duration <value>                            Override Duration\n  --concurrency <value>                         Concurrency\n  --pixel-format <value>                        Pixel format\n  --image-format <value>                        Video Image Format\n  --image-sequence-pattern <value>              Image Sequence Pattern\n  --config <value>                              Config file\n  --env-file <value>                            Env File\n  --jpeg-quality <value>                        JPEG Quality\n  --output <path>                               Set the output path instead of using a positional argument.\n  --overwrite                                   Overwrite output\n  --sequence                                    Image Sequence\n  --codec <value>                               Codec\n  --audio-codec <value>                         Audio Codec\n  --audio-bitrate <value>                       Audio Bitrate\n  --video-bitrate <value>                       Video Bitrate\n  --buffer-size <value>                         FFmpeg -bufsize flag\n  --max-rate <value>                            FFmpeg -maxrate flag\n  --prores-profile <value>                      ProRes profile\n  --x264-preset <value>                         x264 Preset\n  --gop <value>                                 GOP size\n  --crf <value>                                 CRF\n  --browser-executable <value>                  Browser executable\n  --chrome-mode <value>                         Chrome Mode\n  --scale <value>                               Scale\n  --frames <value>                              Frame Range\n  --every-nth-frame <value>    ",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "nullsrc=s=64x64:d=0.1",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "sample.mp4"
+      ],
+      "exit": 234,
+      "milliseconds": 9624.768500000002,
+      "stdout": "You are running Remotion with Bun, which is mostly supported. Visit https://remotion.dev/bun for more information.\n",
+      "stderr": "s16le --enable-encoder=pcm_s24le --enable-encoder=libx264 --enable-encoder=libx265 --enable-encoder=libaom_av1 --enable-libvpx --enable-encoder=libvpx_vp8 --enable-encoder=libvpx_vp9 --enable-encoder=gif --enable-encoder=libmp3lame --enable-encoder=libopus --enable-encoder=prores_ks --enable-encoder=rawvideo --enable-encoder=h264_nvenc --enable-encoder=hevc_nvenc --disable-muxers --enable-muxer='webm,opus,mp4,wav,mp3,mov,matroska,hevc,h264,gif,image2,image2pipe,adts,m4a,mpegts,null,avi' --enable-libx264 --enable-libx265 --enable-libmp3lame --enable-zlib --enable-libopus --disable-demuxers --disable-sdl2 --disable-xlib --enable-demuxer='aac,av1,avi,caf,concat,flac,flv,h264,hevc,image2,image2pipe,matroska,mov,mp3,ogg,pcm_f32le,pcm_f32be,pcm_f64le,pcm_f64be,pcm_s16be,pcm_s16le,pcm_s24be,pcm_s24le,pcm_s32be,pcm_s32le,pcm_u16be,pcm_u16le,pcm_u24le,pcm_u24be,pcm_u32be,pcm_u32le,wav,gif,hls,m4a,mpeg2_videotoolbox,mpeg4_videotoolbox' --disable-decoders --enable-decoder='aac,ac3,flac,h264,hevc,libvpx_vp8,libvpx_vp9,vp8,vp9,mp3,mpeg4,opus,pcm_u8,pcm_f16le,pcm_f24le,pcm_f32le,pcm_f32be,pcm_f64le,pcm_f64be,pcm_s16be,pcm_s16le,pcm_s24be,pcm_s24le,pcm_s32be,pcm_s32le,pcm_s64be,pcm_s64le,pcm_u16be,pcm_u16le,pcm_u24le,pcm_u24be,pcm_u32be,pcm_u32le,prores,theora,vorbis,vp9,mjpeg,gif,png,libdav1d,hls,m4a,rawvideo'\r\n  libavutil      59. 39.100 / 59. 39.100\r\n  libavcodec     61. 19.100 / 61. 19.100\r\n  libavformat    61.  7.100 / 61.  7.100\r\n  libavdevice    61.  3.100 / 61.  3.100\r\n  libavfilter    10.  4.100 / 10.  4.100\r\n  libswscale      8.  3.100 /  8.  3.100\r\n  libswresample   5.  3.100 /  5.  3.100\r\nInput #0, lavfi, from 'nullsrc=s=64x64:d=0.1':\r\n  Duration: N/A, start: 0.000000, bitrate: N/A\r\n  Stream #0:0: Video: wrapped_avframe, yuv420p, 64x64 [SAR 1:1 DAR 1:1], 25 fps, 25 tbr, 25 tbn\r\n[vist#0:0/wrapped_avframe @ 000000d1e6c94f00] Decoding requested, but no decoder found for: wrapped_avframe\r\nError opening output file sample.mp4.\r\nError opening output files: Invalid argument\r\n"
+    },
+    {
+      "args": [
+        "ffprobe",
+        "-v",
+        "quiet",
+        "-show_entries",
+        "stream=codec_name,width,height",
+        "-of",
+        "json",
+        "sample.mp4"
+      ],
+      "exit": 1,
+      "milliseconds": 10527.6276,
+      "stdout": "You are running Remotion with Bun, which is mostly supported. Visit https://remotion.dev/bun for more information.\n{\r\n\r\n}\r\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "ffmpeg",
+        "-y",
+        "-loop",
+        "1",
+        "-framerate",
+        "30",
+        "-i",
+        "sample.png",
+        "-vf",
+        "scale=64:64",
+        "-frames:v",
+        "3",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "sample.mp4"
+      ],
+      "exit": 0,
+      "stdout": "You are running Remotion with Bun, which is mostly supported. Visit https://remotion.dev/bun for more information.\n",
+      "stderr": "qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00\r\nOutput #0, mp4, to 'sample.mp4':\r\n  Metadata:\r\n    encoder         : Lavf61.7.100\r\n  Stream #0:0: Video: h264 (avc1 / 0x31637661), yuv420p(tv, progressive), 64x64, q=2-31, 30 fps, 15360 tbn\r\n      Metadata:\r\n        encoder         : Lavc61.19.100 libx264\r\n      Side data:\r\n        cpb: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A\r\n[out#0/mp4 @ 0000008000daddc0] video:1KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 118.908123%\r\nframe=    3 fps=0.0 q=-1.0 Lsize=       2KiB time=00:00:00.03 bitrate= 394.6kbits/s speed=0.0879x    \r\n[libx264 @ 0000008000cae7c0] frame I:1     Avg QP:12.00  size:    36\r\n[libx264 @ 0000008000cae7c0] frame P:1     Avg QP:14.00  size:    14\r\n[libx264 @ 0000008000cae7c0] frame B:1     Avg QP:14.00  size:    12\r\n[libx264 @ 0000008000cae7c0] consecutive B-frames: 33.3% 66.7%  0.0%  0.0%\r\n[libx264 @ 0000008000cae7c0] mb I  I16..4: 100.0%  0.0%  0.0%\r\n[libx264 @ 0000008000cae7c0] mb P  I16..4:  0.0%  0.0%  0.0%  P16..4:  0.0%  0.0%  0.0%  0.0%  0.0%    skip:100.0%\r\n[libx264 @ 0000008000cae7c0] mb B  I16..4:  0.0%  0.0%  0.0%  B16..8:  0.0%  0.0%  0.0%  direct: 0.0%  skip:100.0%\r\n[libx264 @ 0000008000cae7c0] 8x8 transform intra:0.0%\r\n[libx264 @ 0000008000cae7c0] coded y,uvDC,uvAC intra: 0.0% 0.0% 0.0% inter: 0.0% 0.0% 0.0%\r\n[libx264 @ 0000008000cae7c0] i16 v,h,dc,p: 75%  0% 25%  0%\r\n[libx264 @ 0000008000cae7c0] i8c dc,h,v,p: 100%  0%  0%  0%\r\n[libx264 @ 0000008000cae7c0] Weighted P-Frames: Y:0.0% UV:0.0%\r\n[libx264 @ 0000008000cae7c0] kb/s:4.96\r\n"
+    },
+    {
+      "args": [
+        "ffprobe",
+        "-v",
+        "quiet",
+        "-show_entries",
+        "stream=codec_name,width,height,nb_frames",
+        "-of",
+        "json",
+        "sample.mp4"
+      ],
+      "exit": 0,
+      "stdout": "You are running Remotion with Bun, which is mostly supported. Visit https://remotion.dev/bun for more information.\n{\r\n    \"programs\": [\r\n\r\n    ],\r\n    \"stream_groups\": [\r\n\r\n    ],\r\n    \"streams\": [\r\n        {\r\n            \"codec_name\": \"h264\",\r\n            \"width\": 64,\r\n            \"height\": 64,\r\n            \"nb_frames\": \"3\"\r\n        }\r\n    ]\r\n}\r\n",
+      "stderr": ""
+    }
+  ],
+  "encodedBytes": 1644,
+  "bundleCheck": {
+    "args": [
+      "bundle",
+      "index.tsx",
+      "--out-dir",
+      "composition"
+    ],
+    "exit": 1,
+    "stdout": "You are running Remotion with Bun, which is mostly supported. Visit https://remotion.dev/bun for more information.\n\n",
+    "stderr": "ResolveMessage: Cannot find module '@remotion/studio/renderEntry'\nRequire stack:\n- C:\\bun\\vendor\\bun-video\\remotion\\.aphrody\\build-deps\\node_modules\\@rspack\\binding\\binding.js\n"
+  },
+  "compiledLibrary": {
+    "path": "tmp/bun-video-build/library/index.ts",
+    "bytes": 3884117,
+    "worker": "frame-worker.ts",
+    "cleanCwdNoNodeModules": true,
+    "interpolate": 50,
+    "springSnappyDataLength": 1318,
+    "remotionVersion": "4.0.534",
+    "renderMediaExport": "function"
+  },
+  "physicalModuleBundleQualification": {
+    "status": "incomplete",
+    "latestSourceFix": "Only seven Bun.Transpiler outputs containing bun:wrap use pinned upstream ESbuild lowering with inline browser helpers",
+    "fixCompiled": false,
+    "finalCompilationAttempts": [
+      {
+        "session": 36754,
+        "result": "PE Io/ENOSPC"
+      },
+      {
+        "session": 65847,
+        "temporaryDirectory": "NTFS-compressed task compile-temp, child TEMP/TMP/TMPDIR only",
+        "result": "PE Io/ENOSPC"
+      }
+    ],
+    "freeBytesAfterFinalAttempt": 779591680,
+    "automaticReclaimReview": "Exact old task PE deletion and exact stale module extraction deletion rejected: blocked by policy; no bypass",
+    "extractionLifetime": "Native DLLs can remain loaded during process exit cleanup, leaving approximately 561 MB extraction per process",
+    "ntfsCompression": {
+      "deletedFiles": 0,
+      "binaryHashesPreserved": true,
+      "staleExtractions": [
+        "bun-video-remotion-modules-IvL8ta",
+        "bun-video-remotion-modules-lFLQfI"
+      ]
+    }
+  },
+  "latestUnifiedArtifact": {
+    "path": "tmp/bun-video-build/bun-video.exe",
+    "bytes": 1036963328,
+    "sha256": "ab3ed4cd9e3282befa82db8cb0f230b0cb156915ff7c7c1b8ba0742f272584e1",
+    "bun": "1.4.3",
+    "revision": "41211b56872ca2957e5c037ad1756f56f8f89b7c",
+    "platform": "win32",
+    "arch": "x64",
+    "scope": "Includes physical loaders, relative ESbuild entry and explicit relative ESM extensions; browser explicit-resource-management fallback source not compiled"
+  },
+  "latestUnifiedCleanroom": {
+    "cwd": "OS temp bun-video-remotion-clean fixture",
+    "cwdNodeModules": false,
+    "remotionHelpExit": 0,
+    "hyperframesHelpExit": 0,
+    "embeddedRemotionFfmpegVersion": "n7.1",
+    "embeddedRemotionFfmpegExit": 0,
+    "bundleExit": 1,
+    "bundleProgress": 99,
+    "error": "Webpack UnhandledSchemeError bun:wrap emitted by installed Bun.Transpiler for browser explicit resource management",
+    "physicalLoaders": true,
+    "actualNativeEsbuildTransform": true,
+    "fullReactRender": false
+  },
+  "compiledMcp": {
+    "method": "direct JSON-RPC stdio integration from clean cwd",
+    "executableSha256": "ab3ed4cd9e3282befa82db8cb0f230b0cb156915ff7c7c1b8ba0742f272584e1",
+    "exitCode": 0,
+    "stderr": "",
+    "replyOrder": [
+      1,
+      3,
+      4,
+      2
+    ],
+    "protocolVersion": "2025-11-25",
+    "interpolateValue": 50,
+    "cancelledRequestIsError": true,
+    "factoryGate": "Not run in this final phase: native factory stopped due insufficient disk capacity; direct compiled JSON-RPC gate passed instead"
+  }
+}

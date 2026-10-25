@@ -1,0 +1,41 @@
+{
+  "appName": {
+    "message": "Crunchyroll 바로가기"
+  },
+  "description": {
+    "message": "현재 Chrome 세션에서 공식 에피소드를 엽니다."
+  },
+  "title": {
+    "message": "파괴신"
+  },
+  "open": {
+    "message": "Crunchyroll에서 보기"
+  },
+  "language": {
+    "message": "앱 언어"
+  },
+  "note": {
+    "message": "이 설정은 바로가기의 표시 언어를 변경합니다. 오디오, 자막, 계정 접근 및 재생은 Crunchyroll이 관리합니다."
+  },
+  "install": {
+    "message": "바로가기 설치"
+  },
+  "installUnavailable": {
+    "message": "Chrome에서 설치를 제안하면 사용할 수 있습니다. 브라우저 메뉴에서도 설치할 수 있습니다."
+  },
+  "offline": {
+    "message": "바로가기는 오프라인에서도 작동합니다. 시청에는 인터넷과 승인된 Crunchyroll 접근 권한이 필요합니다."
+  },
+  "online": {
+    "message": "바로가기 준비 완료. 재생은 공식 사이트에서 진행됩니다."
+  },
+  "installed": {
+    "message": "설치를 요청했습니다. Chrome이 결과를 확인합니다."
+  },
+  "installDismissed": {
+    "message": "설치가 취소되었습니다. 다시 시도할 수 있습니다."
+  },
+  "shellError": {
+    "message": "오프라인 사용을 위한 로컬 바로가기를 준비하지 못했습니다."
+  }
+}

@@ -1,0 +1,322 @@
+import {expect, test} from 'bun:test';
+import type {VideoConfig} from 'remotion';
+import {getTimelineSequenceLayout} from '../helpers/get-timeline-sequence-layout';
+
+const makeVideoConfig = (durationInFrames: number): VideoConfig => ({
+	durationInFrames,
+	fps: 30,
+	height: 1080,
+	width: 1920,
+	id: 'main',
+	// @ts-expect-error
+	component: {_payload: {_status: 1}},
+	props: {},
+});
+
+test('Should test timeline sequence layout without max media duration', () => {
+	expect(
+		getTimelineSequenceLayout({
+			durationInFrames: 400,
+			startFrom: 2023,
+			cascadedStart: 2023,
+			startFromMedia: 0,
+			maxMediaDuration: null,
+			premountDisplay: null,
+			postmountDisplay: null,
+			video: {
+				durationInFrames: 2423,
+				fps: 30,
+				height: 1080,
+				width: 1920,
+				id: 'main',
+				// @ts-expect-error
+				component: {
+					_payload: {
+						_status: 1,
+					},
+				},
+				props: {},
+			},
+			windowWidth: 1414.203125,
+		}),
+	).toEqual({
+		marginLeft: 1154.0226668902187,
+		premountWidth: null,
+		postmountWidth: null,
+		negativeStartWidth: 0,
+		negativeStartClipped: false,
+		width: 228.18045810978126,
+		naturalWidth: 228.18045810978126,
+	});
+});
+test('Should test timeline sequence layout with max media duration', () => {
+	expect(
+		getTimelineSequenceLayout({
+			durationInFrames: 400,
+			startFrom: 2023,
+			cascadedStart: 2023,
+			maxMediaDuration: 400,
+			startFromMedia: 10,
+			premountDisplay: null,
+			postmountDisplay: null,
+			video: {
+				durationInFrames: 2423,
+				fps: 30,
+				height: 1080,
+				width: 1920,
+				id: 'main',
+				// @ts-expect-error
+				component: {
+					_payload: {
+						_status: 1,
+					},
+				},
+				props: {},
+			},
+			windowWidth: 1414.203125,
+		}),
+	).toEqual({
+		marginLeft: 1154.0226668902187,
+		premountWidth: null,
+		postmountWidth: null,
+		negativeStartWidth: 0,
+		negativeStartClipped: false,
+		width: 222.47594665703676,
+		naturalWidth: 222.47594665703676,
+	});
+});
+
+test('naturalWidth > width when segment is clipped by timeline end', () => {
+	// Segment of 100 frames starting at frame 250 in a 300-frame composition
+	// startFrom + durationInFrames = 350 > 300, so it gets clipped
+	const clipped = getTimelineSequenceLayout({
+		durationInFrames: 100,
+		startFrom: 250,
+		cascadedStart: 250,
+		startFromMedia: 0,
+		maxMediaDuration: null,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(300),
+		windowWidth: 1000,
+	});
+
+	expect(clipped.naturalWidth).toBeGreaterThan(clipped.width);
+});
+
+test('naturalWidth === width when segment fits within timeline', () => {
+	// Segment of 100 frames starting at frame 100 in a 300-frame comp
+	// startFrom + durationInFrames = 200 < 300, so no clipping
+	const result = getTimelineSequenceLayout({
+		durationInFrames: 100,
+		startFrom: 100,
+		cascadedStart: 100,
+		startFromMedia: 0,
+		maxMediaDuration: null,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(300),
+		windowWidth: 1000,
+	});
+
+	expect(result.naturalWidth).toBe(result.width);
+});
+
+test('one-frame segments have a one-frame width', () => {
+	const result = getTimelineSequenceLayout({
+		durationInFrames: 1,
+		startFrom: 0,
+		cascadedStart: 0,
+		startFromMedia: 0,
+		maxMediaDuration: null,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(300),
+		windowWidth: 1000,
+	});
+
+	expect(result.width).toBe(3.226666666666667);
+	expect(result.naturalWidth).toBe(3.226666666666667);
+});
+
+test('adjacent sequences have no visual gap', () => {
+	const first = getTimelineSequenceLayout({
+		durationInFrames: 23.5,
+		startFrom: 0,
+		cascadedStart: 0,
+		startFromMedia: 0,
+		maxMediaDuration: null,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(120),
+		windowWidth: 1000,
+	});
+	const second = getTimelineSequenceLayout({
+		durationInFrames: 20,
+		startFrom: 23.5,
+		cascadedStart: 23.5,
+		startFromMedia: 0,
+		maxMediaDuration: null,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(120),
+		windowWidth: 1000,
+	});
+
+	expect(first.marginLeft + first.width).toBe(second.marginLeft);
+});
+
+test('media trimmed past its duration has zero width', () => {
+	const result = getTimelineSequenceLayout({
+		durationInFrames: 300,
+		startFrom: 0,
+		cascadedStart: 0,
+		startFromMedia: 500,
+		maxMediaDuration: 300,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(300),
+		windowWidth: 1000,
+	});
+
+	expect(result.width).toBe(0);
+	expect(result.naturalWidth).toBe(0);
+});
+
+test('media trimmed past its duration and timeline end has zero width', () => {
+	const result = getTimelineSequenceLayout({
+		durationInFrames: 200,
+		startFrom: 200,
+		cascadedStart: 200,
+		startFromMedia: 500,
+		maxMediaDuration: 300,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(300),
+		windowWidth: 1000,
+	});
+
+	expect(result.width).toBe(0);
+	expect(result.naturalWidth).toBe(0);
+});
+
+test('Loop overshoot: naturalWidth > width when total loop duration exceeds comp', () => {
+	// 4 full iterations of 100 frames = 400, but comp is only 350
+	const overshoot = getTimelineSequenceLayout({
+		durationInFrames: 400,
+		startFrom: 0,
+		cascadedStart: 0,
+		startFromMedia: 0,
+		maxMediaDuration: null,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(350),
+		windowWidth: 1000,
+	});
+
+	expect(overshoot.naturalWidth).toBeGreaterThan(overshoot.width);
+
+	// When loop fits exactly, naturalWidth === width
+	const exact = getTimelineSequenceLayout({
+		durationInFrames: 350,
+		startFrom: 0,
+		cascadedStart: 0,
+		startFromMedia: 0,
+		maxMediaDuration: null,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(350),
+		windowWidth: 1000,
+	});
+
+	expect(exact.naturalWidth).toBe(exact.width);
+});
+
+test('naturalWidth is constrained by maxMediaDuration but not by timeline end', () => {
+	// Segment of 200 frames, media only 150 frames, starts near timeline end
+	// Both timeline end and maxMediaDuration clip width,
+	// but only maxMediaDuration clips naturalWidth
+	const clippedByBoth = getTimelineSequenceLayout({
+		durationInFrames: 200,
+		startFrom: 800,
+		cascadedStart: 800,
+		startFromMedia: 0,
+		maxMediaDuration: 150,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(900),
+		windowWidth: 1000,
+	});
+
+	expect(clippedByBoth.naturalWidth).toBeGreaterThan(clippedByBoth.width);
+
+	// Same segment but not clipped by timeline end (starts earlier)
+	// Both should have the same behavior
+	const clippedByMediaOnly = getTimelineSequenceLayout({
+		durationInFrames: 200,
+		startFrom: 100,
+		cascadedStart: 100,
+		startFromMedia: 0,
+		maxMediaDuration: 150,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(900),
+		windowWidth: 1000,
+	});
+
+	// When not clipped by timeline end, width === naturalWidth,
+	// both constrained by maxMediaDuration
+	expect(clippedByMediaOnly.naturalWidth).toBe(clippedByMediaOnly.width);
+});
+
+test('negative starts use the left timeline gutter without shifting frame zero', () => {
+	const oneFrameBeforeZero = getTimelineSequenceLayout({
+		durationInFrames: 99,
+		startFrom: 0,
+		cascadedStart: -1,
+		startFromMedia: 0,
+		maxMediaDuration: null,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(100),
+		windowWidth: 1032,
+	});
+
+	expect(oneFrameBeforeZero.marginLeft).toBe(-10);
+	expect(oneFrameBeforeZero.negativeStartWidth).toBe(10);
+	expect(oneFrameBeforeZero.negativeStartClipped).toBe(false);
+	expect(oneFrameBeforeZero.width).toBe(1000);
+
+	const clippedToGutter = getTimelineSequenceLayout({
+		durationInFrames: 80,
+		startFrom: 0,
+		cascadedStart: -20,
+		startFromMedia: 0,
+		maxMediaDuration: null,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(100),
+		windowWidth: 1032,
+	});
+
+	expect(clippedToGutter.marginLeft).toBe(-16);
+	expect(clippedToGutter.negativeStartWidth).toBe(16);
+	expect(clippedToGutter.negativeStartClipped).toBe(true);
+});
+
+test('does not show negative timing that is clipped by a positive parent', () => {
+	const result = getTimelineSequenceLayout({
+		durationInFrames: 20,
+		startFrom: 30,
+		cascadedStart: -10,
+		startFromMedia: 0,
+		maxMediaDuration: null,
+		premountDisplay: null,
+		postmountDisplay: null,
+		video: makeVideoConfig(100),
+		windowWidth: 1032,
+	});
+
+	expect(result.marginLeft).toBe(300);
+	expect(result.negativeStartWidth).toBe(0);
+});

@@ -1,0 +1,41 @@
+{
+  "appName": {
+    "message": "Crunchyroll shortcut"
+  },
+  "description": {
+    "message": "Open the official episode in your own Chrome session."
+  },
+  "title": {
+    "message": "The God Who Destroys"
+  },
+  "open": {
+    "message": "Watch on Crunchyroll"
+  },
+  "language": {
+    "message": "App language"
+  },
+  "note": {
+    "message": "This changes the shortcut language. Crunchyroll controls audio, subtitles, account access and playback."
+  },
+  "install": {
+    "message": "Install this shortcut"
+  },
+  "installUnavailable": {
+    "message": "Installation is available when Chrome offers it. You can also use the browser menu."
+  },
+  "offline": {
+    "message": "The shortcut works offline; watching the episode requires an internet connection and authorized Crunchyroll access."
+  },
+  "online": {
+    "message": "Shortcut ready. Playback happens on the official site."
+  },
+  "installed": {
+    "message": "Shortcut installation requested. Chrome confirms the result."
+  },
+  "installDismissed": {
+    "message": "Installation was dismissed. You can try again."
+  },
+  "shellError": {
+    "message": "The local shortcut could not be prepared for offline use."
+  }
+}

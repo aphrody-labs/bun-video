@@ -1,0 +1,1529 @@
+import {readFileSync} from 'node:fs';
+import type {
+	CallExpression,
+	Expression,
+	File,
+	JSXAttribute,
+	JSXElement,
+	JSXOpeningElement,
+	NewExpression,
+	Node,
+	ObjectExpression,
+	ObjectProperty,
+	TSAsExpression,
+	UnaryExpression,
+} from '@babel/types';
+import {CodemodsInternals, getNodeProps, getNodes} from '@remotion/codemods';
+import {RenderInternals} from '@remotion/renderer';
+import type {SubscribeToSequencePropsResponse} from '@remotion/studio-shared';
+import {LINEAR_KEYFRAME_EASING} from '@remotion/studio-shared';
+import * as recast from 'recast';
+import type {
+	CanUpdateSequencePropsResponseTrue,
+	CanUpdateSequencePropStatus,
+	ExtrapolateType,
+	InterpolateOutputOption,
+	InterpolateOutputType,
+	JsxComponentIdentity,
+	LogLevel,
+	SequenceNodePath,
+} from 'remotion';
+import {NoReactInternals} from 'remotion/no-react';
+import {getAstNodePath} from '../../helpers/get-ast-node-path';
+import {toImportAgnosticNodePath} from '../../helpers/import-agnostic-node-path';
+import {parseKeyframeEasingExpression} from '../../helpers/parse-keyframe-easing-expression';
+import {
+	FileOutsideProjectError,
+	resolveFileInsideProject,
+} from '../../helpers/resolve-file-inside-project';
+import {parseVideoConfigNumericExpression} from '../../helpers/video-config-numeric-expression';
+import {type VideoConfigIdentifierValues} from '../../helpers/video-config-values';
+import {JsxElementIdentityMismatchError} from '../jsx-component-identity';
+import {JsxElementNotFoundAtLocationError} from '../jsx-element-not-found-at-location-error';
+
+type CanUpdatePropStatus = CanUpdateSequencePropStatus;
+type KeyframedPropStatus = Extract<CanUpdatePropStatus, {status: 'keyframed'}>;
+type PropKeyframes = KeyframedPropStatus['keyframes'];
+type PropEasing = KeyframedPropStatus['easing'];
+type PropClamping = KeyframedPropStatus['clamping'];
+type PropPosterize = KeyframedPropStatus['posterize'];
+type PropOutput = KeyframedPropStatus['output'];
+type PropInterpolationFunction = KeyframedPropStatus['interpolationFunction'];
+
+const computedStatus = (): CanUpdatePropStatus => ({
+	status: 'computed',
+});
+
+// Mirrors the encoding that staticFile() from "remotion" applies at runtime
+const encodeStaticFilePath = (path: string): string => {
+	return path.split('/').map(encodeURIComponent).join('/');
+};
+
+type SpecialValueCall =
+	| {type: 'static-file'; value: string}
+	| {type: 'date'; value: string};
+
+// Detects calls that the Studio knows how to serialize back to source:
+// staticFile("...") and new Date("...")
+const getSpecialValueCall = (node: Expression): SpecialValueCall | null => {
+	if (node.type === 'CallExpression') {
+		const call = node as CallExpression;
+		if (
+			call.callee.type === 'Identifier' &&
+			call.callee.name === 'staticFile' &&
+			call.arguments.length === 1 &&
+			call.arguments[0].type === 'StringLiteral'
+		) {
+			return {type: 'static-file', value: call.arguments[0].value};
+		}
+
+		return null;
+	}
+
+	if (node.type === 'NewExpression') {
+		const newExpr = node as NewExpression;
+		if (
+			newExpr.callee.type === 'Identifier' &&
+			newExpr.callee.name === 'Date' &&
+			newExpr.arguments.length === 1 &&
+			newExpr.arguments[0].type === 'StringLiteral'
+		) {
+			return {type: 'date', value: newExpr.arguments[0].value};
+		}
+
+		return null;
+	}
+
+	return null;
+};
+
+type StaticValueOptions = {
+	allowSpecialValues: boolean;
+};
+
+const defaultStaticValueOptions: StaticValueOptions = {
+	allowSpecialValues: false,
+};
+
+export const isStaticValue = (
+	node: Expression,
+	options: StaticValueOptions = defaultStaticValueOptions,
+): boolean => {
+	if (options.allowSpecialValues && getSpecialValueCall(node) !== null) {
+		return true;
+	}
+
+	switch (node.type) {
+		case 'NumericLiteral':
+		case 'StringLiteral':
+		case 'BooleanLiteral':
+		case 'NullLiteral':
+			return true;
+		case 'UnaryExpression':
+			return (
+				((node as UnaryExpression).operator === '-' ||
+					(node as UnaryExpression).operator === '+') &&
+				(node as UnaryExpression).argument.type === 'NumericLiteral'
+			);
+		case 'TSAsExpression':
+			return isStaticValue(
+				(node as TSAsExpression).expression as Expression,
+				options,
+			);
+		case 'ArrayExpression':
+			return (
+				node as Extract<Expression, {type: 'ArrayExpression'}>
+			).elements.every(
+				(el) =>
+					el !== null &&
+					el.type !== 'SpreadElement' &&
+					isStaticValue(el, options),
+			);
+		case 'ObjectExpression':
+			return (node as ObjectExpression).properties.every(
+				(prop) =>
+					prop.type === 'ObjectProperty' &&
+					isStaticValue((prop as ObjectProperty).value as Expression, options),
+			);
+		default:
+			return false;
+	}
+};
+
+export const extractStaticValue = (
+	node: Expression,
+	options: StaticValueOptions = defaultStaticValueOptions,
+): unknown => {
+	if (options.allowSpecialValues) {
+		const specialValue = getSpecialValueCall(node);
+		if (specialValue !== null) {
+			if (specialValue.type === 'static-file') {
+				return `${NoReactInternals.FILE_TOKEN}${encodeStaticFilePath(specialValue.value)}`;
+			}
+
+			return `${NoReactInternals.DATE_TOKEN}${specialValue.value}`;
+		}
+	}
+
+	switch (node.type) {
+		case 'NumericLiteral':
+		case 'StringLiteral':
+		case 'BooleanLiteral':
+			return (node as {value: unknown}).value;
+		case 'NullLiteral':
+			return null;
+		case 'UnaryExpression': {
+			const un = node as UnaryExpression;
+			if (un.argument.type === 'NumericLiteral') {
+				const val = (un.argument as {value: number}).value;
+				return un.operator === '-' ? -val : val;
+			}
+
+			return undefined;
+		}
+
+		case 'TSAsExpression':
+			return extractStaticValue(
+				(node as TSAsExpression).expression as Expression,
+				options,
+			);
+		case 'ArrayExpression':
+			return (
+				node as Extract<Expression, {type: 'ArrayExpression'}>
+			).elements.map((el) => {
+				if (el === null || el.type === 'SpreadElement') {
+					return undefined;
+				}
+
+				return extractStaticValue(el, options);
+			});
+		case 'ObjectExpression': {
+			const obj = node as ObjectExpression;
+			const result: Record<string, unknown> = {};
+			for (const prop of obj.properties) {
+				if (prop.type === 'ObjectProperty') {
+					const p = prop as ObjectProperty;
+					const key =
+						p.key.type === 'Identifier'
+							? (p.key as {name: string}).name
+							: p.key.type === 'StringLiteral' ||
+								  p.key.type === 'NumericLiteral'
+								? String((p.key as {value: unknown}).value)
+								: undefined;
+					if (key !== undefined) {
+						result[key] = extractStaticValue(p.value as Expression, options);
+					}
+				}
+			}
+
+			return result;
+		}
+
+		default:
+			return undefined;
+	}
+};
+
+const getNumericValue = (node: Expression): number | null => {
+	if (node.type === 'NumericLiteral') {
+		return node.value;
+	}
+
+	if (
+		node.type === 'UnaryExpression' &&
+		(node.operator === '-' || node.operator === '+') &&
+		node.argument.type === 'NumericLiteral'
+	) {
+		return node.operator === '-' ? -node.argument.value : node.argument.value;
+	}
+
+	if (node.type === 'TSAsExpression') {
+		return getNumericValue(node.expression as Expression);
+	}
+
+	return null;
+};
+
+const getExtrapolateType = (node: Expression): ExtrapolateType | null => {
+	if (node.type === 'StringLiteral') {
+		if (
+			node.value === 'extend' ||
+			node.value === 'identity' ||
+			node.value === 'clamp' ||
+			node.value === 'wrap'
+		) {
+			return node.value;
+		}
+
+		return null;
+	}
+
+	if (node.type === 'TSAsExpression') {
+		return getExtrapolateType(node.expression as Expression);
+	}
+
+	return null;
+};
+
+const getInterpolateOutputOption = (
+	node: Expression,
+): InterpolateOutputOption | null => {
+	if (node.type === 'StringLiteral') {
+		if (node.value === 'linear' || node.value === 'perceptual-scale') {
+			return node.value;
+		}
+
+		return null;
+	}
+
+	if (node.type === 'TSAsExpression') {
+		return getInterpolateOutputOption(node.expression as Expression);
+	}
+
+	return null;
+};
+
+const getInterpolateOutputType = (
+	node: Expression,
+): InterpolateOutputType | null => {
+	if (node.type === 'StringLiteral') {
+		if (
+			node.value === 'font-weight' ||
+			node.value === 'scale' ||
+			node.value === 'translate' ||
+			node.value === 'rotate' ||
+			node.value === 'transform-origin'
+		) {
+			return node.value;
+		}
+
+		return null;
+	}
+
+	if (node.type === 'TSAsExpression') {
+		return getInterpolateOutputType(node.expression as Expression);
+	}
+
+	return null;
+};
+
+const getKeyframeEasing = (node: Expression): PropEasing[number] | null =>
+	parseKeyframeEasingExpression(node);
+
+const getKeyframeEasingArray = ({
+	easingNode,
+	segments,
+}: {
+	easingNode: Expression;
+	segments: number;
+}): PropEasing | null => {
+	if (segments === 0) {
+		return [];
+	}
+
+	if (easingNode.type === 'TSAsExpression') {
+		return getKeyframeEasingArray({
+			easingNode: easingNode.expression as Expression,
+			segments,
+		});
+	}
+
+	if (easingNode.type === 'ArrayExpression') {
+		if (easingNode.elements.length !== segments) {
+			return null;
+		}
+
+		const parsed = easingNode.elements.map((element) => {
+			if (!element || element.type === 'SpreadElement') {
+				return null;
+			}
+
+			return getKeyframeEasing(element);
+		});
+
+		if (parsed.some((value) => value === null)) {
+			return null;
+		}
+
+		return parsed as PropEasing;
+	}
+
+	const easing = getKeyframeEasing(easingNode);
+	if (!easing) {
+		return null;
+	}
+
+	return new Array(segments).fill(easing) as PropEasing;
+};
+
+const getInterpolationMetadata = (
+	interpolationFunction: PropInterpolationFunction,
+	callExpression: CallExpression,
+	keyframeCount: number,
+): {
+	easing: PropEasing;
+	clamping: PropClamping;
+	posterize: PropPosterize;
+	output: PropOutput;
+} | null => {
+	const segments = Math.max(0, keyframeCount - 1);
+	const defaultClamping: PropClamping =
+		interpolationFunction === 'interpolateColors'
+			? {
+					left: 'clamp',
+					right: 'clamp',
+				}
+			: {
+					left: 'extend',
+					right: 'extend',
+				};
+	const defaults = {
+		easing: Array.from({length: segments}, () => LINEAR_KEYFRAME_EASING),
+		clamping: defaultClamping,
+		posterize: undefined,
+		output: undefined,
+	};
+
+	const optionsArg = callExpression.arguments[3];
+	if (!optionsArg) {
+		return defaults;
+	}
+
+	if (optionsArg.type !== 'ObjectExpression') {
+		return null;
+	}
+
+	let {easing} = defaults;
+	let {clamping}: {clamping: PropClamping} = defaults;
+	let posterize: PropPosterize;
+	let {output}: {output: PropOutput} = defaults;
+
+	for (const property of optionsArg.properties) {
+		if (property.type !== 'ObjectProperty' || property.computed) {
+			return null;
+		}
+
+		const key =
+			property.key.type === 'Identifier'
+				? property.key.name
+				: property.key.type === 'StringLiteral'
+					? property.key.value
+					: null;
+
+		if (!key) {
+			return null;
+		}
+
+		const value = property.value as Expression;
+
+		if (key === 'easing') {
+			const parsedEasing = getKeyframeEasingArray({
+				easingNode: value,
+				segments,
+			});
+			if (!parsedEasing) {
+				return null;
+			}
+
+			easing = parsedEasing;
+			continue;
+		}
+
+		if (key === 'extrapolateLeft' || key === 'extrapolateRight') {
+			if (interpolationFunction === 'interpolateColors') {
+				return null;
+			}
+
+			const extrapolateType = getExtrapolateType(value);
+			if (
+				!extrapolateType ||
+				(interpolationFunction === 'interpolatePaths' &&
+					extrapolateType === 'identity')
+			) {
+				return null;
+			}
+
+			clamping =
+				key === 'extrapolateLeft'
+					? {...clamping, left: extrapolateType}
+					: {...clamping, right: extrapolateType};
+			continue;
+		}
+
+		if (key === 'posterize') {
+			const parsedPosterize = getNumericValue(value);
+			if (
+				parsedPosterize === null ||
+				!Number.isFinite(parsedPosterize) ||
+				parsedPosterize <= 0
+			) {
+				return null;
+			}
+
+			posterize = parsedPosterize;
+			continue;
+		}
+
+		if (key === 'output') {
+			if (interpolationFunction !== 'interpolate') {
+				return null;
+			}
+
+			const parsedOutput = getInterpolateOutputOption(value);
+			if (!parsedOutput) {
+				return null;
+			}
+
+			output = parsedOutput;
+			continue;
+		}
+
+		if (key === 'outputType') {
+			if (
+				interpolationFunction !== 'interpolate' ||
+				getInterpolateOutputType(value) === null
+			) {
+				return null;
+			}
+
+			continue;
+		}
+
+		return null;
+	}
+
+	return {
+		easing,
+		clamping,
+		posterize,
+		output,
+	};
+};
+
+const getInterpolationKeyframes = (
+	node: Expression,
+	ast: File,
+	videoConfigValues: VideoConfigIdentifierValues,
+):
+	| {
+			keyframes: PropKeyframes;
+			easing: PropEasing;
+			clamping: PropClamping;
+			posterize: PropPosterize;
+			output: PropOutput;
+			interpolationFunction: PropInterpolationFunction;
+			keyframeDisplayOffsetAdjustment: number | null;
+			keyframePlaybackRateAdjustment: number;
+	  }
+	| undefined => {
+	if (node.type === 'TSAsExpression') {
+		return getInterpolationKeyframes(
+			node.expression as Expression,
+			ast,
+			videoConfigValues,
+		);
+	}
+
+	if (
+		node.type === 'CallExpression' &&
+		node.callee.type === 'Identifier' &&
+		node.callee.name === 'String' &&
+		node.arguments.length === 1 &&
+		node.arguments[0].type !== 'ArgumentPlaceholder' &&
+		node.arguments[0].type !== 'JSXNamespacedName' &&
+		node.arguments[0].type !== 'SpreadElement'
+	) {
+		const interpolation = getInterpolationKeyframes(
+			node.arguments[0] as Expression,
+			ast,
+			videoConfigValues,
+		);
+		if (!interpolation) {
+			return undefined;
+		}
+
+		return {
+			...interpolation,
+			keyframes: interpolation.keyframes.map((keyframe) => ({
+				...keyframe,
+				value: String(keyframe.value),
+			})),
+		};
+	}
+
+	if (node.type !== 'CallExpression') {
+		return undefined;
+	}
+
+	const callExpression = node as CallExpression;
+	if (callExpression.callee.type !== 'Identifier') {
+		return undefined;
+	}
+
+	const interpolationFunction =
+		CodemodsInternals.getKeyframeInterpolationFunctionForCallee({
+			ast,
+			callee: callExpression.callee,
+		});
+	if (interpolationFunction === null) {
+		return undefined;
+	}
+
+	const frameArg = callExpression.arguments[0];
+	const inputArg = callExpression.arguments[1];
+	const outputArg = callExpression.arguments[2];
+	if (
+		!frameArg ||
+		frameArg.type === 'SpreadElement' ||
+		!inputArg ||
+		!outputArg ||
+		inputArg.type !== 'ArrayExpression' ||
+		outputArg.type !== 'ArrayExpression'
+	) {
+		return undefined;
+	}
+
+	const frameDisplayOffset = getCurrentFrameDisplayOffsetAdjustment({
+		node: frameArg as Expression,
+		ast,
+		videoConfigValues,
+	});
+	if (frameDisplayOffset === null) {
+		return undefined;
+	}
+
+	if (inputArg.elements.length !== outputArg.elements.length) {
+		return undefined;
+	}
+
+	const keyframes: PropKeyframes = [];
+	for (let i = 0; i < inputArg.elements.length; i++) {
+		const inputElement = inputArg.elements[i];
+		const outputElement = outputArg.elements[i];
+		if (
+			!inputElement ||
+			!outputElement ||
+			inputElement.type === 'SpreadElement' ||
+			outputElement.type === 'SpreadElement'
+		) {
+			return undefined;
+		}
+
+		const frameExpression = parseVideoConfigNumericExpression({
+			node: inputElement,
+			videoConfigValues,
+		});
+		if (frameExpression === null || !isStaticValue(outputElement)) {
+			return undefined;
+		}
+
+		keyframes.push({
+			frame: NoReactInternals.evaluateSourceNumericValue(frameExpression, null),
+			value: extractStaticValue(outputElement),
+			...(frameExpression.type === 'literal' ? {} : {frameExpression}),
+		});
+	}
+
+	if (keyframes.length === 0) {
+		return undefined;
+	}
+
+	const metadata = getInterpolationMetadata(
+		interpolationFunction,
+		callExpression,
+		keyframes.length,
+	);
+	if (!metadata) {
+		return undefined;
+	}
+
+	return {
+		interpolationFunction,
+		keyframes,
+		easing: metadata.easing,
+		clamping: metadata.clamping,
+		posterize: metadata.posterize,
+		output: metadata.output,
+		keyframePlaybackRateAdjustment: frameDisplayOffset.playbackRateAdjustment,
+		keyframeDisplayOffsetAdjustment: frameDisplayOffset.hasEnclosingElement
+			? frameDisplayOffset.adjustment
+			: null,
+	};
+};
+
+const getRemotionImportNames = ({
+	ast,
+	importedName,
+}: {
+	ast: File;
+	importedName: string;
+}): {direct: Set<string>; namespaces: Set<string>} => {
+	const direct = new Set<string>();
+	const namespaces = new Set<string>();
+	for (const statement of ast.program.body) {
+		if (
+			statement.type !== 'ImportDeclaration' ||
+			statement.source.value !== 'remotion'
+		) {
+			continue;
+		}
+
+		for (const specifier of statement.specifiers ?? []) {
+			if (
+				specifier.type === 'ImportSpecifier' &&
+				((specifier.imported.type === 'Identifier' &&
+					specifier.imported.name === importedName) ||
+					(specifier.imported.type === 'StringLiteral' &&
+						specifier.imported.value === importedName))
+			) {
+				direct.add(specifier.local?.name ?? importedName);
+			}
+
+			if (specifier.type === 'ImportNamespaceSpecifier') {
+				namespaces.add(specifier.local.name);
+			}
+		}
+	}
+
+	return {direct, namespaces};
+};
+
+const isUseCurrentFrameCall = (node: Expression, ast: File): boolean => {
+	if (node.type !== 'CallExpression' || node.arguments.length !== 0) {
+		return false;
+	}
+
+	const imports = getRemotionImportNames({
+		ast,
+		importedName: 'useCurrentFrame',
+	});
+	if (node.callee.type === 'Identifier') {
+		return imports.direct.has(node.callee.name);
+	}
+
+	return (
+		node.callee.type === 'MemberExpression' &&
+		!node.callee.computed &&
+		node.callee.object.type === 'Identifier' &&
+		node.callee.property.type === 'Identifier' &&
+		imports.namespaces.has(node.callee.object.name) &&
+		node.callee.property.name === 'useCurrentFrame'
+	);
+};
+
+const findNodePath = (
+	ast: File,
+	target: Node,
+): recast.types.NodePath | null => {
+	let found: recast.types.NodePath | null = null;
+	recast.types.visit(ast, {
+		visitNode(p) {
+			if (p.node === target) {
+				found = p as unknown as recast.types.NodePath;
+				return false;
+			}
+
+			return this.traverse(p);
+		},
+	});
+
+	return found;
+};
+
+const getJsxNumericAttribute = ({
+	openingElement,
+	name,
+	defaultValue,
+	videoConfigValues,
+}: {
+	openingElement: JSXOpeningElement;
+	name: string;
+	defaultValue: number;
+	videoConfigValues: VideoConfigIdentifierValues;
+}): number | null => {
+	if (
+		openingElement.attributes.some(
+			(attribute) => attribute.type === 'JSXSpreadAttribute',
+		)
+	) {
+		return null;
+	}
+
+	for (let index = openingElement.attributes.length - 1; index >= 0; index--) {
+		const attribute = openingElement.attributes[index];
+		if (
+			attribute.type !== 'JSXAttribute' ||
+			attribute.name.type !== 'JSXIdentifier' ||
+			attribute.name.name !== name
+		) {
+			continue;
+		}
+
+		if (
+			attribute.value?.type !== 'JSXExpressionContainer' ||
+			attribute.value.expression.type === 'JSXEmptyExpression'
+		) {
+			return null;
+		}
+
+		const numericExpression = parseVideoConfigNumericExpression({
+			node: attribute.value.expression,
+			videoConfigValues,
+		});
+		return numericExpression === null
+			? null
+			: NoReactInternals.evaluateSourceNumericValue(numericExpression, null);
+	}
+
+	return defaultValue;
+};
+
+const getFrameDisplayOffsetAdjustmentBetweenPaths = ({
+	startPath,
+	endPath,
+	videoConfigValues,
+}: {
+	startPath: recast.types.NodePath;
+	endPath: recast.types.NodePath;
+	videoConfigValues: VideoConfigIdentifierValues;
+}): {
+	readonly adjustment: number;
+	readonly playbackRateAdjustment: number;
+	readonly hasEnclosingElement: boolean;
+} | null => {
+	let current: recast.types.NodePath | null = startPath;
+	let hasSeenControlledElement = false;
+	let hasEnclosingElement = false;
+	let adjustment = 0;
+	let playbackRateAdjustment = 1;
+	while (current && current.value !== endPath.value) {
+		const currentNode = current.value as Node;
+		if (
+			currentNode.type === 'FunctionDeclaration' ||
+			currentNode.type === 'FunctionExpression' ||
+			currentNode.type === 'ArrowFunctionExpression'
+		) {
+			return null;
+		}
+
+		if (currentNode.type === 'JSXElement') {
+			if (!hasSeenControlledElement) {
+				hasSeenControlledElement = true;
+			} else {
+				hasEnclosingElement = true;
+				// Sequence-backed built-ins and userland components can both shift
+				// their children, so the prop names are the semantic boundary.
+				const from = getJsxNumericAttribute({
+					openingElement: currentNode.openingElement,
+					name: 'from',
+					defaultValue: 0,
+					videoConfigValues,
+				});
+				const trimBefore = getJsxNumericAttribute({
+					openingElement: currentNode.openingElement,
+					name: 'trimBefore',
+					defaultValue: 0,
+					videoConfigValues,
+				});
+				const playbackRate = getJsxNumericAttribute({
+					openingElement: currentNode.openingElement,
+					name: 'playbackRate',
+					defaultValue: 1,
+					videoConfigValues,
+				});
+				if (
+					from === null ||
+					trimBefore === null ||
+					playbackRate === null ||
+					!Number.isFinite(playbackRate) ||
+					playbackRate <= 0
+				) {
+					return null;
+				}
+
+				// Walk from the controlled element back to the hook's scope.
+				// A sequence maps parent time to (parent - from) * rate + trimBefore.
+				adjustment = (adjustment + trimBefore) / playbackRate - from;
+				playbackRateAdjustment /= playbackRate;
+			}
+		}
+
+		current = current.parentPath;
+	}
+
+	return current
+		? {adjustment, playbackRateAdjustment, hasEnclosingElement}
+		: null;
+};
+
+type ResolvedCurrentFrameExpression = {
+	readonly bindingScopePath: recast.types.NodePath;
+	readonly offset: number;
+};
+
+const resolveCurrentFrameExpression = ({
+	node,
+	ast,
+	seenDeclarations,
+}: {
+	node: Expression;
+	ast: File;
+	seenDeclarations: Set<object>;
+}): ResolvedCurrentFrameExpression | null => {
+	if (node.type === 'TSAsExpression') {
+		return resolveCurrentFrameExpression({
+			node: node.expression as Expression,
+			ast,
+			seenDeclarations,
+		});
+	}
+
+	if (
+		node.type === 'BinaryExpression' &&
+		(node.operator === '+' || node.operator === '-')
+	) {
+		const rightValue = getNumericValue(node.right as Expression);
+		if (rightValue !== null && Number.isFinite(rightValue)) {
+			const resolvedLeft = resolveCurrentFrameExpression({
+				node: node.left as Expression,
+				ast,
+				seenDeclarations,
+			});
+			if (resolvedLeft !== null) {
+				return {
+					...resolvedLeft,
+					offset:
+						resolvedLeft.offset +
+						(node.operator === '+' ? rightValue : -rightValue),
+				};
+			}
+		}
+
+		if (node.operator === '+') {
+			const leftValue = getNumericValue(node.left as Expression);
+			if (leftValue !== null && Number.isFinite(leftValue)) {
+				const resolvedRight = resolveCurrentFrameExpression({
+					node: node.right as Expression,
+					ast,
+					seenDeclarations,
+				});
+				if (resolvedRight !== null) {
+					return {
+						...resolvedRight,
+						offset: resolvedRight.offset + leftValue,
+					};
+				}
+			}
+		}
+
+		return null;
+	}
+
+	if (node.type !== 'Identifier') {
+		return null;
+	}
+
+	const nodePath = findNodePath(ast, node);
+	const bindingScope = nodePath?.scope?.lookup(node.name);
+	if (!nodePath || !bindingScope) {
+		return null;
+	}
+
+	let matchingDeclarations = 0;
+	let matchingDeclaration: object | null = null;
+	let initializer: Expression | null = null;
+	let isConstDeclaration = false;
+	recast.types.visit(bindingScope.path, {
+		visitVariableDeclarator(p) {
+			const {id, init} = p.node;
+			if (
+				id.type !== 'Identifier' ||
+				id.name !== node.name ||
+				p.scope.lookup(node.name)?.path.node !== bindingScope.path.node
+			) {
+				return this.traverse(p);
+			}
+
+			matchingDeclarations++;
+			const declaration = p.parentPath.node;
+			if (init) {
+				matchingDeclaration = p.node;
+				initializer = init as Expression;
+				isConstDeclaration =
+					declaration.type === 'VariableDeclaration' &&
+					declaration.kind === 'const';
+			}
+
+			return false;
+		},
+	});
+
+	if (
+		matchingDeclarations !== 1 ||
+		matchingDeclaration === null ||
+		initializer === null ||
+		seenDeclarations.has(matchingDeclaration)
+	) {
+		return null;
+	}
+
+	if (isUseCurrentFrameCall(initializer, ast)) {
+		return {bindingScopePath: bindingScope.path, offset: 0};
+	}
+
+	if (!isConstDeclaration) {
+		return null;
+	}
+
+	const nextSeenDeclarations = new Set(seenDeclarations);
+	nextSeenDeclarations.add(matchingDeclaration);
+	return resolveCurrentFrameExpression({
+		node: initializer,
+		ast,
+		seenDeclarations: nextSeenDeclarations,
+	});
+};
+
+const getCurrentFrameDisplayOffsetAdjustment = ({
+	node,
+	ast,
+	videoConfigValues,
+}: {
+	node: Expression;
+	ast: File;
+	videoConfigValues: VideoConfigIdentifierValues;
+}): {
+	readonly adjustment: number;
+	readonly playbackRateAdjustment: number;
+	readonly hasEnclosingElement: boolean;
+} | null => {
+	if (node.type === 'TSAsExpression') {
+		return getCurrentFrameDisplayOffsetAdjustment({
+			node: node.expression as Expression,
+			ast,
+			videoConfigValues,
+		});
+	}
+
+	const nodePath = findNodePath(ast, node);
+	const resolved = resolveCurrentFrameExpression({
+		node,
+		ast,
+		seenDeclarations: new Set(),
+	});
+	if (!nodePath || resolved === null) {
+		return null;
+	}
+
+	const frameDisplayOffset = getFrameDisplayOffsetAdjustmentBetweenPaths({
+		startPath: nodePath,
+		endPath: resolved.bindingScopePath,
+		videoConfigValues,
+	});
+	if (frameDisplayOffset === null) {
+		return null;
+	}
+
+	return {
+		...frameDisplayOffset,
+		// interpolate(frame + offset, [keyframe], ...) reaches the keyframe at
+		// composition frame `keyframe - offset`.
+		adjustment: frameDisplayOffset.adjustment - resolved.offset,
+	};
+};
+
+export const getComputedStatus = (
+	node: Expression,
+	ast: File,
+	videoConfigValues: VideoConfigIdentifierValues,
+): CanUpdatePropStatus => {
+	const interpolation = getInterpolationKeyframes(node, ast, videoConfigValues);
+	if (!interpolation) {
+		return computedStatus();
+	}
+
+	return {
+		status: 'keyframed',
+		interpolationFunction: interpolation.interpolationFunction,
+		keyframeDisplayOffsetAdjustment:
+			interpolation.keyframeDisplayOffsetAdjustment,
+		...(interpolation.keyframePlaybackRateAdjustment === 1
+			? {}
+			: {
+					keyframePlaybackRateAdjustment:
+						interpolation.keyframePlaybackRateAdjustment,
+				}),
+		keyframes: interpolation.keyframes,
+		easing: interpolation.easing,
+		clamping: interpolation.clamping,
+		posterize: interpolation.posterize,
+		output: interpolation.output,
+	};
+};
+
+export const getNodePathForRecastPath = (
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	recastPath: any,
+	ast: File,
+): SequenceNodePath => {
+	const segments: Array<string | number> = [];
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	let current: any = recastPath;
+	while (current && current.parentPath) {
+		segments.unshift(current.name);
+		current = current.parentPath;
+	}
+
+	// Recast paths start with "root" which doesn't correspond to a real AST property
+	if (segments.length > 0 && segments[0] === 'root') {
+		return toImportAgnosticNodePath({ast, nodePath: segments.slice(1)});
+	}
+
+	return toImportAgnosticNodePath({ast, nodePath: segments});
+};
+
+export const findJsxElementPathAtNodePath = (
+	ast: File,
+	nodePath: SequenceNodePath,
+) => {
+	const current = getAstNodePath(ast, nodePath);
+	if (!current) {
+		return null;
+	}
+
+	if (recast.types.namedTypes.JSXOpeningElement.check(current.value)) {
+		return current;
+	}
+
+	return null;
+};
+
+export const findJsxElementAtNodePath = (
+	ast: File,
+	nodePath: SequenceNodePath,
+): JSXOpeningElement | null => {
+	const current = findJsxElementPathAtNodePath(ast, nodePath);
+	return current ? (current.value as unknown as JSXOpeningElement) : null;
+};
+
+const getJsxElementNodeFromJsxPath = (
+	jsxPath: recast.types.NodePath,
+): JSXElement | null => {
+	if (recast.types.namedTypes.JSXElement.check(jsxPath.parentPath?.value)) {
+		return jsxPath.parentPath.value as unknown as JSXElement;
+	}
+
+	return null;
+};
+
+export const findJsxElementNodeAtNodePath = (
+	ast: File,
+	nodePath: SequenceNodePath,
+): JSXElement | null => {
+	const current = findJsxElementPathAtNodePath(ast, nodePath);
+	return current ? getJsxElementNodeFromJsxPath(current) : null;
+};
+
+export type StaticJsxTextContent =
+	| {kind: 'jsx-text'; value: string}
+	| {kind: 'string-expression'; value: string};
+
+const findJsxChildrenAttribute = (
+	jsxElement: JSXOpeningElement,
+): JSXAttribute | null => {
+	const childrenAttr = jsxElement.attributes.find((attr) => {
+		return (
+			attr.type === 'JSXAttribute' &&
+			attr.name.type === 'JSXIdentifier' &&
+			attr.name.name === 'children'
+		);
+	});
+
+	return childrenAttr && childrenAttr.type === 'JSXAttribute'
+		? childrenAttr
+		: null;
+};
+
+export const getStaticJsxChildrenAttribute = (
+	jsxElement: JSXOpeningElement,
+): StaticJsxTextContent | null => {
+	const childrenAttr = findJsxChildrenAttribute(jsxElement);
+	if (!childrenAttr?.value) {
+		return null;
+	}
+
+	if (childrenAttr.value.type === 'StringLiteral') {
+		return {kind: 'jsx-text', value: childrenAttr.value.value};
+	}
+
+	if (
+		childrenAttr.value.type === 'JSXExpressionContainer' &&
+		childrenAttr.value.expression.type === 'StringLiteral'
+	) {
+		return {
+			kind: 'string-expression',
+			value: childrenAttr.value.expression.value,
+		};
+	}
+
+	return null;
+};
+
+export const hasJsxChildrenAttribute = (
+	jsxElement: JSXOpeningElement,
+): boolean => findJsxChildrenAttribute(jsxElement) !== null;
+
+export const getStaticJsxTextContent = (
+	jsxElement: JSXElement,
+): StaticJsxTextContent | null => {
+	const meaningfulChildren = jsxElement.children.filter((candidate) => {
+		return !(candidate.type === 'JSXText' && candidate.value.trim() === '');
+	});
+
+	if (meaningfulChildren.length === 0) {
+		return {kind: 'jsx-text', value: ''};
+	}
+
+	if (meaningfulChildren.length !== 1) {
+		return null;
+	}
+
+	const child = meaningfulChildren[0];
+	if (child.type === 'JSXText') {
+		return {
+			kind: 'jsx-text',
+			value: child.value.includes('\n') ? child.value.trim() : child.value,
+		};
+	}
+
+	if (
+		child.type === 'JSXExpressionContainer' &&
+		child.expression.type === 'StringLiteral'
+	) {
+		return {kind: 'string-expression', value: child.expression.value};
+	}
+
+	return null;
+};
+
+export const findNodePathForJsxElement = (
+	ast: File,
+	target: JSXOpeningElement,
+): SequenceNodePath | null => {
+	let foundPath: SequenceNodePath | null = null;
+
+	recast.types.visit(ast, {
+		visitJSXOpeningElement(p) {
+			if (p.node === target) {
+				foundPath = getNodePathForRecastPath(p, ast);
+				return false;
+			}
+
+			return this.traverse(p);
+		},
+	});
+
+	return foundPath;
+};
+
+const RECAST_TAB_WIDTH = 4;
+
+const sourceColumnToRecastColumn = ({
+	sourceLine,
+	column,
+}: {
+	sourceLine: string | undefined;
+	column: number;
+}) => {
+	if (sourceLine === undefined) {
+		return column;
+	}
+
+	let recastColumn = 0;
+	for (let index = 0; index < column; index++) {
+		if (sourceLine[index] === '\t') {
+			recastColumn += RECAST_TAB_WIDTH - (recastColumn % RECAST_TAB_WIDTH);
+		} else {
+			recastColumn++;
+		}
+	}
+
+	return recastColumn;
+};
+
+export const lineColumnToNodePath = (
+	ast: File,
+	targetLine: number,
+	targetColumn?: number,
+	fileContents?: string,
+): SequenceNodePath | null => {
+	const lineMatches: SequenceNodePath[] = [];
+	const exactMatches: SequenceNodePath[] = [];
+	const recastTargetColumn =
+		targetColumn === undefined || fileContents === undefined
+			? targetColumn
+			: sourceColumnToRecastColumn({
+					sourceLine: fileContents.split('\n')[targetLine - 1],
+					column: targetColumn,
+				});
+
+	recast.types.visit(ast, {
+		visitJSXOpeningElement(p) {
+			const {node} = p;
+			if (node.loc && node.loc.start.line === targetLine) {
+				const nodePath = getNodePathForRecastPath(p, ast);
+				lineMatches.push(nodePath);
+				if (node.loc.start.column === recastTargetColumn) {
+					exactMatches.push(nodePath);
+				}
+			}
+
+			return this.traverse(p);
+		},
+	});
+
+	if (exactMatches.length === 1) {
+		return exactMatches[0];
+	}
+
+	return lineMatches.at(-1) ?? null;
+};
+
+export const lineColumnsToNodePaths = ({
+	ast,
+	targets,
+	fileContents,
+}: {
+	ast: File;
+	targets: {line: number; column: number}[];
+	fileContents: string;
+}): (SequenceNodePath | null)[] => {
+	const sourceLines = fileContents.split('\n');
+	const targetIndicesByLine = new Map<number, number[]>();
+	const recastTargetColumns = targets.map(({line, column}, index) => {
+		const indices = targetIndicesByLine.get(line) ?? [];
+		indices.push(index);
+		targetIndicesByLine.set(line, indices);
+		return sourceColumnToRecastColumn({
+			sourceLine: sourceLines[line - 1],
+			column,
+		});
+	});
+	const lineMatches: (SequenceNodePath | null)[] = targets.map(() => null);
+	const exactMatches: (SequenceNodePath | null)[] = targets.map(() => null);
+	const exactMatchCounts = targets.map(() => 0);
+
+	recast.types.visit(ast, {
+		visitJSXOpeningElement(p) {
+			const {node} = p;
+			const line = node.loc?.start.line;
+			const targetIndices = line ? targetIndicesByLine.get(line) : undefined;
+			if (targetIndices) {
+				const nodePath = getNodePathForRecastPath(p, ast);
+				for (const index of targetIndices) {
+					lineMatches[index] = nodePath;
+					if (node.loc?.start.column === recastTargetColumns[index]) {
+						exactMatches[index] = nodePath;
+						exactMatchCounts[index]++;
+					}
+				}
+			}
+
+			return this.traverse(p);
+		},
+	});
+
+	return targets.map((_, index) =>
+		exactMatchCounts[index] === 1 ? exactMatches[index] : lineMatches[index],
+	);
+};
+
+export const resolveSequencePropsNodePathsFromFilename = ({
+	fileName,
+	targets,
+	remotionRoot,
+}: {
+	fileName: string;
+	targets: {line: number; column: number}[];
+	remotionRoot: string;
+}) => {
+	const {absolutePath} = resolveFileInsideProject({
+		remotionRoot,
+		fileName,
+		action: 'read',
+	});
+	const fileContents = readFileSync(absolutePath, 'utf-8');
+	const nodes = getNodes({
+		project: {rootDir: remotionRoot, files: {[absolutePath]: fileContents}},
+		filePath: absolutePath,
+	});
+	return targets.map(({line, column}) => {
+		const lineMatches = nodes.filter((node) => node.location?.line === line);
+		const exactMatches = lineMatches.filter(
+			(node) => node.location?.column === column,
+		);
+		return (
+			(exactMatches.length === 1 ? exactMatches[0] : lineMatches.at(-1))
+				?.nodePath ?? null
+		);
+	});
+};
+
+export const computeSequencePropsStatusFromContent = ({
+	fileContents,
+	nodePath,
+	componentIdentity,
+	keys,
+	assetKeys = [],
+	effects,
+}: {
+	fileContents: string;
+	nodePath: SequenceNodePath;
+	componentIdentity: JsxComponentIdentity | null;
+	keys: string[];
+	assetKeys?: string[];
+	effects: string[][];
+}): CanUpdateSequencePropsResponseTrue => {
+	try {
+		return getNodeProps({
+			project: {rootDir: '/', files: {'source.tsx': fileContents}},
+			node: {filePath: 'source.tsx', nodePath},
+			componentIdentity,
+			keys,
+			assetKeys,
+			effectKeys: effects,
+		});
+	} catch (error) {
+		if (error instanceof CodemodsInternals.JsxElementIdentityMismatchError) {
+			throw new JsxElementIdentityMismatchError();
+		}
+
+		if (error instanceof CodemodsInternals.JsxElementNotFoundAtLocationError) {
+			throw new JsxElementNotFoundAtLocationError();
+		}
+
+		throw error;
+	}
+};
+
+export const computeSequencePropsStatus = ({
+	fileName,
+	nodePath,
+	componentIdentity,
+	keys,
+	assetKeys = [],
+	effects,
+	remotionRoot,
+}: {
+	fileName: string;
+	nodePath: SequenceNodePath;
+	componentIdentity: JsxComponentIdentity | null;
+	keys: string[];
+	assetKeys?: string[];
+	effects: string[][];
+	remotionRoot: string;
+}): CanUpdateSequencePropsResponseTrue => {
+	const {absolutePath} = resolveFileInsideProject({
+		remotionRoot,
+		fileName,
+		action: 'read',
+	});
+
+	const fileContents = readFileSync(absolutePath, 'utf-8');
+	return computeSequencePropsStatusFromContent({
+		fileContents,
+		nodePath,
+		componentIdentity,
+		keys,
+		assetKeys,
+		effects,
+	});
+};
+
+export const computeSequencePropsStatusFromFilenameByLocation = ({
+	fileName,
+	line,
+	column,
+	componentIdentity,
+	keys,
+	assetKeys = [],
+	effects,
+	remotionRoot,
+	logLevel,
+}: {
+	fileName: string;
+	line: number;
+	column: number;
+	componentIdentity: JsxComponentIdentity | null;
+	keys: string[];
+	assetKeys?: string[];
+	effects: string[][];
+	remotionRoot: string;
+	logLevel: LogLevel;
+}): SubscribeToSequencePropsResponse => {
+	try {
+		const {absolutePath} = resolveFileInsideProject({
+			remotionRoot,
+			fileName,
+			action: 'read',
+		});
+
+		const [resolvedNodePath] = resolveSequencePropsNodePathsFromFilename({
+			fileName,
+			targets: [{line, column}],
+			remotionRoot,
+		});
+		if (!resolvedNodePath) {
+			return {
+				status: {
+					canUpdate: false,
+					reason: 'not-found',
+				},
+				success: false,
+			};
+		}
+
+		return {
+			status: computeSequencePropsStatus({
+				fileName,
+				nodePath: resolvedNodePath,
+				componentIdentity,
+				keys,
+				assetKeys,
+				effects,
+				remotionRoot,
+			}),
+			nodePath: {
+				absolutePath,
+				nodePath: resolvedNodePath,
+				sequenceKeys: keys,
+				effectKeys: effects,
+				videoConfigValues: null,
+			},
+			success: true,
+		};
+	} catch (err) {
+		if (
+			err instanceof FileOutsideProjectError ||
+			err instanceof JsxElementIdentityMismatchError ||
+			err instanceof JsxElementNotFoundAtLocationError
+		) {
+			return {
+				status: {
+					canUpdate: false as const,
+					reason: 'not-found',
+				},
+				success: false,
+			};
+		}
+
+		RenderInternals.Log.error({indent: false, logLevel}, err);
+		return {
+			status: {
+				canUpdate: false as const,
+				reason: 'error',
+			},
+			success: false,
+		};
+	}
+};

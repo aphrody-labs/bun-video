@@ -1,0 +1,2 @@
+# Retain the source owner's tab indentation inside this package.
+* whitespace=blank-at-eol,-blank-at-eof,-space-before-tab,-tab-in-indent

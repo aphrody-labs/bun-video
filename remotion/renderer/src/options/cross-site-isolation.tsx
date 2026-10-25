@@ -1,0 +1,45 @@
+import type {AnyRemotionOption} from './option';
+
+let enableCrossSiteIsolation = false;
+let configuredEnableCrossSiteIsolation: boolean | null = null;
+
+const cliFlag = 'cross-site-isolation' as const;
+
+export const enableCrossSiteIsolationOption = {
+	name: 'Enable Cross-Site Isolation',
+	addedIn: '4.0.306',
+	cliFlag,
+	description: () => (
+		<>
+			Enable Cross-Site Isolation in the Studio (sets Cross-Origin-Opener-Policy
+			and Cross-Origin-Embedder-Policy HTTP headers, required for{' '}
+			<code>@remotion/whisper-web</code>).
+		</>
+	),
+	ssrName: null,
+	docLink: 'https://www.remotion.dev/docs/options/cross-site-isolation',
+	type: false as boolean,
+	getValue: ({commandLine}) => {
+		if (commandLine[cliFlag] !== undefined) {
+			return {
+				value: commandLine[cliFlag] as boolean,
+				source: 'cli',
+			};
+		}
+
+		return {
+			value: enableCrossSiteIsolation,
+			source: 'config',
+		};
+	},
+	setConfig(value) {
+		enableCrossSiteIsolation = value;
+		configuredEnableCrossSiteIsolation = value;
+	},
+	getConfigValue: () => configuredEnableCrossSiteIsolation,
+	reset: () => {
+		enableCrossSiteIsolation = false;
+		configuredEnableCrossSiteIsolation = null;
+	},
+	id: cliFlag,
+} satisfies AnyRemotionOption<boolean>;

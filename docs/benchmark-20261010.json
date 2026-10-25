@@ -1,0 +1,274 @@
+{
+  "measuredAt": "2026-10-10T02:48:26.553Z",
+  "runtime": {
+    "version": "1.4.3",
+    "revision": "41211b56872ca2957e5c037ad1756f56f8f89b7c",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "samples": 7,
+  "scope": "Actual upstream and migrated core CPU functions on identical installed Aphrody Bun; excludes video encoding, browser render and startup",
+  "results": {
+    "remotion": {
+      "revision": "32af7e8f8ac67493ef81498d311af3dc9ca953a6",
+      "workload": "interpolate: three-point clamped triangle",
+      "rows": {
+        "upstream": [
+          {
+            "elapsedMs": 1.0076000000008207,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 60452864,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 1.0263000000000009,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 59437056,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 1.0503,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 59289600,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 1.0437999999999992,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 59559936,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 1.1585999999999999,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 58966016,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 1.0646000000000004,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 59465728,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 1.0207999999999995,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 59678720,
+            "iterations": 2000
+          }
+        ],
+        "migrated": [
+          {
+            "elapsedMs": 1.0395000000000003,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 58761216,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 1.1331999999999987,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 59039744,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 0.9942999999999955,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 59002880,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 1.0254000000000012,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 59027456,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 1.0465,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 58781696,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 1.0170000000000012,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 59002880,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 1.0097000000000005,
+            "checksum": 1012.1933333333335,
+            "digest": "baee6e455e334471b91113f152c6d23de6c989ca0abf225cd3b9eb5196b87d9c",
+            "rssBytes": 58798080,
+            "iterations": 2000
+          }
+        ]
+      },
+      "upstream": {
+        "medianMs": 1.0437999999999992,
+        "minMs": 1.0076000000008207,
+        "maxMs": 1.1585999999999999,
+        "medianRssBytes": 59465728
+      },
+      "migrated": {
+        "medianMs": 1.0254000000000012,
+        "minMs": 0.9942999999999955,
+        "maxMs": 1.1331999999999987,
+        "medianRssBytes": 59002880
+      },
+      "upstreamOverMigrated": 1.0179442168909674,
+      "parity": true
+    },
+    "hyperframes": {
+      "revision": "063c2f8d61b4e989274b6526b370edc588b37e4a",
+      "workload": "generateSpringEaseData: under/critical/over damping, 120 samples",
+      "rows": {
+        "upstream": [
+          {
+            "elapsedMs": 36.6558,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 83316736,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 36.18320000000001,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 84066304,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 35.402499999999996,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 84099072,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 37.347699999999996,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 84013056,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 37.371500000000005,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 84115456,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 36.483,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 84004864,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 36.3313,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 84062208,
+            "iterations": 2000
+          }
+        ],
+        "migrated": [
+          {
+            "elapsedMs": 35.9599,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 83955712,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 35.8886,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 83877888,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 36.02269999999999,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 84164608,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 36.7025,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 83922944,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 37.8398,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 84008960,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 35.968900000000005,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 83980288,
+            "iterations": 2000
+          },
+          {
+            "elapsedMs": 36.540200000000006,
+            "checksum": 3350000,
+            "digest": "2445f4aa78f96768519e71e587ffa9e5e814da819363b06a10f413d8c8013b99",
+            "rssBytes": 83914752,
+            "iterations": 2000
+          }
+        ]
+      },
+      "upstream": {
+        "medianMs": 36.483,
+        "minMs": 35.402499999999996,
+        "maxMs": 37.371500000000005,
+        "medianRssBytes": 84062208
+      },
+      "migrated": {
+        "medianMs": 36.02269999999999,
+        "minMs": 35.8886,
+        "maxMs": 37.8398,
+        "medianRssBytes": 83955712
+      },
+      "upstreamOverMigrated": 1.0127780538382742,
+      "parity": true
+    }
+  },
+  "fullStack": {
+    "status": "blocked",
+    "stages": {
+      "oxc": {
+        "status": "blocked",
+        "reason": "Installed runtime lacks yolo_tooling_abi_version"
+      },
+      "m3": {
+        "status": "blocked",
+        "reason": "Custom theme requires qualified native provider"
+      },
+      "obscura": {
+        "status": "blocked",
+        "reason": "Installed runtime lacks browser capabilities"
+      }
+    }
+  }
+}

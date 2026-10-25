@@ -1,0 +1,27 @@
+# Crunchyroll metadata service: sync loop, catalog index, API and resolver in one process.
+# Install: copy to /etc/systemd/system, put secrets in /etc/bun-video/crunchyroll.env (mode 0600, owner root), then
+#   systemctl daemon-reload && systemctl enable --now bun-video-crunchyroll
+# The env file may define BUN_VIDEO_CRUNCHYROLL_API_TOKEN (required for the private routes),
+# BUN_VIDEO_CRUNCHYROLL_ACCESS_TOKEN, BUN_VIDEO_CRUNCHYROLL_ACCOUNT_ID and BUN_VIDEO_CRUNCHYROLL_LOCALE.
+[Unit]
+Description=Bun Video Crunchyroll metadata service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bun-video
+EnvironmentFile=/etc/bun-video/crunchyroll.env
+StateDirectory=bun-video
+ExecStart=/usr/local/bin/bun /opt/bun-video/src/crunchyroll-cli.ts daemon --hostname 127.0.0.1 --port 3000 --entries /var/lib/bun-video/crunchyroll-entries.json --catalog /var/lib/bun-video/catalog.sqlite --interval 900
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/bun-video
+
+[Install]
+WantedBy=multi-user.target

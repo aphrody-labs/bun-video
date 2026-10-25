@@ -1,0 +1,231 @@
+import React, {useCallback, useContext} from 'react';
+import type {
+	CanUpdateSequencePropStatusFalse,
+	CanUpdateSequencePropStatusStatic,
+	SequencePropsSubscriptionKey,
+} from 'remotion';
+import type {CodePosition} from '../../error-overlay/react-overlay/utils/get-source-map';
+import {
+	LIGHT_TEXT,
+	TRANSPARENT,
+	WHITE,
+	WHITE_ALPHA_40,
+} from '../../helpers/colors';
+import {
+	FOCUS_VISIBLE_ONLY_CLASS_NAME,
+	HOVERABLE_CLASS_NAME,
+	hoverableStyle,
+} from '../../helpers/hoverable';
+import type {
+	SchemaFieldInfo,
+	TimelineFieldOnDragValueChange,
+	TimelineFieldOnSave,
+} from '../../helpers/timeline-layout';
+import {SetSelectedModalContext} from '../../state/modals';
+import {formatTimelineFieldValueForDisplay} from './timeline-field-display-utils';
+import {TimelineArrayField} from './TimelineArrayField';
+import {
+	isTimelinePrimitiveFieldInfo,
+	TimelinePrimitiveFieldValue,
+} from './TimelinePrimitiveFieldValue';
+
+const unsupportedStatusWrapper: React.CSSProperties = {
+	alignItems: 'center',
+	display: 'inline-flex',
+	gap: 4,
+	maxWidth: '100%',
+	minWidth: 0,
+	userSelect: 'none',
+	WebkitUserSelect: 'none',
+};
+
+const unsupportedLabel: React.CSSProperties = {
+	color: WHITE_ALPHA_40,
+	fontFamily: 'Arial, Helvetica, sans-serif',
+	fontSize: 12,
+	fontStyle: 'italic',
+	lineHeight: '18px',
+};
+
+const computedValue: React.CSSProperties = {
+	color: WHITE_ALPHA_40,
+	fontFamily: 'Arial, Helvetica, sans-serif',
+	fontSize: 12,
+	lineHeight: '18px',
+	minWidth: 0,
+	overflow: 'hidden',
+	pointerEvents: 'none',
+	textOverflow: 'ellipsis',
+	whiteSpace: 'nowrap',
+};
+
+const fixLinkBase: React.CSSProperties = {
+	...hoverableStyle({
+		idleBackground: TRANSPARENT,
+		hoverBackground: TRANSPARENT,
+		idleColor: LIGHT_TEXT,
+		hoverColor: WHITE,
+	}),
+	display: 'inline-block',
+	flexShrink: 0,
+	fontSize: 10,
+	fontStyle: 'normal',
+	fontWeight: 600,
+	lineHeight: 1,
+	textDecoration: 'none',
+	width: 17,
+	appearance: 'none',
+	background: 'none',
+	border: 'none',
+	cursor: 'default',
+	padding: 0,
+};
+
+export const UnsupportedStatus: React.FC<{
+	readonly label: React.ReactNode;
+	readonly onFix?: () => void;
+	readonly formattedValue: boolean;
+}> = ({label, onFix, formattedValue}) => {
+	const [hovered, setHovered] = React.useState(false);
+	const [focused, setFocused] = React.useState(false);
+	const visible = hovered || focused;
+
+	const fixLink: React.CSSProperties = React.useMemo(() => {
+		return {
+			...fixLinkBase,
+			opacity: visible ? 1 : 0,
+			pointerEvents: visible ? 'auto' : 'none',
+		};
+	}, [visible]);
+
+	const stopMousePropagation: React.MouseEventHandler<HTMLButtonElement> = (
+		event,
+	) => {
+		event.stopPropagation();
+	};
+
+	const stopPointerPropagation: React.PointerEventHandler<HTMLButtonElement> = (
+		event,
+	) => {
+		event.stopPropagation();
+	};
+
+	return (
+		<span
+			role="group"
+			style={unsupportedStatusWrapper}
+			onPointerEnter={() => setHovered(true)}
+			onPointerLeave={() => setHovered(false)}
+			aria-label={
+				formattedValue && typeof label === 'string' ? label : undefined
+			}
+		>
+			<span
+				style={formattedValue ? computedValue : unsupportedLabel}
+				inert={formattedValue}
+			>
+				{label}
+			</span>
+			{onFix ? (
+				<button
+					type="button"
+					className={`${FOCUS_VISIBLE_ONLY_CLASS_NAME} ${HOVERABLE_CLASS_NAME}`}
+					style={fixLink}
+					aria-label="Fix computed Studio value"
+					onClick={(event) => {
+						stopMousePropagation(event);
+						onFix();
+					}}
+					onDoubleClick={stopMousePropagation}
+					onPointerDown={stopPointerPropagation}
+					onFocus={() => setFocused(true)}
+					onBlur={() => setFocused(false)}
+					tabIndex={visible ? 0 : -1}
+				>
+					Fix
+				</button>
+			) : null}
+		</span>
+	);
+};
+
+export const TimelineNonEditableStatus: React.FC<{
+	readonly propStatus: CanUpdateSequencePropStatusFalse;
+	readonly field: SchemaFieldInfo;
+	readonly runtimeValue: unknown;
+	readonly validatedLocation: CodePosition;
+}> = ({propStatus, field, runtimeValue, validatedLocation}) => {
+	const {setSelectedModal} = useContext(SetSelectedModalContext);
+	const onFix = useCallback(() => {
+		setSelectedModal({
+			type: 'fix-computed-value',
+			prop: field.key,
+			location: validatedLocation,
+		});
+	}, [field.key, setSelectedModal, validatedLocation]);
+
+	if (propStatus.status === 'computed') {
+		return (
+			<UnsupportedStatus
+				label={
+					runtimeValue === undefined
+						? 'computed'
+						: formatTimelineFieldValueForDisplay({
+								fieldSchema: field.fieldSchema,
+								value: runtimeValue,
+							})
+				}
+				onFix={onFix}
+				formattedValue={runtimeValue !== undefined}
+			/>
+		);
+	}
+};
+
+export const TimelineFieldValue: React.FC<{
+	readonly field: SchemaFieldInfo;
+	readonly onSave: TimelineFieldOnSave;
+	readonly onDragValueChange: TimelineFieldOnDragValueChange;
+	readonly onDragEnd: () => void;
+	readonly propStatus: CanUpdateSequencePropStatusStatic;
+	readonly effectiveValue: unknown;
+	readonly scaleLockNodePath: SequencePropsSubscriptionKey | null;
+}> = ({
+	field,
+	onSave,
+	onDragValueChange,
+	onDragEnd,
+	propStatus,
+	effectiveValue,
+	scaleLockNodePath,
+}) => {
+	if (isTimelinePrimitiveFieldInfo(field)) {
+		return (
+			<TimelinePrimitiveFieldValue
+				effectiveValue={effectiveValue}
+				field={field}
+				onDragEnd={onDragEnd}
+				onDragValueChange={onDragValueChange}
+				onSave={onSave}
+				propStatus={propStatus}
+				scaleLockNodePath={scaleLockNodePath}
+			/>
+		);
+	}
+
+	if (field.typeName === 'array') {
+		return (
+			<span>
+				<TimelineArrayField
+					effectiveValue={effectiveValue}
+					field={field}
+					onDragEnd={onDragEnd}
+					onDragValueChange={onDragValueChange}
+					onSave={onSave}
+				/>
+			</span>
+		);
+	}
+
+	throw new Error(`Unsupported field type: ${field.typeName}`);
+};

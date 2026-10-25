@@ -1,0 +1,45 @@
+import type {AnyRemotionOption} from './option';
+
+let enableRepro = false;
+
+const setRepro = (should: boolean) => {
+	enableRepro = should;
+};
+
+const cliFlag = 'repro' as const;
+
+export const reproOption = {
+	name: 'Create reproduction',
+	addedIn: '4.0.88',
+	cliFlag,
+	description: () => (
+		<>
+			Create a ZIP that you can submit to Remotion if asked for a reproduction.
+		</>
+	),
+	ssrName: 'repro',
+	docLink: 'https://www.remotion.dev/docs/options/repro',
+	type: false as boolean,
+	getValue: ({commandLine}) => {
+		if (commandLine[cliFlag] !== undefined && commandLine[cliFlag] !== null) {
+			return {
+				value: commandLine[cliFlag] as boolean,
+				source: 'cli',
+			};
+		}
+
+		if (enableRepro) {
+			return {
+				value: enableRepro,
+				source: 'config',
+			};
+		}
+
+		return {
+			value: false,
+			source: 'default',
+		};
+	},
+	setConfig: setRepro,
+	id: cliFlag,
+} satisfies AnyRemotionOption<boolean>;

@@ -1,0 +1,342 @@
+import type React from 'react';
+import {useContext, useLayoutEffect, useMemo, useState} from 'react';
+import {
+	cancelRender,
+	Html5Audio,
+	Internals,
+	random,
+	useCurrentFrame,
+	useDelayRender,
+	useRemotionEnvironment,
+} from 'remotion';
+import {useMaxMediaCacheSize, useRenderMediaCache} from '../caches';
+import {applyVolume} from '../convert-audiodata/apply-volume';
+import {frameForVolumeProp} from '../looped-frame';
+import {callOnErrorAndResolve} from '../on-error';
+import {extractFrameViaBroadcastChannel} from '../video-extraction/extract-frame-via-broadcast-channel';
+import type {AudioProps} from './props';
+
+export const AudioForRendering: React.FC<AudioProps> = ({
+	volume: volumeProp,
+	playbackRate,
+	src,
+	muted,
+	loopVolumeCurveBehavior,
+	delayRenderRetries,
+	delayRenderTimeoutInMilliseconds,
+	logLevel: overriddenLogLevel,
+	loop,
+	fallbackHtml5AudioProps,
+	audioStreamIndex,
+	showInTimeline,
+	style,
+	name,
+	disallowFallbackToHtml5Audio,
+	toneFrequency,
+	trimAfter,
+	trimBefore,
+	onError,
+	credentials,
+	requestInit,
+}) => {
+	const audioContext = useContext(Internals.SharedAudioContext);
+	const sampleRate = audioContext?.sampleRate ?? 48000;
+	const defaultLogLevel = Internals.useLogLevel();
+	const logLevel = overriddenLogLevel ?? defaultLogLevel;
+	const frame = useCurrentFrame();
+	const absoluteFrame = Internals.useTimelinePosition();
+
+	const videoConfig = Internals.useUnsafeVideoConfig();
+	const {registerRenderAsset, unregisterRenderAsset} = useContext(
+		Internals.RenderAssetManager,
+	);
+	const startsAt = Internals.useMediaStartsAt();
+
+	const environment = useRemotionEnvironment();
+
+	if (!videoConfig) {
+		throw new Error('No video config found');
+	}
+
+	if (!src) {
+		throw new TypeError('No `src` was passed to <Audio>.');
+	}
+
+	const {fps} = videoConfig;
+
+	const {delayRender, continueRender} = useDelayRender();
+	const [replaceWithHtml5Audio, setReplaceWithHtml5Audio] = useState(false);
+	const [initialRequestInit] = useState(requestInit);
+
+	const sequenceContext = useContext(Internals.SequenceContext);
+	const sequencePlaybackRate = sequenceContext?.playbackRate ?? 1;
+	const startInVideo = sequenceContext
+		? sequenceContext.cumulatedFrom + sequenceContext.relativeFrom
+		: 0;
+
+	// Generate a string that's as unique as possible for this asset
+	// but at the same time the same on all threads
+	const id = useMemo(
+		() =>
+			`media-audio-${random(
+				src,
+			)}-${sequenceContext?.cumulatedFrom}-${sequenceContext?.relativeFrom}-${sequenceContext?.durationInFrames}`,
+		[
+			src,
+			sequenceContext?.cumulatedFrom,
+			sequenceContext?.relativeFrom,
+			sequenceContext?.durationInFrames,
+		],
+	);
+
+	const maxCacheSize = useMaxMediaCacheSize(logLevel);
+	const mediaCache = useRenderMediaCache(logLevel);
+
+	const audioEnabled = Internals.useAudioEnabled();
+	const {isMutedForPlayback, shouldUseAudio} = Internals.useMediaAudioState({
+		muted: muted ?? false,
+		volume: null,
+		audioEnabled,
+	});
+
+	useLayoutEffect(() => {
+		const timestamp = frame / sequencePlaybackRate / fps;
+		const durationInSeconds = 1 / fps;
+
+		if (!shouldUseAudio) {
+			return;
+		}
+
+		if (replaceWithHtml5Audio) {
+			return;
+		}
+
+		let cancelled = false;
+		const newHandle = delayRender(`Extracting audio for frame ${frame}`, {
+			retries: delayRenderRetries ?? undefined,
+			timeoutInMilliseconds: delayRenderTimeoutInMilliseconds ?? undefined,
+		});
+
+		extractFrameViaBroadcastChannel({
+			sampleRate,
+			src,
+			timeInSeconds: timestamp,
+			durationInSeconds,
+			playbackRate: (playbackRate ?? 1) * sequencePlaybackRate,
+			logLevel,
+			includeAudio: shouldUseAudio,
+			includeVideo: false,
+			isClientSideRendering: environment.isClientSideRendering,
+			loop: loop ?? false,
+			audioStreamIndex: audioStreamIndex ?? null,
+			trimAfter,
+			trimBefore,
+			fps,
+			maxCacheSize,
+			credentials,
+			requestInit: initialRequestInit,
+			mediaCache,
+		})
+			.then((result) => {
+				if (cancelled || mediaCache.isDisposed()) {
+					return;
+				}
+
+				const handleError = (
+					error: Error,
+					clientSideError: Error,
+					fallbackMessage: string,
+				) => {
+					const [action, errorToUse] = callOnErrorAndResolve({
+						onError,
+						error,
+						disallowFallback: disallowFallbackToHtml5Audio ?? false,
+						isClientSideRendering: environment.isClientSideRendering,
+						clientSideError,
+					});
+					if (action === 'fail') {
+						cancelRender(errorToUse);
+					}
+
+					Internals.Log.warn(
+						{logLevel, tag: '@remotion/media'},
+						fallbackMessage,
+					);
+
+					setReplaceWithHtml5Audio(true);
+				};
+
+				if (
+					(result.type === 'unknown-container-format' ||
+						result.type === 'network-error') &&
+					result.error
+				) {
+					handleError(
+						result.error,
+						result.error,
+						`Failed to read ${src}: ${result.error.message}, falling back to <Html5Audio>`,
+					);
+					return;
+				}
+
+				if (result.type === 'unknown-container-format') {
+					handleError(
+						new Error(`Unknown container format ${src}.`),
+						new Error(
+							`Cannot render audio "${src}": Unknown container format. See supported formats: https://www.remotion.dev/docs/mediabunny/formats`,
+						),
+						`Unknown container format for ${src} (Supported formats: https://www.remotion.dev/docs/mediabunny/formats), falling back to <Html5Audio>`,
+					);
+					return;
+				}
+
+				if (result.type === 'cannot-decode') {
+					handleError(
+						new Error(`Cannot decode ${src}.`),
+						new Error(
+							`Cannot render audio "${src}": The audio could not be decoded by the browser.`,
+						),
+						`Cannot decode ${src}, falling back to <Html5Audio>`,
+					);
+					return;
+				}
+
+				if (result.type === 'cannot-decode-alpha') {
+					throw new Error(
+						`Cannot decode alpha component for ${src}, and 'disallowFallbackToHtml5Audio' was set. But this should never happen, since you used the <Audio> tag. Please report this as a bug.`,
+					);
+				}
+
+				if (result.type === 'cannot-decode-prores') {
+					throw new Error(
+						`Encountered ProRes media for ${src}. But this should never happen, since you used the <Audio> tag. Please report this as a bug.`,
+					);
+				}
+
+				if (result.type === 'network-error') {
+					handleError(
+						new Error(`Network error fetching ${src}.`),
+						new Error(
+							`Cannot render audio "${src}": Network error while fetching the audio (possibly CORS).`,
+						),
+						`Network error fetching ${src}, falling back to <Html5Audio>`,
+					);
+					return;
+				}
+
+				const {audio, durationInSeconds: assetDurationInSeconds} = result;
+
+				const volumePropsFrame = frameForVolumeProp({
+					behavior: loopVolumeCurveBehavior ?? 'repeat',
+					loop: loop ?? false,
+					assetDurationInSeconds: assetDurationInSeconds ?? 0,
+					fps,
+					frame,
+					startsAt,
+					playbackRate: playbackRate ?? 1,
+					trimBefore,
+					trimAfter,
+				});
+				const volume = Internals.evaluateVolume({
+					volume: volumeProp,
+					frame: volumePropsFrame,
+					mediaVolume: 1,
+				});
+
+				Internals.warnAboutTooHighVolume(volume);
+
+				if (audio && volume > 0) {
+					applyVolume(audio.data, volume);
+					registerRenderAsset({
+						type: 'inline-audio',
+						id,
+						audio: environment.isClientSideRendering
+							? audio.data
+							: Array.from(audio.data),
+						frame: absoluteFrame,
+						startInVideo,
+						timestamp: audio.timestamp,
+						duration: audio.durationInMicroSeconds,
+						toneFrequency: toneFrequency ?? 1,
+					});
+				}
+
+				continueRender(newHandle);
+			})
+			.catch((error) => {
+				if (cancelled || mediaCache.isDisposed()) {
+					return;
+				}
+
+				cancelRender(error);
+			});
+
+		return () => {
+			cancelled = true;
+			continueRender(newHandle);
+			unregisterRenderAsset(id);
+		};
+	}, [
+		sampleRate,
+		absoluteFrame,
+		continueRender,
+		delayRender,
+		delayRenderRetries,
+		delayRenderTimeoutInMilliseconds,
+		disallowFallbackToHtml5Audio,
+		environment.isClientSideRendering,
+		fps,
+		frame,
+		id,
+		logLevel,
+		loop,
+		loopVolumeCurveBehavior,
+		shouldUseAudio,
+		playbackRate,
+		sequencePlaybackRate,
+		registerRenderAsset,
+		src,
+		startInVideo,
+		startsAt,
+		unregisterRenderAsset,
+		volumeProp,
+		audioStreamIndex,
+		toneFrequency,
+		trimAfter,
+		trimBefore,
+		replaceWithHtml5Audio,
+		maxCacheSize,
+		onError,
+		credentials,
+		initialRequestInit,
+		mediaCache,
+	]);
+
+	if (replaceWithHtml5Audio) {
+		return (
+			<Html5Audio
+				src={src}
+				playbackRate={playbackRate}
+				muted={isMutedForPlayback}
+				loop={loop}
+				volume={volumeProp}
+				delayRenderRetries={delayRenderRetries}
+				delayRenderTimeoutInMilliseconds={delayRenderTimeoutInMilliseconds}
+				style={style}
+				loopVolumeCurveBehavior={loopVolumeCurveBehavior}
+				audioStreamIndex={audioStreamIndex}
+				useWebAudioApi={fallbackHtml5AudioProps?.useWebAudioApi}
+				onError={fallbackHtml5AudioProps?.onError}
+				toneFrequency={toneFrequency}
+				acceptableTimeShiftInSeconds={
+					fallbackHtml5AudioProps?.acceptableTimeShiftInSeconds
+				}
+				preservePitch={fallbackHtml5AudioProps?.preservePitch ?? true}
+				name={name}
+				showInTimeline={showInTimeline}
+			/>
+		);
+	}
+
+	return null;
+};

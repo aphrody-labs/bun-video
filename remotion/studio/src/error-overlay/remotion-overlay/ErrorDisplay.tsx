@@ -1,0 +1,285 @@
+import {getLocationFromBuildError} from '@remotion/studio-shared';
+import React, {useContext, useMemo} from 'react';
+import {MediaPlaybackError} from 'remotion';
+import {CodingAgentButton} from '../../components/CodingAgentButton';
+import {Spacing} from '../../components/layout';
+import {HORIZONTAL_SCROLLBAR_CLASSNAME} from '../../components/Menu/is-menu-item';
+import {useEditorOpening} from '../../components/use-default-editor-info';
+import {StudioServerConnectionCtx} from '../../helpers/client-id';
+import {
+	ERROR_CODE_FRAME_BACKGROUND,
+	WHITE,
+	WHITE_ALPHA_60,
+} from '../../helpers/colors';
+import {getCodexAnnotation} from '../../helpers/get-codex-annotation';
+import {didUnmountReactApp} from '../react-overlay';
+import type {ErrorRecord} from '../react-overlay/listen-to-runtime-errors';
+import {AskOnDiscord} from './AskOnDiscord';
+import {CalculateMetadataErrorExplainer} from './CalculateMetadataErrorExplainer';
+import {CopyStackTrace} from './CopyStackTrace';
+import {ErrorTitle} from './ErrorTitle';
+import {getHelpLink} from './get-help-link';
+import {HelpLink} from './HelpLink';
+import {MediaPlaybackErrorExplainer} from './MediaPlaybackErrorExplainer';
+import {OpenInEditor} from './OpenInEditor';
+import {RetryButton} from './Retry';
+import {SearchGithubIssues} from './SearchGitHubIssues';
+import {StackElement} from './StackFrame';
+
+const stack: React.CSSProperties = {
+	marginTop: 17,
+	overflowX: 'hidden',
+	marginBottom: 14,
+};
+
+const rawStack: React.CSSProperties = {
+	backgroundColor: ERROR_CODE_FRAME_BACKGROUND,
+	borderRadius: 6,
+	boxSizing: 'border-box',
+	color: WHITE,
+	fontFamily: 'monospace',
+	fontSize: 14,
+	lineHeight: 1.7,
+	marginBottom: 0,
+	marginTop: 17,
+	maxWidth: '100%',
+	overflowX: 'auto',
+	padding: 12,
+	whiteSpace: 'pre',
+};
+
+const symbolicationFailureStyle: React.CSSProperties = {
+	color: WHITE_ALPHA_60,
+	fontFamily: 'SF Pro Text, sans-serif',
+	fontSize: 14,
+	lineHeight: 1.5,
+	marginBottom: 14,
+	marginTop: 24,
+};
+
+const spacer: React.CSSProperties = {
+	width: 5,
+	display: 'inline-block',
+};
+
+const actionRow: React.CSSProperties = {
+	alignItems: 'center',
+	display: 'flex',
+	flexWrap: 'wrap',
+	marginLeft: 4,
+	marginTop: -10,
+	userSelect: 'none',
+};
+
+const codingAgentButton: React.CSSProperties = {
+	marginLeft: 1,
+	marginRight: 5,
+};
+
+export type OnRetry = null | (() => void);
+
+export const ErrorDisplay: React.FC<{
+	readonly display: ErrorRecord;
+	readonly keyboardShortcuts: boolean;
+	readonly onRetry: OnRetry;
+	readonly canHaveDismissButton: boolean;
+	readonly calculateMetadata: boolean;
+	readonly symbolicationFailure: string | null;
+}> = ({
+	display,
+	keyboardShortcuts,
+	onRetry,
+	canHaveDismissButton,
+	calculateMetadata,
+	symbolicationFailure,
+}) => {
+	const {previewServerState} = useContext(StudioServerConnectionCtx);
+	const canShowProjectActions = !didUnmountReactApp();
+	const canAnnotate =
+		canShowProjectActions &&
+		!window.remotion_isReadOnlyStudio &&
+		getCodexAnnotation() !== null;
+	const {canOpenInEditor, defaultEditorId, defaultEditorName} =
+		useEditorOpening(previewServerState.type === 'connected');
+	const stackFrames = useMemo(() => {
+		const withoutReactInternals = display.stackFrames.filter((frame) => {
+			const fileName = `/${frame.originalFileName?.replaceAll('\\', '/') ?? ''}`;
+			return ![
+				'/node_modules/react/',
+				'/node_modules/react-dom/',
+				'/node_modules/scheduler/',
+			].some((packagePath) => fileName.includes(packagePath));
+		});
+
+		return withoutReactInternals.length > 0
+			? withoutReactInternals
+			: display.stackFrames.slice(0, 1);
+	}, [display.stackFrames]);
+	const highestLineNumber = Math.max(
+		0,
+		...stackFrames
+			.map((s) => s.originalScriptCode)
+			.flat(1)
+			.map((s) => s?.lineNumber ?? 0),
+	);
+	const message = useMemo(() => {
+		// Format compilation errors
+		const location = getLocationFromBuildError(display.error);
+		if (!location) {
+			return display.error.message;
+		}
+
+		return location.message
+			.replace(/\\n/g, '\n')
+			.replace(/\\t/g, '  ')
+			.replace(/^error:/, '')
+			.trim();
+	}, [display.error]);
+
+	const lineNumberWidth = String(highestLineNumber).length;
+
+	const helpLink = getHelpLink(message);
+
+	const errorTextForCopy = useMemo(() => {
+		const header = `${display.error.name}: ${message}`;
+
+		if (stackFrames.length > 0) {
+			const stackLines = stackFrames
+				.map(
+					(frame) =>
+						`at ${frame.originalFunctionName || '<anonymous>'} (${frame.originalFileName || 'unknown'}:${frame.originalLineNumber || '?'}:${frame.originalColumnNumber || '?'})`,
+				)
+				.join('\n');
+			return `${header}\n${stackLines}`;
+		}
+
+		return display.error.stack || header;
+	}, [display.error, message, stackFrames]);
+	const fixWithAgentPrompt = `Fix this error in my Remotion project:\n\n${errorTextForCopy}`;
+
+	return (
+		<div>
+			<ErrorTitle
+				symbolicating={false}
+				name={display.error.name}
+				message={message}
+				canHaveDismissButton={canHaveDismissButton}
+			/>
+
+			<div style={actionRow}>
+				{helpLink ? (
+					<>
+						<HelpLink
+							link={helpLink}
+							canHaveKeyboardShortcuts={keyboardShortcuts}
+						/>
+						<div style={spacer} />
+					</>
+				) : null}
+				{canShowProjectActions &&
+				stackFrames.length > 0 &&
+				canOpenInEditor &&
+				defaultEditorId &&
+				defaultEditorName ? (
+					<>
+						<OpenInEditor
+							canHaveKeyboardShortcuts={keyboardShortcuts}
+							editorId={defaultEditorId}
+							editorName={defaultEditorName}
+							size="default"
+							stack={stackFrames[0]}
+						/>
+						<div style={spacer} />
+					</>
+				) : null}
+				{canShowProjectActions ? (
+					<CodingAgentButton
+						label="Fix with"
+						prompt={fixWithAgentPrompt}
+						size="default"
+						style={codingAgentButton}
+					/>
+				) : null}
+				<CopyStackTrace errorText={errorTextForCopy} />
+				<div style={spacer} />
+				<SearchGithubIssues
+					canHaveKeyboardShortcuts={keyboardShortcuts}
+					message={display.error.message}
+				/>
+				<div style={spacer} />
+				<AskOnDiscord canHaveKeyboardShortcuts={keyboardShortcuts} />
+				{onRetry ? (
+					<>
+						<div style={spacer} />
+						<RetryButton
+							onClick={onRetry}
+							label={calculateMetadata ? 'Retry calculateMetadata()' : 'Retry'}
+						/>
+					</>
+				) : null}
+			</div>
+			{calculateMetadata ? (
+				<>
+					<br />
+					<Spacing y={0.5} />
+					<CalculateMetadataErrorExplainer />
+				</>
+			) : null}
+			{display.error instanceof MediaPlaybackError ? (
+				<>
+					<br />
+					<Spacing y={0.5} />
+					<MediaPlaybackErrorExplainer src={display.error.src} />
+				</>
+			) : null}
+			{stackFrames.length > 0 ? (
+				<div style={stack} className={HORIZONTAL_SCROLLBAR_CLASSNAME}>
+					{stackFrames.map((s, i) => {
+						return (
+							<StackElement
+								// eslint-disable-next-line react/no-array-index-key
+								key={i}
+								collapsible
+								isFirst={i === 0}
+								s={s}
+								fontSize={14}
+								headerAction={null}
+								horizontalSpacing={14}
+								lineNumberWidth={lineNumberWidth}
+								defaultFunctionName={'(anonymous function)'}
+								editorId={
+									canShowProjectActions && canOpenInEditor
+										? defaultEditorId
+										: null
+								}
+							/>
+						);
+					})}
+				</div>
+			) : (
+				<>
+					<pre
+						aria-label="Unsymbolicated stack trace"
+						className={HORIZONTAL_SCROLLBAR_CLASSNAME}
+						style={rawStack}
+					>
+						{display.error.stack ??
+							'Check the Terminal and browser console for error messages.'}
+					</pre>
+					{symbolicationFailure ? (
+						<div style={symbolicationFailureStyle}>{symbolicationFailure}</div>
+					) : null}
+				</>
+			)}
+			{canAnnotate && stackFrames.length > 0 && display.error.stack ? (
+				<pre
+					aria-label="Complete stack trace"
+					className={HORIZONTAL_SCROLLBAR_CLASSNAME}
+					style={rawStack}
+				>
+					{display.error.stack}
+				</pre>
+			) : null}
+		</div>
+	);
+};

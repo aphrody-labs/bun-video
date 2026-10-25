@@ -1,0 +1,61 @@
+import {buildPackage} from '../.monorepo/builder';
+
+const external = [
+	'react',
+	'remotion',
+	'@remotion/sdk',
+	'react-dom',
+	'react',
+	'@remotion/media-utils',
+	'@remotion/studio-shared',
+	'@remotion/timeline-utils',
+	'@remotion/zod-types',
+	'@remotion/renderer',
+	'@remotion/player',
+	'@remotion/renderer/client',
+	'@remotion/renderer/pure',
+	'@remotion/web-renderer',
+	'@remotion/whisper-webgpu',
+	'@remotion/video-matting',
+	'@remotion/renderer/error-handling',
+	'@jridgewell/trace-mapping',
+	'zod',
+	'remotion/no-react',
+	'react/jsx-runtime',
+	'mediabunny',
+];
+
+await buildPackage({
+	formats: {
+		// Keep visual controls and other singleton state shared across entry points.
+		esm: 'build-shared',
+		cjs: 'use-tsc',
+	},
+	external,
+	entrypoints: [
+		{
+			path: 'src/index.ts',
+			target: 'browser',
+		},
+		{
+			path: 'src/renderEntry.tsx',
+			target: 'browser',
+			splitting: true,
+		},
+		{
+			path: 'src/internals.ts',
+			target: 'browser',
+			splitting: true,
+		},
+		{
+			path: 'src/previewBootstrap.ts',
+			target: 'browser',
+			splitting: true,
+		},
+		{
+			path: 'src/previewEntry.tsx',
+			target: 'browser',
+			splitting: true,
+		},
+	],
+});

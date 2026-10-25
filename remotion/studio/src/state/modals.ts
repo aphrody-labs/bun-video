@@ -1,0 +1,372 @@
+import type {
+	AudioCodec,
+	ChromeMode,
+	Codec,
+	ColorSpace,
+	LogLevel,
+	OpenGlRenderer,
+	PixelFormat,
+	StillImageFormat,
+	VideoImageFormat,
+	X264Preset,
+} from '@remotion/renderer';
+import type {HardwareAccelerationOption} from '@remotion/renderer/client';
+import type {
+	CanvasCaptureData,
+	ElementInstallExpectedFileState,
+	ElementInstallRequest,
+	NodeWrapper,
+	RenderDefaults,
+} from '@remotion/studio-shared';
+import type {
+	RenderStillOnWebImageFormat,
+	WebRendererAudioCodec,
+	WebRendererContainer,
+	WebRendererHardwareAcceleration,
+	WebRendererPageResponsiveness,
+	WebRendererQuality,
+	WebRendererVideoCodec,
+} from '@remotion/web-renderer';
+import type React from 'react';
+import {createContext} from 'react';
+import type {SequencePropsSubscriptionKey, _InternalTypes} from 'remotion';
+import type {StaticFile} from '../api/get-static-files';
+import type {CompType} from '../components/NewComposition/DuplicateComposition';
+import type {QuickSwitcherMode} from '../components/QuickSwitcher/NoResults';
+import type {RenderType} from '../components/RenderModal/RenderModalAdvanced';
+import type {useTimelineSelection} from '../components/Timeline/TimelineSelection';
+import type {SequenceNodePathInfo} from '../helpers/get-timeline-sequence-sort-key';
+
+export type WebRenderModalState = {
+	type: 'web-render';
+	initialFrame: number;
+	compositionId: string;
+	defaultProps: Record<string, unknown>;
+	inFrameMark: number | null;
+	outFrameMark: number | null;
+	initialLogLevel: LogLevel;
+	initialStillImageFormat: RenderStillOnWebImageFormat;
+	initialScale: number;
+	initialDelayRenderTimeout: number;
+	initialDefaultOutName: string | null;
+	initialContainer: WebRendererContainer | null;
+	initialVideoCodec: WebRendererVideoCodec | null;
+	initialAudioCodec: WebRendererAudioCodec | null;
+	initialAudioBitrate: WebRendererQuality | null;
+	initialVideoBitrate: WebRendererQuality | null;
+	initialHardwareAcceleration: WebRendererHardwareAcceleration | null;
+	initialKeyframeIntervalInSeconds: number | null;
+	initialTransparent: boolean | null;
+	initialMuted: boolean | null;
+	initialMediaCacheSizeInBytes: number | null;
+	initialAllowHtmlInCanvas: boolean;
+	initialPageResponsiveness: WebRendererPageResponsiveness;
+};
+
+export type RenderModalState = {
+	type: 'server-render';
+	readOnlyStudio: boolean;
+	compositionId: string;
+	initialFrame: number;
+	initialStillImageFormat: StillImageFormat;
+	initialVideoImageFormat: VideoImageFormat | null;
+	initialJpegQuality: number;
+	initialScale: number;
+	initialLogLevel: LogLevel;
+	initialConcurrency: number;
+	initialMuted: boolean;
+	initialEnforceAudioTrack: boolean;
+	initialProResProfile: _InternalTypes['ProResProfile'] | null;
+	initialx264Preset: X264Preset;
+	initialGopSize: number | null;
+	initialPixelFormat: PixelFormat | null;
+	initialVideoBitrate: string | null;
+	initialAudioBitrate: string | null;
+	initialEveryNthFrame: number;
+	initialNumberOfGifLoops: number | null;
+	initialDelayRenderTimeout: number;
+	initialEnvVariables: Record<string, string>;
+	initialDisableWebSecurity: boolean;
+	initialOpenGlRenderer: OpenGlRenderer | null;
+	initialIgnoreCertificateErrors: boolean;
+	initialHeadless: boolean;
+	initialDarkMode: boolean;
+	initialMediaCacheSizeInBytes: number | null;
+	initialOffthreadVideoCacheSizeInBytes: number | null;
+	initialOffthreadVideoThreads: number | null;
+	initialColorSpace: ColorSpace;
+	initialMultiProcessOnLinux: boolean;
+	initialUserAgent: string | null;
+	initialEncodingMaxRate: string | null;
+	initialEncodingBufferSize: string | null;
+	initialForSeamlessAacConcatenation: boolean;
+	initialHardwareAcceleration: HardwareAccelerationOption;
+	initialSampleRate: number;
+	initialBeep: boolean;
+	initialRepro: boolean;
+	initialChromeMode: ChromeMode;
+	minConcurrency: number;
+	maxConcurrency: number;
+	defaultProps: Record<string, unknown>;
+	inFrameMark: number | null;
+	outFrameMark: number | null;
+	defaultConfigurationVideoCodec: Codec;
+	defaultConfigurationAudioCodec: AudioCodec | null;
+	renderTypeOfLastRender: RenderType | null;
+	defaulMetadata: Record<string, string> | null;
+	renderDefaults: RenderDefaults;
+};
+
+export type ConfirmationDialogState = {
+	type: 'confirmation-dialog';
+	id: string;
+	title: string;
+	message: React.ReactNode;
+	confirmLabel: string;
+	cancelLabel: string;
+	onConfirm: () => void;
+	onCancel: () => void;
+};
+
+export type SvgImportDialogState = {
+	type: 'svg-import-dialog';
+	id: string;
+	onImage: () => void;
+	onInline: () => void;
+	onDismiss: () => void;
+};
+
+export type AddEffectModalState = {
+	type: 'add-effect';
+	fileName: string;
+	nodePathInfo: SequenceNodePathInfo;
+	clientId: string;
+	selectItems: ReturnType<typeof useTimelineSelection>['selectItems'];
+};
+
+export type AssetSelectionModalState = {
+	readonly type: 'asset-selection';
+	readonly assetType: 'audio' | 'video' | 'image';
+	readonly initialUrl: string | null;
+	readonly invocationTimestamp: number;
+	readonly assetSelection: {
+		readonly initialQuery: string;
+		readonly fileTypes: null;
+		readonly onSelectFile: () => void;
+		readonly onSelected: (asset: StaticFile) => void;
+	};
+	readonly onSelectedUrl: (url: string) => void;
+};
+
+export type TranscriptionModalState = {
+	type: 'transcribe';
+	captionStyle: ElementInstallRequest | null;
+	src: string;
+	displayName: string;
+	audioStreamIndex: number | null;
+	requestInit: Omit<RequestInit, 'signal'> | null;
+	target: {
+		fileName: string;
+		nodePath: SequencePropsSubscriptionKey;
+		durationInFrames: number | null;
+		premountFor: number | null;
+	} | null;
+};
+
+export type VideoMattingModalState = {
+	type: 'video-matting';
+	src: string;
+	displayName: string;
+	target: {
+		fileName: string;
+		nodePath: SequencePropsSubscriptionKey;
+	} | null;
+};
+
+export type CanvasCaptureImport = {
+	readonly data: CanvasCaptureData;
+	readonly durationInSeconds: number;
+	readonly file: File;
+	readonly height: number;
+	readonly width: number;
+};
+
+export type ElementInstallPlan = {
+	readonly compositionFile: string;
+	readonly expectedFileState: ElementInstallExpectedFileState;
+	readonly filePath: string;
+};
+
+export type ElementLibraryModalState = {
+	readonly type: 'element-library';
+	readonly name: string;
+	readonly url: string;
+};
+
+export type ElementInstallModalState = {
+	readonly type: 'element-install';
+	readonly currentPlan: ElementInstallPlan | null;
+	readonly missingPackages: string[];
+	readonly newPlan: ElementInstallPlan;
+	readonly library: ElementLibraryModalState | null;
+	readonly onCancel: () => void;
+	readonly onClose: () => void;
+	readonly request: ElementInstallRequest;
+	readonly sourceIsUnverified: boolean;
+	readonly sourceLabel: string;
+};
+
+export type ModalState =
+	| {
+			type: 'new-comp';
+			folderName: string | null;
+			parentName: string | null;
+			stack: string | null;
+			canvasCapture: CanvasCaptureImport | null;
+	  }
+	| {
+			type: 'new-folder';
+			parentName: string | null;
+			stack: string | null;
+	  }
+	| {
+			type: 'duplicate-comp';
+			compositionId: string;
+			compositionType: CompType;
+	  }
+	| {
+			type: 'delete-comp';
+			compositionId: string;
+	  }
+	| {
+			type: 'rename-comp';
+			compositionId: string;
+	  }
+	| {
+			type: 'delete-folder';
+			folderName: string;
+			parentName: string | null;
+			stack: string | null;
+	  }
+	| {
+			type: 'rename-folder';
+			folderName: string;
+			parentName: string | null;
+			stack: string | null;
+	  }
+	| {
+			type: 'rename-static-file';
+			relativePath: string;
+	  }
+	| {
+			type: 'input-props-override';
+	  }
+	| {
+			type: 'settings';
+			initialStudioPane: 'elements' | 'general' | null;
+			initialTab:
+				| 'apps'
+				| 'rendering'
+				| 'studio'
+				| 'packages'
+				| 'models'
+				| 'shortcuts'
+				| 'skills'
+				| 'updates'
+				| 'license';
+			initialPublicLicenseKey: string | null;
+	  }
+	| RenderModalState
+	| WebRenderModalState
+	| {
+			type: 'render-progress';
+			jobId: string;
+	  }
+	| {
+			type: 'queue-job-error';
+			title: string;
+			error: {
+				message: string;
+				stack: string | null;
+			};
+	  }
+	| {
+			type: 'fix-computed-value';
+			prop: string;
+			location: {
+				source: string;
+				line: number;
+				column: number;
+			};
+	  }
+	| {
+			type: 'precompose-refactor';
+			targets: {
+				fileName: string;
+				displayName: string | null;
+				line: number | null;
+			}[];
+	  }
+	| {
+			type: 'generate-with-agent';
+			location: {
+				source: string;
+				line: number;
+			} | null;
+	  }
+	| {
+			type: 'wrap-refactor';
+			displayName: string | null;
+			location: {
+				source: string;
+				line: number;
+			};
+			wrapper: NodeWrapper;
+	  }
+	| {
+			type: 'browser-studio-experimental-notice';
+	  }
+	| {
+			type: 'html-in-canvas-unavailable';
+			action: 'effects' | 'motion-blur';
+	  }
+	| {
+			type: 'quick-switcher';
+			mode: QuickSwitcherMode;
+			invocationTimestamp: number;
+			assetSelection: {
+				initialQuery: string;
+				fileTypes: {
+					extensions: string[];
+					description: string;
+					importLabel: string;
+				} | null;
+				onSelectFile: () => void;
+				onSelected: (asset: StaticFile) => void;
+			} | null;
+			compositionSelection: {
+				excludeCompositionId: string;
+				onSelected: (composition: _InternalTypes['AnyComposition']) => void;
+			} | null;
+	  }
+	| ElementLibraryModalState
+	| ElementInstallModalState
+	| AddEffectModalState
+	| AssetSelectionModalState
+	| TranscriptionModalState
+	| VideoMattingModalState
+	| ConfirmationDialogState
+	| SvgImportDialogState;
+
+export type SetSelectedModalContextType = {
+	setSelectedModal: React.Dispatch<React.SetStateAction<ModalState | null>>;
+};
+
+// Keep modal state separate from its stable setter so opening a modal only
+// updates consumers that need to render the selected modal.
+export const SelectedModalContext = createContext<ModalState | null>(null);
+
+export const SetSelectedModalContext =
+	createContext<SetSelectedModalContextType>({
+		setSelectedModal: () => undefined,
+	});

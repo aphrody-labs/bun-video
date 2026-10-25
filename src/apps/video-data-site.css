@@ -1,0 +1,271 @@
+:root {
+  font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
+  color: #1b2d48;
+  background: #eef3fb;
+  font-synthesis: none;
+  line-height: 1.5;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  border: 0;
+  border-radius: 7px;
+  background: #173e71;
+  color: #fff;
+  padding: 9px 15px;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 3px solid #e49730;
+  outline-offset: 3px;
+}
+main {
+  max-width: 1450px;
+  margin: auto;
+  padding: 30px;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+.mark {
+  background: #f29a34;
+  color: #17375e;
+  font-size: 32px;
+  border-radius: 15px;
+  padding: 8px 17px;
+}
+h1 {
+  font-size: 30px;
+  margin: 0;
+  font-weight: 650;
+  letter-spacing: -0.8px;
+}
+header p {
+  margin: 0;
+  color: #506481;
+}
+.runtime {
+  margin-left: auto;
+  border: 1px solid #9aacc6;
+  padding: 6px 12px;
+  border-radius: 30px;
+}
+h2 {
+  font-size: 19px;
+  margin: 0 0 8px;
+}
+p {
+  max-width: 75ch;
+}
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 25px;
+  align-items: center;
+  padding: 22px 0;
+  border-top: 1px solid #c4d0e1;
+}
+.toolbar p {
+  margin: 0;
+}
+.toolbar form {
+  display: grid;
+  grid-template-columns: minmax(160px, 300px) auto;
+  gap: 5px 12px;
+  align-items: center;
+}
+.toolbar label {
+  grid-column: 1/-1;
+}
+input,
+select,
+textarea {
+  border: 1px solid #94a8c3;
+  border-radius: 5px;
+  background: #fff;
+  color: #17375e;
+  padding: 8px;
+}
+input[type="file"] {
+  width: 100%;
+  font-size: 12px;
+  padding: 6px;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: 185px minmax(0, 1fr);
+  background: #fff;
+  min-height: 430px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+aside {
+  background: #e0eafa;
+  padding: 22px 15px;
+}
+aside h2 {
+  margin-bottom: 15px;
+}
+nav {
+  display: grid;
+  gap: 4px;
+}
+nav button {
+  text-align: left;
+  background: transparent;
+  color: #2a476d;
+}
+nav button[aria-current] {
+  background: #173e71;
+  color: #fff;
+}
+.cache {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 30px;
+}
+.hint {
+  font-size: 12px;
+  color: #526888;
+  max-width: 22ch;
+}
+.data {
+  padding: 22px;
+  min-width: 0;
+}
+.data-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+.table-scroll {
+  overflow: auto;
+  margin-top: 18px;
+  max-height: 470px;
+  border-bottom: 1px solid #d2dded;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  text-align: left;
+}
+th {
+  background: #eff4fb;
+  position: sticky;
+  top: 0;
+  padding: 11px 10px;
+  font-weight: 650;
+}
+td {
+  padding: 10px;
+  border-bottom: 1px solid #e5ebf4;
+  max-width: 260px;
+  overflow-wrap: anywhere;
+}
+tr:nth-child(even) {
+  background: #fafcff;
+}
+.pagination {
+  display: flex;
+  gap: 20px;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 16px;
+  font-size: 13px;
+}
+.delivery {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 35px;
+  margin-top: 28px;
+}
+.delivery > div {
+  padding: 20px 0;
+}
+.delivery p {
+  font-size: 14px;
+  color: #526888;
+}
+.delivery label {
+  display: block;
+  margin: 12px 0 7px;
+}
+.delivery select {
+  margin-right: 12px;
+}
+.delivery a {
+  display: block;
+  margin-top: 15px;
+  color: #173e71;
+  font-weight: 600;
+}
+.delivery textarea {
+  display: block;
+  width: 100%;
+  margin-bottom: 12px;
+}
+.status {
+  background: #dae6f7;
+  border-left: 4px solid #173e71;
+  padding: 10px 15px;
+  font-size: 14px;
+}
+@media (max-width: 850px) {
+  main {
+    padding: 18px;
+  }
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+  aside {
+    padding: 15px;
+  }
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .cache,
+  .hint {
+    display: none;
+  }
+  .delivery {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+  .runtime {
+    display: none;
+  }
+  .data {
+    padding: 15px;
+  }
+  h1 {
+    font-size: 25px;
+  }
+}

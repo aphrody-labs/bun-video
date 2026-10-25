@@ -1,0 +1,150 @@
+import {PlayerInternals} from '@remotion/player';
+import React, {useCallback, useLayoutEffect, useMemo, useState} from 'react';
+import {Internals} from 'remotion';
+import {useStudioConfigRevision} from '../helpers/client-id';
+import {BACKGROUND} from '../helpers/colors';
+import {noop} from '../helpers/noop';
+import {getStudioCurrentScaleContext} from '../helpers/studio-fit-padding';
+import {getStudioBufferStateDelayInMilliseconds} from '../helpers/studio-runtime-config';
+import {drawRef, RefreshCanvasSizeContext} from '../state/canvas-ref';
+import {compositionListRenderedRef} from '../state/composition-list';
+import {ScaleLockProvider} from '../state/scale-lock';
+import {TimelineZoomContext} from '../state/timeline-zoom';
+import {HigherZIndex} from '../state/z-index';
+import {CanvasCaptureDropHandler} from './CanvasCaptureDropHandler';
+import {EditorContent} from './EditorContent';
+import {ElementInstallRequestHandler} from './ElementInstallRequestHandler';
+import {ForceSpecificCursor} from './ForceSpecificCursor';
+import {Modals} from './Modals';
+import {NotificationCenter} from './Notifications/NotificationCenter';
+import {RenderErrorContext} from './RenderErrorContext';
+import {SequencePropsSubscriptionProvider} from './SequencePropsSubscriptionProvider';
+import {TopPanel} from './TopPanel';
+
+const background: React.CSSProperties = {
+	backgroundColor: BACKGROUND,
+	display: 'flex',
+	width: '100%',
+	height: '100%',
+	flexDirection: 'column',
+	position: 'absolute',
+};
+
+const RootCompositionLoader: React.FC<{
+	readonly Root: React.FC;
+}> = ({Root}) => {
+	return (
+		<>
+			<Root />
+			<CompositionListRenderMarker />
+		</>
+	);
+};
+
+const CompositionListRenderMarker: React.FC = () => {
+	useLayoutEffect(() => {
+		compositionListRenderedRef.current = true;
+
+		return () => {
+			compositionListRenderedRef.current = false;
+		};
+	}, []);
+
+	return null;
+};
+
+export const Editor: React.FC<{
+	readonly Root: React.FC;
+	readonly readOnlyStudio: boolean;
+}> = ({Root, readOnlyStudio}) => {
+	useStudioConfigRevision();
+	const [drawElement, setDrawElement] = useState<HTMLDivElement | null>(null);
+	const size = PlayerInternals.useElementSize(drawElement, {
+		triggerOnWindowResize: false,
+		shouldApplyCssTransforms: true,
+	});
+
+	const [canvasMounted, setCanvasMounted] = React.useState(false);
+
+	const onMounted = useCallback(() => {
+		setCanvasMounted(true);
+	}, []);
+
+	// Use a callback ref so the late-mounted canvas container triggers a render
+	// and useElementSize() can observe it. See GitHub issue #8098.
+	const setDrawRef = useCallback((node: HTMLDivElement | null) => {
+		drawRef.current = node;
+		setDrawElement(node);
+	}, []);
+
+	const value = useMemo(() => {
+		if (!size) {
+			return null;
+		}
+
+		return getStudioCurrentScaleContext(size);
+	}, [size]);
+
+	const MemoRoot = useMemo(() => {
+		return React.memo(Root);
+	}, [Root]);
+
+	const [renderError, setRenderError] = useState<Error | null>(null);
+
+	const clearError = useCallback(() => {
+		setRenderError(null);
+	}, []);
+
+	const compositionRenderErrorContextValue = useMemo(
+		() => ({setError: setRenderError, clearError}),
+		[clearError],
+	);
+
+	const renderErrorContextValue = useMemo(
+		() => ({error: renderError}),
+		[renderError],
+	);
+
+	return (
+		<HigherZIndex onEscape={noop} onOutsideClick={noop}>
+			<TimelineZoomContext>
+				<SequencePropsSubscriptionProvider>
+					<RefreshCanvasSizeContext.Provider value={size?.refresh ?? null}>
+						<Internals.CurrentScaleContext.Provider value={value}>
+							<ForceSpecificCursor />
+							<CanvasCaptureDropHandler readOnlyStudio={readOnlyStudio} />
+							<ScaleLockProvider>
+								<div style={background}>
+									<Internals.CompositionRenderErrorContext.Provider
+										value={compositionRenderErrorContextValue}
+									>
+										{canvasMounted ? (
+											<RootCompositionLoader Root={MemoRoot} />
+										) : null}
+									</Internals.CompositionRenderErrorContext.Provider>
+									<Internals.CanUseRemotionHooksProvider>
+										<RenderErrorContext.Provider
+											value={renderErrorContextValue}
+										>
+											<EditorContent readOnlyStudio={readOnlyStudio}>
+												<TopPanel
+													drawRef={setDrawRef}
+													bufferStateDelayInMilliseconds={getStudioBufferStateDelayInMilliseconds()}
+													onMounted={onMounted}
+													readOnlyStudio={readOnlyStudio}
+												/>
+											</EditorContent>
+										</RenderErrorContext.Provider>
+									</Internals.CanUseRemotionHooksProvider>
+								</div>
+							</ScaleLockProvider>
+						</Internals.CurrentScaleContext.Provider>
+					</RefreshCanvasSizeContext.Provider>
+					<ElementInstallRequestHandler />
+					<Modals readOnlyStudio={readOnlyStudio} />
+					<NotificationCenter />
+				</SequencePropsSubscriptionProvider>
+			</TimelineZoomContext>
+		</HigherZIndex>
+	);
+};

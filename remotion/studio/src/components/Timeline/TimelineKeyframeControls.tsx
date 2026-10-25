@@ -1,0 +1,922 @@
+import {CanvasInternals} from '@remotion/sdk';
+import React, {useCallback, useContext, useMemo} from 'react';
+import type {
+	CanUpdateSequencePropStatus,
+	CanUpdateSequencePropStatusKeyframed,
+	DragOverrideValue,
+	GetDragOverrides,
+	GetEffectDragOverrides,
+	InteractivitySchema,
+	PropStatuses,
+	SequencePropsSubscriptionKey,
+} from 'remotion';
+import {Internals, useVideoConfig} from 'remotion';
+import {canUseKeyframeOperations} from '../../helpers/browser-studio-operations';
+import {StudioServerConnectionCtx} from '../../helpers/client-id';
+import {BLUE, LIGHT_GRAY, LIGHT_TEXT, WHITE} from '../../helpers/colors';
+import type {
+	SequenceNodePathInfo,
+	TimelineTrackData,
+} from '../../helpers/get-timeline-sequence-sort-key';
+import {
+	buildTimelineTree,
+	type TimelineTreeNode,
+} from '../../helpers/timeline-layout';
+import {timelineNodePathInfoToKey} from '../../helpers/timeline-node-path-key';
+import {ActionTooltip} from '../ActionTooltip';
+import {ExpandedTracksSetterContext} from '../ExpandedTracksProvider';
+import {
+	callAddKeyframes,
+	type AddEffectKeyframeChange,
+	type AddSequenceKeyframeChange,
+} from './call-add-keyframe';
+import {
+	callDeleteKeyframes,
+	type DeleteEffectKeyframeChange,
+	type DeleteSequenceKeyframeChange,
+} from './call-delete-keyframe';
+import {
+	getKeyframePlaybackRate,
+	getKeyframeDisplayOffset,
+	getKeyframeSourceFrame,
+	getTimelineKeyframes,
+} from './get-timeline-keyframes';
+import {getCurrentFrame} from './imperative-state';
+import {ensureFrameIsInViewport} from './timeline-scroll-logic';
+import {TimelineKeyframeDiamondIcon} from './TimelineKeyframeDiamondIcon';
+import {useTimelineKeyframeTracksRef} from './TimelineKeyframeTracksContext';
+import {
+	getTimelineSelectionFromNodePathInfo,
+	getTimelineSelectionKey,
+	useTimelineSelection,
+	type TimelineSelection,
+} from './TimelineSelection';
+
+const {
+	getCanvasKeyframeValueToAdd,
+	getNextKeyframeDisplayFrame,
+	getPreviousKeyframeDisplayFrame,
+	hasKeyframeAtSourceFrame,
+	isCanvasKeyframablePropStatus,
+} = CanvasInternals;
+
+const NAV_BUTTON_SIZE = 14;
+const INSPECTOR_NAV_BUTTON_WIDTH = NAV_BUTTON_SIZE / 2;
+const INSPECTOR_PREVIOUS_BUTTON_EXTRA_GAP = 1;
+
+const controlsContainerStyle: React.CSSProperties = {
+	alignItems: 'center',
+	display: 'flex',
+	flexShrink: 0,
+	gap: 1,
+	marginRight: 4,
+};
+
+const inspectorControlsContainerStyle: React.CSSProperties = {
+	...controlsContainerStyle,
+	paddingLeft:
+		NAV_BUTTON_SIZE -
+		INSPECTOR_NAV_BUTTON_WIDTH -
+		INSPECTOR_PREVIOUS_BUTTON_EXTRA_GAP,
+};
+
+const navButtonStyle: React.CSSProperties = {
+	alignItems: 'center',
+	background: 'none',
+	border: 'none',
+	color: WHITE,
+	cursor: 'pointer',
+	display: 'flex',
+	flexShrink: 0,
+	height: NAV_BUTTON_SIZE,
+	justifyContent: 'center',
+	lineHeight: 1,
+	outline: 'none',
+	padding: 0,
+	userSelect: 'none',
+	WebkitUserSelect: 'none',
+	width: NAV_BUTTON_SIZE,
+};
+
+const inspectorNavButtonStyle: React.CSSProperties = {
+	width: INSPECTOR_NAV_BUTTON_WIDTH,
+};
+
+const inspectorPreviousNavButtonStyle: React.CSSProperties = {
+	...inspectorNavButtonStyle,
+	marginRight: INSPECTOR_PREVIOUS_BUTTON_EXTRA_GAP,
+};
+
+const isKeyframedStatus = (
+	status: CanUpdateSequencePropStatus,
+): status is CanUpdateSequencePropStatusKeyframed => {
+	return status.status === 'keyframed';
+};
+
+const diamondButtonStyle: React.CSSProperties = {
+	...navButtonStyle,
+	background: 'none',
+};
+
+const svgStyle: React.CSSProperties = {display: 'block', flexShrink: 0};
+
+type KeyframeControlTarget = {
+	readonly nodePathInfo: SequenceNodePathInfo;
+	readonly fieldKey: string;
+	readonly propStatus: CanUpdateSequencePropStatus;
+	readonly nodePath: SequencePropsSubscriptionKey;
+	readonly fileName: string;
+	readonly keyframeDisplayOffset: number;
+	readonly keyframePlaybackRate: number;
+	readonly sourceFrame: number;
+	readonly defaultValue: unknown;
+	readonly dragOverrideValue: DragOverrideValue | undefined;
+	readonly schema: InteractivitySchema;
+	readonly effectIndex: number | null;
+};
+
+const isKeyframeControlSelection = (
+	selection: TimelineSelection,
+): selection is TimelineSelection & {
+	readonly type: 'sequence-prop' | 'sequence-effect-prop';
+} => {
+	return (
+		selection.type === 'sequence-prop' ||
+		selection.type === 'sequence-effect-prop'
+	);
+};
+
+export const getSelectedKeyframeControlNodePathInfos = ({
+	clickedNodePathInfo,
+	selectedItems,
+}: {
+	readonly clickedNodePathInfo: SequenceNodePathInfo;
+	readonly selectedItems: readonly TimelineSelection[];
+}): readonly SequenceNodePathInfo[] => {
+	const clickedSelection =
+		getTimelineSelectionFromNodePathInfo(clickedNodePathInfo);
+	if (
+		clickedSelection === null ||
+		!isKeyframeControlSelection(clickedSelection)
+	) {
+		return [clickedNodePathInfo];
+	}
+
+	const clickedSelectionKey = getTimelineSelectionKey(clickedSelection);
+	const selectedKeyframeControls = selectedItems.filter(
+		isKeyframeControlSelection,
+	);
+	const clickedIsSelected = selectedKeyframeControls.some(
+		(selection) => getTimelineSelectionKey(selection) === clickedSelectionKey,
+	);
+
+	if (!clickedIsSelected || selectedKeyframeControls.length <= 1) {
+		return [clickedNodePathInfo];
+	}
+
+	return selectedKeyframeControls.map((selection) => selection.nodePathInfo);
+};
+
+const findFieldNode = (
+	nodes: readonly TimelineTreeNode[],
+	nodePathInfoKey: string,
+): (TimelineTreeNode & {readonly kind: 'field'}) | null => {
+	for (const node of nodes) {
+		if (timelineNodePathInfoToKey(node.nodePathInfo) === nodePathInfoKey) {
+			return node.kind === 'field' ? node : null;
+		}
+
+		if (node.kind === 'group') {
+			const child = findFieldNode(node.children, nodePathInfoKey);
+			if (child !== null) {
+				return child;
+			}
+		}
+	}
+
+	return null;
+};
+
+const findTrackForNodePathInfo = ({
+	tracks,
+	nodePathInfo,
+}: {
+	readonly tracks: readonly TimelineTrackData[];
+	readonly nodePathInfo: SequenceNodePathInfo;
+}): TimelineTrackData | null => {
+	return (
+		tracks.find((track) => {
+			if (track.nodePathInfo === null) {
+				return false;
+			}
+
+			return (
+				timelineNodePathInfoToKey({
+					...track.nodePathInfo,
+					auxiliaryKeys: [],
+				}) ===
+				timelineNodePathInfoToKey({
+					...nodePathInfo,
+					auxiliaryKeys: [],
+				})
+			);
+		}) ?? null
+	);
+};
+
+const resolveKeyframeControlTarget = ({
+	nodePathInfo,
+	tracks,
+	propStatuses,
+	getDragOverrides,
+	getEffectDragOverrides,
+	timelinePosition,
+}: {
+	readonly nodePathInfo: SequenceNodePathInfo;
+	readonly tracks: readonly TimelineTrackData[];
+	readonly propStatuses: PropStatuses;
+	readonly getDragOverrides: GetDragOverrides;
+	readonly getEffectDragOverrides: GetEffectDragOverrides;
+	readonly timelinePosition: number;
+}): KeyframeControlTarget | null => {
+	const track = findTrackForNodePathInfo({tracks, nodePathInfo});
+	if (
+		track === null ||
+		track.nodePathInfo === null ||
+		!track.sequence.controls
+	) {
+		return null;
+	}
+
+	const tree = buildTimelineTree({
+		sequence: track.sequence,
+		nodePathInfo: track.nodePathInfo,
+		getDragOverrides,
+		getEffectDragOverrides,
+		propStatuses,
+		includeTextContent: false,
+		includeSourceControls: false,
+		runtimeValues: null,
+	});
+	const fieldNode = findFieldNode(
+		tree,
+		timelineNodePathInfoToKey(nodePathInfo),
+	);
+	if (fieldNode === null || fieldNode.field === null) {
+		return null;
+	}
+
+	const nodePath = nodePathInfo.sequenceSubscriptionKey;
+	if (fieldNode.field.kind === 'sequence-field') {
+		const sequencePropStatuses = Internals.getPropStatusesCtx(
+			propStatuses,
+			nodePath,
+		);
+		const sequenceSelectedPropStatus =
+			sequencePropStatuses?.[fieldNode.field.key] ?? null;
+		if (sequenceSelectedPropStatus === null) {
+			return null;
+		}
+
+		return {
+			nodePathInfo,
+			fieldKey: fieldNode.field.key,
+			propStatus: sequenceSelectedPropStatus,
+			nodePath,
+			fileName: nodePath.absolutePath,
+			keyframePlaybackRate: track.keyframePlaybackRate,
+			keyframeDisplayOffset: getKeyframeDisplayOffset({
+				propStatus: sequenceSelectedPropStatus,
+				keyframeDisplayOffset: track.keyframeDisplayOffset,
+				keyframePlaybackRate: track.keyframePlaybackRate,
+			}),
+			sourceFrame: getKeyframeSourceFrame({
+				displayFrame: timelinePosition,
+				propStatus: sequenceSelectedPropStatus,
+				keyframeDisplayOffset: getKeyframeDisplayOffset({
+					propStatus: sequenceSelectedPropStatus,
+					keyframeDisplayOffset: track.keyframeDisplayOffset,
+					keyframePlaybackRate: track.keyframePlaybackRate,
+				}),
+				keyframePlaybackRate: track.keyframePlaybackRate,
+			}),
+			defaultValue: fieldNode.field.fieldSchema.default,
+			dragOverrideValue: (getDragOverrides(nodePath) ?? {})[
+				fieldNode.field.key
+			],
+			schema: track.sequence.controls.schema,
+			effectIndex: null,
+		};
+	}
+
+	const effectStatus = Internals.getEffectPropStatusesCtx({
+		propStatuses,
+		nodePath,
+		effectIndex: fieldNode.field.effectIndex,
+	});
+	const effectSelectedPropStatus =
+		effectStatus.type === 'can-update-effect'
+			? (effectStatus.props?.[fieldNode.field.key] ?? null)
+			: null;
+	if (effectSelectedPropStatus === null) {
+		return null;
+	}
+
+	return {
+		nodePathInfo,
+		fieldKey: fieldNode.field.key,
+		propStatus: effectSelectedPropStatus,
+		nodePath,
+		fileName: nodePath.absolutePath,
+		keyframePlaybackRate: track.keyframePlaybackRate,
+		keyframeDisplayOffset: getKeyframeDisplayOffset({
+			propStatus: effectSelectedPropStatus,
+			keyframeDisplayOffset: track.keyframeDisplayOffset,
+			keyframePlaybackRate: track.keyframePlaybackRate,
+		}),
+		sourceFrame: getKeyframeSourceFrame({
+			displayFrame: timelinePosition,
+			propStatus: effectSelectedPropStatus,
+			keyframeDisplayOffset: getKeyframeDisplayOffset({
+				propStatus: effectSelectedPropStatus,
+				keyframeDisplayOffset: track.keyframeDisplayOffset,
+				keyframePlaybackRate: track.keyframePlaybackRate,
+			}),
+			keyframePlaybackRate: track.keyframePlaybackRate,
+		}),
+		defaultValue: fieldNode.field.fieldSchema.default,
+		dragOverrideValue: getEffectDragOverrides(
+			nodePath,
+			fieldNode.field.effectIndex,
+		)[fieldNode.field.key],
+		schema: fieldNode.field.effectSchema,
+		effectIndex: fieldNode.field.effectIndex,
+	};
+};
+
+const hasTargetKeyframeAtCurrentFrame = (target: KeyframeControlTarget) => {
+	if (!isKeyframedStatus(target.propStatus)) {
+		return false;
+	}
+
+	return hasKeyframeAtSourceFrame(
+		target.propStatus.keyframes,
+		target.sourceFrame,
+	);
+};
+
+const getAddChange = (
+	target: KeyframeControlTarget,
+): AddSequenceKeyframeChange | AddEffectKeyframeChange | null => {
+	if (
+		!isCanvasKeyframablePropStatus({
+			propStatus: target.propStatus,
+			schema: target.schema,
+			key: target.fieldKey,
+		}) ||
+		hasTargetKeyframeAtCurrentFrame(target)
+	) {
+		return null;
+	}
+
+	const value = getCanvasKeyframeValueToAdd({
+		propStatus: target.propStatus,
+		schema: target.schema,
+		key: target.fieldKey,
+		sourceFrame: target.sourceFrame,
+		defaultValue: target.defaultValue,
+		dragOverrideValue: target.dragOverrideValue,
+	});
+	if (value === null) {
+		return null;
+	}
+
+	const change = {
+		fileName: target.fileName,
+		nodePath: target.nodePath,
+		fieldKey: target.fieldKey,
+		sourceFrame: target.sourceFrame,
+		value,
+		schema: target.schema,
+	};
+
+	if (target.effectIndex === null) {
+		return change;
+	}
+
+	return {
+		...change,
+		effectIndex: target.effectIndex,
+	};
+};
+
+const getDeleteChange = (
+	target: KeyframeControlTarget,
+): DeleteSequenceKeyframeChange | DeleteEffectKeyframeChange | null => {
+	if (!hasTargetKeyframeAtCurrentFrame(target)) {
+		return null;
+	}
+
+	const change = {
+		fileName: target.fileName,
+		nodePath: target.nodePath,
+		fieldKey: target.fieldKey,
+		sourceFrame: target.sourceFrame,
+		schema: target.schema,
+		valueWhenLastKeyframeDeleted: null,
+	};
+
+	if (target.effectIndex === null) {
+		return change;
+	}
+
+	return {
+		...change,
+		effectIndex: target.effectIndex,
+	};
+};
+
+const hasEffectIndex = <T extends object>(
+	change: T,
+): change is T & {readonly effectIndex: number} => {
+	return 'effectIndex' in change;
+};
+
+export const shouldShowTimelineKeyframeControls = ({
+	propStatus,
+	selected,
+	keyframable,
+}: {
+	propStatus: CanUpdateSequencePropStatus | null;
+	selected: boolean;
+	keyframable: boolean;
+}): boolean => {
+	if (propStatus === null) {
+		return false;
+	}
+
+	if (!keyframable && !isKeyframedStatus(propStatus)) {
+		return false;
+	}
+
+	if (selected) {
+		return true;
+	}
+
+	return isKeyframedStatus(propStatus);
+};
+
+export type TimelineKeyframeControlsMode = 'timeline' | 'inspector';
+
+export const shouldShowTimelineKeyframeNavigation = ({
+	propStatus,
+	selected,
+}: {
+	readonly propStatus: CanUpdateSequencePropStatus;
+	readonly selected: boolean;
+}) => {
+	if (propStatus.status === 'computed') {
+		return false;
+	}
+
+	if (selected) {
+		return true;
+	}
+
+	return isKeyframedStatus(propStatus);
+};
+
+export const TimelineKeyframeControls: React.FC<{
+	readonly fieldKey: string;
+	readonly propStatus: CanUpdateSequencePropStatus;
+	readonly nodePath: SequencePropsSubscriptionKey;
+	readonly fileName: string;
+	readonly keyframeDisplayOffset: number;
+	readonly keyframePlaybackRate: number;
+	readonly defaultValue: unknown;
+	readonly dragOverrideValue: DragOverrideValue | undefined;
+	readonly schema: InteractivitySchema;
+	readonly effectIndex: number | null;
+	readonly nodePathInfo: SequenceNodePathInfo;
+	readonly mode?: TimelineKeyframeControlsMode;
+}> = ({
+	fieldKey,
+	propStatus,
+	nodePath,
+	fileName,
+	keyframeDisplayOffset,
+	keyframePlaybackRate,
+	defaultValue,
+	dragOverrideValue,
+	schema,
+	effectIndex,
+	nodePathInfo,
+	mode = 'timeline',
+}) => {
+	const videoConfig = useVideoConfig();
+	const timelinePosition = Internals.Timeline.useTimelinePosition();
+	const seekFrame = Internals.Timeline.useTimelineSeekFrame();
+	const {setPropStatuses} = useContext(Internals.VisualModeSettersContext);
+	const propStatusesRef = useContext(
+		Internals.VisualModePropStatusesRefContext,
+	);
+	const {getDragOverrides, getEffectDragOverrides} = useContext(
+		Internals.VisualModeDragOverridesContext,
+	);
+	const {previewServerState} = useContext(StudioServerConnectionCtx);
+	const {expandParentTracks} = useContext(ExpandedTracksSetterContext);
+	const {selectedItems, selectItems} = useTimelineSelection();
+	const tracksRef = useTimelineKeyframeTracksRef();
+
+	const clientId =
+		previewServerState.type === 'connected'
+			? previewServerState.clientId
+			: null;
+
+	const resolvedKeyframeDisplayOffset = getKeyframeDisplayOffset({
+		propStatus,
+		keyframeDisplayOffset,
+		keyframePlaybackRate,
+	});
+	const jsxFrame = getKeyframeSourceFrame({
+		displayFrame: timelinePosition,
+		keyframeDisplayOffset: resolvedKeyframeDisplayOffset,
+		keyframePlaybackRate,
+		propStatus,
+	});
+	const keyframes = useMemo(
+		() =>
+			getTimelineKeyframes(
+				propStatus,
+				keyframeDisplayOffset,
+				keyframePlaybackRate,
+			),
+		[propStatus, keyframeDisplayOffset, keyframePlaybackRate],
+	);
+
+	const hasKeyframeAtCurrentFrame = useMemo(() => {
+		if (!isKeyframedStatus(propStatus)) {
+			return false;
+		}
+
+		return hasKeyframeAtSourceFrame(
+			(propStatus as CanUpdateSequencePropStatusKeyframed).keyframes,
+			jsxFrame,
+		);
+	}, [jsxFrame, propStatus]);
+
+	const previousDisplayFrame = useMemo(
+		() =>
+			getPreviousKeyframeDisplayFrame(
+				keyframes,
+				timelinePosition,
+				videoConfig.durationInFrames,
+			),
+		[keyframes, timelinePosition, videoConfig.durationInFrames],
+	);
+	const nextDisplayFrame = useMemo(
+		() =>
+			getNextKeyframeDisplayFrame(
+				keyframes,
+				timelinePosition,
+				videoConfig.durationInFrames,
+			),
+		[keyframes, timelinePosition, videoConfig.durationInFrames],
+	);
+	const propertySelected = useMemo(() => {
+		const propertySelection =
+			getTimelineSelectionFromNodePathInfo(nodePathInfo);
+		if (propertySelection === null) {
+			return false;
+		}
+
+		const propertySelectionKey = getTimelineSelectionKey(propertySelection);
+		return selectedItems.some(
+			(selection) =>
+				getTimelineSelectionKey(selection) === propertySelectionKey,
+		);
+	}, [nodePathInfo, selectedItems]);
+	const showNavigationButtons = shouldShowTimelineKeyframeNavigation({
+		propStatus,
+		selected: propertySelected,
+	});
+
+	const canAddKeyframe = isCanvasKeyframablePropStatus({
+		propStatus,
+		schema,
+		key: fieldKey,
+	});
+	const canToggleKeyframe =
+		canUseKeyframeOperations() &&
+		propStatus.status !== 'computed' &&
+		(hasKeyframeAtCurrentFrame || canAddKeyframe);
+
+	const seekToDisplayFrame = useCallback(
+		(frame: number, direction: 'fit-left' | 'fit-right') => {
+			seekFrame((current) => {
+				const next = {...current, [videoConfig.id]: frame};
+				Internals.persistCurrentFrame(next);
+				return next;
+			});
+			ensureFrameIsInViewport({
+				direction,
+				durationInFrames: videoConfig.durationInFrames,
+				frame,
+			});
+		},
+		[seekFrame, videoConfig.durationInFrames, videoConfig.id],
+	);
+
+	const onPrevious = useCallback(
+		(e: React.PointerEvent<HTMLButtonElement>) => {
+			e.stopPropagation();
+			if (previousDisplayFrame !== null) {
+				seekToDisplayFrame(previousDisplayFrame, 'fit-left');
+			}
+		},
+		[previousDisplayFrame, seekToDisplayFrame],
+	);
+
+	const onNext = useCallback(
+		(e: React.PointerEvent<HTMLButtonElement>) => {
+			e.stopPropagation();
+			if (nextDisplayFrame !== null) {
+				seekToDisplayFrame(nextDisplayFrame, 'fit-right');
+			}
+		},
+		[nextDisplayFrame, seekToDisplayFrame],
+	);
+
+	const onToggleKeyframe = useCallback(
+		async (e: React.PointerEvent<HTMLButtonElement>) => {
+			e.stopPropagation();
+			if (
+				!clientId ||
+				!canUseKeyframeOperations() ||
+				propStatus.status === 'computed'
+			) {
+				return;
+			}
+
+			const currentFrame = getCurrentFrame();
+			const clickedTarget: KeyframeControlTarget = {
+				nodePathInfo,
+				fieldKey,
+				propStatus,
+				nodePath,
+				fileName,
+				keyframeDisplayOffset: resolvedKeyframeDisplayOffset,
+				keyframePlaybackRate,
+				sourceFrame: getKeyframeSourceFrame({
+					displayFrame: currentFrame,
+					keyframeDisplayOffset: resolvedKeyframeDisplayOffset,
+					keyframePlaybackRate,
+					propStatus,
+				}),
+				defaultValue,
+				dragOverrideValue,
+				schema,
+				effectIndex,
+			};
+			const hasKeyframe = hasTargetKeyframeAtCurrentFrame(clickedTarget);
+			if (!hasKeyframe && !canAddKeyframe) {
+				return;
+			}
+
+			const selectedNodePathInfos = getSelectedKeyframeControlNodePathInfos({
+				clickedNodePathInfo: nodePathInfo,
+				selectedItems,
+			});
+			const clickedNodePathInfoKey = timelineNodePathInfoToKey(nodePathInfo);
+			const keyframeToggleTargets = selectedNodePathInfos.flatMap(
+				(selectedNodePathInfo) => {
+					if (
+						timelineNodePathInfoToKey(selectedNodePathInfo) ===
+						clickedNodePathInfoKey
+					) {
+						return [clickedTarget];
+					}
+
+					const target = resolveKeyframeControlTarget({
+						nodePathInfo: selectedNodePathInfo,
+						tracks: tracksRef.current,
+						propStatuses: propStatusesRef.current,
+						getDragOverrides,
+						getEffectDragOverrides,
+						timelinePosition: currentFrame,
+					});
+					return target === null ? [] : [target];
+				},
+			);
+
+			if (hasKeyframe) {
+				const deleteTargets = keyframeToggleTargets.flatMap((target) => {
+					const change = getDeleteChange(target);
+					return change === null ? [] : [{target, change}];
+				});
+				if (deleteTargets.length === 0) {
+					return;
+				}
+
+				selectItems(
+					deleteTargets.flatMap(({target}) => {
+						const propertySelection = getTimelineSelectionFromNodePathInfo(
+							target.nodePathInfo,
+						);
+						return propertySelection === null ? [] : [propertySelection];
+					}),
+					{reveal: true},
+				);
+				const deleteChanges = deleteTargets.map(({change}) => change);
+				await callDeleteKeyframes({
+					sequenceKeyframes: deleteChanges.filter(
+						(change): change is DeleteSequenceKeyframeChange =>
+							!hasEffectIndex(change),
+					),
+					effectKeyframes: deleteChanges.filter(
+						(change): change is DeleteEffectKeyframeChange =>
+							hasEffectIndex(change),
+					),
+					setPropStatuses,
+					clientId,
+				});
+				return;
+			}
+
+			const addChanges = keyframeToggleTargets.flatMap((target) => {
+				const change = getAddChange(target);
+				return change === null ? [] : [{target, change}];
+			});
+			if (addChanges.length === 0) {
+				return;
+			}
+
+			const addChangeValues = addChanges.map(({change}) => change);
+			await callAddKeyframes({
+				sequenceKeyframes: addChangeValues.filter(
+					(change): change is AddSequenceKeyframeChange =>
+						!hasEffectIndex(change),
+				),
+				effectKeyframes: addChangeValues.filter(
+					(change): change is AddEffectKeyframeChange => hasEffectIndex(change),
+				),
+				setPropStatuses,
+				clientId,
+			});
+			for (const {target} of addChanges) {
+				expandParentTracks(target.nodePathInfo);
+			}
+
+			if (mode === 'timeline') {
+				selectItems(
+					addChanges.map(({target}) => ({
+						type: 'keyframe' as const,
+						nodePathInfo: target.nodePathInfo,
+						frame:
+							target.sourceFrame /
+								getKeyframePlaybackRate(
+									target.propStatus,
+									target.keyframePlaybackRate,
+								) +
+							target.keyframeDisplayOffset,
+					})),
+					{reveal: true},
+				);
+			}
+		},
+		[
+			canAddKeyframe,
+			clientId,
+			defaultValue,
+			dragOverrideValue,
+			effectIndex,
+			expandParentTracks,
+			fieldKey,
+			fileName,
+			getDragOverrides,
+			getEffectDragOverrides,
+			keyframePlaybackRate,
+			mode,
+			nodePath,
+			nodePathInfo,
+			propStatus,
+			propStatusesRef,
+			resolvedKeyframeDisplayOffset,
+			schema,
+			selectItems,
+			selectedItems,
+			setPropStatuses,
+			tracksRef,
+		],
+	);
+
+	const previousDisabled = previousDisplayFrame === null;
+	const nextDisabled = nextDisplayFrame === null;
+
+	const previousStyle = useMemo(
+		(): React.CSSProperties => ({
+			...navButtonStyle,
+			...(mode === 'inspector' ? inspectorPreviousNavButtonStyle : null),
+			cursor: previousDisabled ? 'default' : 'pointer',
+			opacity: previousDisabled ? 0.35 : 1,
+			visibility: showNavigationButtons ? 'visible' : 'hidden',
+		}),
+		[mode, previousDisabled, showNavigationButtons],
+	);
+
+	const nextStyle = useMemo(
+		(): React.CSSProperties => ({
+			...navButtonStyle,
+			...(mode === 'inspector' ? inspectorNavButtonStyle : null),
+			cursor: nextDisabled ? 'default' : 'pointer',
+			opacity: nextDisabled ? 0.35 : 1,
+			visibility: showNavigationButtons ? 'visible' : 'hidden',
+		}),
+		[mode, nextDisabled, showNavigationButtons],
+	);
+
+	const diamondStyle = useMemo(
+		(): React.CSSProperties => ({
+			...diamondButtonStyle,
+			cursor: canToggleKeyframe && clientId ? 'pointer' : 'default',
+			opacity: canToggleKeyframe && clientId ? 1 : 0.35,
+		}),
+		[canToggleKeyframe, clientId],
+	);
+
+	const diamondColor = hasKeyframeAtCurrentFrame ? BLUE : LIGHT_TEXT;
+	const toggleKeyframeLabel = hasKeyframeAtCurrentFrame
+		? 'Remove keyframe'
+		: 'Add keyframe';
+
+	return (
+		<div
+			style={
+				mode === 'inspector'
+					? inspectorControlsContainerStyle
+					: controlsContainerStyle
+			}
+		>
+			<ActionTooltip
+				label="Previous keyframe"
+				shortcut={null}
+				delay={800}
+				dismissOnClick
+				triggerStyle={{
+					visibility: showNavigationButtons ? 'visible' : 'hidden',
+				}}
+			>
+				<button
+					type="button"
+					style={previousStyle}
+					disabled={previousDisabled}
+					onPointerDown={previousDisabled ? undefined : onPrevious}
+					aria-label="Previous keyframe"
+				>
+					<svg width="14" height="14" viewBox="0 0 10 10" style={svgStyle}>
+						<path d="M7 1.5L3 5L7 8.5Z" fill={LIGHT_GRAY} />
+					</svg>
+				</button>
+			</ActionTooltip>
+			<ActionTooltip
+				label={toggleKeyframeLabel}
+				shortcut={null}
+				delay={800}
+				dismissOnClick
+			>
+				<button
+					type="button"
+					style={diamondStyle}
+					disabled={!canToggleKeyframe || !clientId}
+					onPointerDown={
+						canToggleKeyframe && clientId ? onToggleKeyframe : undefined
+					}
+					aria-label={toggleKeyframeLabel}
+				>
+					<TimelineKeyframeDiamondIcon color={diamondColor} size={12} />
+				</button>
+			</ActionTooltip>
+			<ActionTooltip
+				label="Next keyframe"
+				shortcut={null}
+				delay={800}
+				dismissOnClick
+				triggerStyle={{
+					visibility: showNavigationButtons ? 'visible' : 'hidden',
+				}}
+			>
+				<button
+					type="button"
+					style={nextStyle}
+					disabled={nextDisabled}
+					onPointerDown={nextDisabled ? undefined : onNext}
+					aria-label="Next keyframe"
+				>
+					<svg width="14" height="14" viewBox="0 0 10 10" style={svgStyle}>
+						<path d="M3 1.5L7 5L3 8.5Z" fill={LIGHT_GRAY} />
+					</svg>
+				</button>
+			</ActionTooltip>
+		</div>
+	);
+};

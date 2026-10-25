@@ -1,0 +1,899 @@
+import {
+	BufferTarget,
+	StreamTarget,
+	type MetadataTags,
+	type Quality,
+	type StreamTargetChunk,
+} from 'mediabunny';
+import type {CalculateMetadataFunction} from 'remotion';
+import {Internals, type LogLevel} from 'remotion';
+import {VERSION} from 'remotion/version';
+import type {z} from 'zod';
+import type {$ZodObject} from 'zod/v4/core';
+import {addAudioSample, addVideoSampleAndCloseFrame} from './add-sample';
+import {handleArtifacts, type WebRendererOnArtifact} from './artifact';
+import {createAudioMixer} from './audio';
+import {createBackgroundKeepalive} from './background-keepalive';
+import {canUseWebFsWriter} from './can-use-webfs-target';
+import {createAudioSampleSource} from './create-audio-sample-source';
+import {checkForError, createScaffold} from './create-scaffold';
+import {getRealFrameRange, type FrameRange} from './frame-range';
+import {supportsNativeHtmlInCanvas} from './html-in-canvas';
+import type {InternalState} from './internal-state';
+import {makeInternalState} from './internal-state';
+import {
+	makeOutputWithCleanup,
+	makeVideoSampleSourceCleanup,
+} from './mediabunny-cleanups';
+import type {
+	WebRendererAudioCodec,
+	WebRendererContainer,
+	WebRendererQuality,
+} from './mediabunny-mappings';
+import {
+	audioCodecToMediabunnyAudioCodec,
+	codecToMediabunnyCodec,
+	containerToMediabunnyContainer,
+	getDefaultVideoCodecForContainer,
+	getMimeType,
+	getQualityForWebRendererQuality,
+	isAudioOnlyContainer,
+	type WebRendererVideoCodec,
+} from './mediabunny-mappings';
+import type {WebRendererOutputTarget} from './output-target';
+import {
+	createPageResponsivenessController,
+	resolvePageResponsivenessInterval,
+	type WebRendererPageResponsiveness,
+} from './page-responsiveness';
+import type {CompositionCalculateMetadataOrExplicit} from './props-if-has-props';
+import {onlyOneMediaRenderAtATimeQueue} from './render-operations-queue';
+import {resolveAudioCodec} from './resolve-audio-codec';
+import {sendUsageEvent} from './send-telemetry-event';
+import {createLayer, type HtmlInCanvasLayerOutcome} from './take-screenshot';
+import {createThrottledProgressCallback} from './throttle-progress';
+import {getEncodedDimensions} from './validate-dimensions';
+import {validateScale} from './validate-scale';
+import {validateVideoFrame, type OnFrameCallback} from './validate-video-frame';
+import {waitForReady} from './wait-for-ready';
+import {cleanupStaleOpfsFiles, createWebFsTarget} from './web-fs-target';
+
+export type InputPropsIfHasProps<
+	Schema extends $ZodObject,
+	Props,
+> = $ZodObject extends Schema
+	? {} extends Props
+		? {
+				// Neither props nor schema specified
+				inputProps?: z.input<Schema> & Props;
+			}
+		: {
+				// Only props specified
+				inputProps: Props;
+			}
+	: {} extends Props
+		? {
+				// Only schema specified
+				inputProps: z.input<Schema>;
+			}
+		: {
+				// Props and schema specified
+				inputProps: z.input<Schema> & Props;
+			};
+
+type MandatoryRenderMediaOnWebOptions<
+	Schema extends $ZodObject,
+	Props extends Record<string, unknown>,
+> = {
+	composition: CompositionCalculateMetadataOrExplicit<Schema, Props>;
+};
+
+const MAX_RECENT_FRAME_TIMINGS = 150;
+
+export type RenderMediaOnWebProgress = {
+	/**
+	 * @deprecated Kept for backward compatibility. Use `progress` for overall
+	 * status updates.
+	 */
+	renderedFrames: number;
+	encodedFrames: number;
+	/**
+	 * The total time in milliseconds from render start until all frames were
+	 * encoded, or `null` while encoding is still in progress.
+	 */
+	doneIn: number | null;
+	renderEstimatedTime: number;
+	progress: number;
+};
+
+export type RenderMediaOnWebResult = {
+	getBlob: () => Promise<Blob>;
+	internalState: InternalState;
+};
+
+export type RenderMediaOnWebProgressCallback = (
+	progress: RenderMediaOnWebProgress,
+) => void;
+
+export type WebRendererHardwareAcceleration =
+	| 'no-preference'
+	| 'prefer-hardware'
+	| 'prefer-software';
+
+type OptionalRenderMediaOnWebOptions<Schema extends $ZodObject> = {
+	delayRenderTimeoutInMilliseconds: number;
+	logLevel: LogLevel;
+	schema: Schema | undefined;
+	mediaCacheSizeInBytes: number | null;
+	videoCodec: WebRendererVideoCodec | null;
+	audioCodec: WebRendererAudioCodec | null;
+	audioBitrate: number | WebRendererQuality;
+	container: WebRendererContainer;
+	signal: AbortSignal | null;
+	onProgress: RenderMediaOnWebProgressCallback | null;
+	hardwareAcceleration: WebRendererHardwareAcceleration;
+	keyframeIntervalInSeconds: number;
+	videoBitrate: number | WebRendererQuality | Quality;
+	frameRange: FrameRange | null;
+	transparent: boolean;
+	onArtifact: WebRendererOnArtifact | null;
+	onFrame: OnFrameCallback | null;
+	pageResponsiveness: WebRendererPageResponsiveness;
+	outputTarget: WebRendererOutputTarget | null;
+	outputWritable: WritableStream<StreamTargetChunk> | null;
+	licenseKey: string | null;
+	isProduction: boolean;
+	muted: boolean;
+	scale: number;
+	sampleRate: number;
+	allowHtmlInCanvas: boolean;
+	metadata: MetadataTags | null;
+};
+
+export type RenderMediaOnWebOptions<
+	Schema extends $ZodObject,
+	Props extends Record<string, unknown>,
+> = MandatoryRenderMediaOnWebOptions<Schema, Props> &
+	Partial<OptionalRenderMediaOnWebOptions<Schema>> &
+	InputPropsIfHasProps<Schema, Props>;
+
+type InternalRenderMediaOnWebOptions<
+	Schema extends $ZodObject,
+	Props extends Record<string, unknown>,
+> = MandatoryRenderMediaOnWebOptions<Schema, Props> &
+	OptionalRenderMediaOnWebOptions<Schema> &
+	InputPropsIfHasProps<Schema, Props>;
+
+// TODO: Validating inputs
+// TODO: Apply defaultCodec
+
+const internalRenderMediaOnWeb = async <
+	Schema extends $ZodObject,
+	Props extends Record<string, unknown>,
+>({
+	composition,
+	inputProps,
+	delayRenderTimeoutInMilliseconds,
+	logLevel,
+	mediaCacheSizeInBytes,
+	schema,
+	videoCodec: codec,
+	audioCodec: unresolvedAudioCodec,
+	audioBitrate,
+	container,
+	signal,
+	onProgress,
+	hardwareAcceleration,
+	keyframeIntervalInSeconds,
+	videoBitrate,
+	frameRange,
+	transparent,
+	onArtifact,
+	onFrame,
+	pageResponsiveness,
+	outputTarget: userDesiredOutputTarget,
+	outputWritable,
+	licenseKey,
+	muted,
+	scale,
+	isProduction,
+	sampleRate,
+	allowHtmlInCanvas,
+	metadata,
+}: InternalRenderMediaOnWebOptions<
+	Schema,
+	Props
+>): Promise<RenderMediaOnWebResult> => {
+	validateScale(scale);
+	const pageResponsivenessIntervalInMilliseconds =
+		resolvePageResponsivenessInterval(pageResponsiveness);
+
+	let htmlInCanvasLayerOutcomeReported = false;
+	const onHtmlInCanvasLayerOutcome = (outcome: HtmlInCanvasLayerOutcome) => {
+		if (htmlInCanvasLayerOutcomeReported) {
+			return;
+		}
+
+		htmlInCanvasLayerOutcomeReported = true;
+		if (outcome.native) {
+			Internals.Log.warn(
+				{logLevel, tag: '@remotion/web-renderer'},
+				'Using Chromium experimental HTML-in-canvas (drawElementImage) for video frames. Pixels may differ from the built-in DOM composer. Set allowHtmlInCanvas: false to force software rasterization. See https://remotion.dev/docs/client-side-rendering/html-in-canvas',
+			);
+		} else if (outcome.shouldWarn) {
+			Internals.Log.warn(
+				{logLevel, tag: '@remotion/web-renderer'},
+				`Not using HTML-in-canvas: ${outcome.reason}`,
+			);
+		}
+	};
+
+	const outputTarget =
+		outputWritable !== null
+			? null
+			: userDesiredOutputTarget === null
+				? (await canUseWebFsWriter())
+					? 'web-fs'
+					: 'arraybuffer'
+				: userDesiredOutputTarget;
+
+	if (outputTarget === 'web-fs') {
+		await cleanupStaleOpfsFiles();
+	}
+
+	const format = containerToMediabunnyContainer(container);
+	const videoEnabled = !isAudioOnlyContainer(container);
+
+	if (
+		videoEnabled &&
+		codec &&
+		!format.getSupportedCodecs().includes(codecToMediabunnyCodec(codec))
+	) {
+		return Promise.reject(
+			new Error(`Codec ${codec} is not supported for container ${container}`),
+		);
+	}
+
+	if (transparent) {
+		if (container !== 'webm' && container !== 'mkv') {
+			return Promise.reject(
+				new Error(
+					`Transparent videos are only supported with the "webm" and "mkv" containers, but you specified "${container}". Change the \`container\` option to "webm" or "mkv".`,
+				),
+			);
+		}
+
+		if (codec && codec !== 'vp8' && codec !== 'vp9') {
+			return Promise.reject(
+				new Error(
+					`Transparent videos are only supported with the "vp8" and "vp9" codecs, but you specified "${codec}". Change the \`videoCodec\` option to "vp8" or "vp9", or remove it to use the default.`,
+				),
+			);
+		}
+	}
+
+	const resolvedAudioBitrate =
+		typeof audioBitrate === 'number'
+			? audioBitrate
+			: getQualityForWebRendererQuality(audioBitrate);
+
+	let finalAudioCodec: WebRendererAudioCodec | null = null;
+	if (!muted) {
+		const audioResult = await resolveAudioCodec({
+			container,
+			requestedCodec: unresolvedAudioCodec,
+			userSpecifiedAudioCodec:
+				unresolvedAudioCodec !== undefined && unresolvedAudioCodec !== null,
+			bitrate: resolvedAudioBitrate,
+		});
+
+		// log warnings and reject on errors
+		for (const issue of audioResult.issues) {
+			if (issue.severity === 'error') {
+				return Promise.reject(new Error(issue.message));
+			}
+
+			Internals.Log.warn(
+				{logLevel, tag: '@remotion/web-renderer'},
+				issue.message,
+			);
+		}
+
+		finalAudioCodec = audioResult.codec;
+	}
+
+	const resolved = await Internals.resolveVideoConfig({
+		calculateMetadata:
+			(composition.calculateMetadata as unknown as CalculateMetadataFunction<
+				Record<string, unknown>
+			>) ?? null,
+		signal: signal ?? new AbortController().signal,
+		defaultProps: composition.defaultProps ?? {},
+		inputProps: inputProps ?? {},
+		compositionId: composition.id,
+		compositionDurationInFrames: composition.durationInFrames ?? null,
+		compositionFps: composition.fps ?? null,
+		compositionHeight: composition.height ?? null,
+		compositionWidth: composition.width ?? null,
+	});
+
+	const encodedDimensions = getEncodedDimensions({
+		width: resolved.width,
+		height: resolved.height,
+		scale,
+		codec: videoEnabled ? codec : null,
+	});
+	const sourceDimensions = {
+		width: Math.ceil(resolved.width * scale),
+		height: Math.ceil(resolved.height * scale),
+	};
+	const needsCrop =
+		encodedDimensions.width !== sourceDimensions.width ||
+		encodedDimensions.height !== sourceDimensions.height;
+	if (needsCrop && codec) {
+		const croppedPixelsOnRight =
+			sourceDimensions.width - encodedDimensions.width;
+		const croppedPixelsOnBottom =
+			sourceDimensions.height - encodedDimensions.height;
+		const croppedEdges = [
+			croppedPixelsOnRight > 0
+				? `${croppedPixelsOnRight} ${croppedPixelsOnRight === 1 ? 'pixel was' : 'pixels were'} removed from the right edge`
+				: null,
+			croppedPixelsOnBottom > 0
+				? `${croppedPixelsOnBottom} ${croppedPixelsOnBottom === 1 ? 'pixel was' : 'pixels were'} removed from the bottom edge`
+				: null,
+		].filter(Boolean);
+		const codecName =
+			codec === 'h264'
+				? 'H.264'
+				: codec === 'h265'
+					? 'H.265'
+					: codec === 'av1'
+						? 'AV1'
+						: codec.toUpperCase();
+		Internals.Log.warn(
+			{logLevel, tag: '@remotion/web-renderer'},
+			`The output was cropped from ${sourceDimensions.width}×${sourceDimensions.height} to ${encodedDimensions.width}×${encodedDimensions.height} because ${codecName} requires even dimensions. ${croppedEdges.join(' and ')}. Use even output dimensions to avoid cropping.`,
+		);
+	}
+
+	const realFrameRange = getRealFrameRange(
+		resolved.durationInFrames,
+		frameRange,
+	);
+
+	if (signal?.aborted) {
+		return Promise.reject(new Error('renderMediaOnWeb() was cancelled'));
+	}
+
+	using scaffold = createScaffold({
+		width: resolved.width,
+		height: resolved.height,
+		fps: resolved.fps,
+		durationInFrames: resolved.durationInFrames,
+		Component: composition.component,
+		resolvedProps: resolved.props,
+		id: resolved.id,
+		delayRenderTimeoutInMilliseconds,
+		logLevel,
+		mediaCacheSizeInBytes,
+		schema: schema ?? null,
+		audioEnabled: !muted,
+		videoEnabled,
+		initialFrame: 0,
+		defaultCodec: resolved.defaultCodec,
+		defaultOutName: resolved.defaultOutName,
+		useHtmlInCanvas: allowHtmlInCanvas,
+		pixelDensity: scale,
+		sampleRate,
+	});
+
+	const {
+		delayRenderScope,
+		div,
+		timeUpdater,
+		collectAssets,
+		errorHolder,
+		htmlInCanvasContext,
+	} = scaffold;
+
+	if (allowHtmlInCanvas && !htmlInCanvasContext) {
+		if (!supportsNativeHtmlInCanvas()) {
+			onHtmlInCanvasLayerOutcome({
+				native: false,
+				reason:
+					'This browser does not expose CanvasRenderingContext2D.prototype.drawElementImage. In Chromium, enable chrome://flags/#canvas-draw-element and use a version that ships the API.',
+				shouldWarn: false,
+			});
+		} else {
+			onHtmlInCanvasLayerOutcome({
+				native: false,
+				reason:
+					'drawElementImage is available but canvas.requestPaint() is missing. Use a Chromium version that ships requestPaint.',
+				shouldWarn: true,
+			});
+		}
+	} else if (!allowHtmlInCanvas) {
+		onHtmlInCanvasLayerOutcome({
+			native: false,
+			reason: 'allowHtmlInCanvas is false; using the built-in DOM composer.',
+			shouldWarn: false,
+		});
+	}
+
+	using internalState = makeInternalState({
+		signal,
+		maskImageTimeoutInMilliseconds: delayRenderTimeoutInMilliseconds,
+	});
+	const pageResponsivenessController = createPageResponsivenessController({
+		intervalInMilliseconds: pageResponsivenessIntervalInMilliseconds,
+		now: () => performance.now(),
+		wait: () =>
+			new Promise<void>((resolve) => {
+				setTimeout(resolve, 0);
+			}),
+	});
+
+	const waitForPageResponsiveness = async () => {
+		await pageResponsivenessController.waitIfNeeded();
+		if (signal?.aborted) {
+			throw new Error('renderMediaOnWeb() was cancelled');
+		}
+	};
+
+	using keepalive = createBackgroundKeepalive({
+		fps: resolved.fps,
+		logLevel,
+	});
+	const waitForRenderReady = async () => {
+		await waitForReady({
+			timeoutInMilliseconds: delayRenderTimeoutInMilliseconds,
+			scope: delayRenderScope,
+			signal,
+			apiName: 'renderMediaOnWeb',
+			internalState,
+			keepalive,
+		});
+		checkForError(errorHolder);
+	};
+
+	const artifactsHandler = handleArtifacts();
+
+	const webFsTarget =
+		outputTarget === 'web-fs' ? await createWebFsTarget() : null;
+
+	const target = outputWritable
+		? new StreamTarget(outputWritable)
+		: webFsTarget
+			? new StreamTarget(webFsTarget.stream)
+			: new BufferTarget()!;
+
+	using outputWithCleanup = makeOutputWithCleanup({
+		format,
+		target,
+	});
+
+	const defaultComment = `Made with Remotion ${VERSION}`;
+	outputWithCleanup.output.setMetadataTags({
+		...(metadata ?? {}),
+		comment:
+			metadata?.comment === undefined
+				? defaultComment
+				: `${defaultComment}; ${metadata.comment}`,
+	});
+
+	using throttledProgress = createThrottledProgressCallback(onProgress);
+	const throttledOnProgress = throttledProgress?.throttled ?? null;
+
+	try {
+		if (signal?.aborted) {
+			throw new Error('renderMediaOnWeb() was cancelled');
+		}
+
+		await waitForRenderReady();
+
+		if (signal?.aborted) {
+			throw new Error('renderMediaOnWeb() was cancelled');
+		}
+
+		using videoSampleSource =
+			videoEnabled && codec
+				? makeVideoSampleSourceCleanup({
+						codec: codecToMediabunnyCodec(codec),
+						bitrate:
+							typeof videoBitrate === 'number'
+								? videoBitrate
+								: getQualityForWebRendererQuality(videoBitrate),
+						sizeChangeBehavior: 'deny',
+						...(needsCrop
+							? {
+									transform: {
+										crop: {
+											left: 0,
+											top: 0,
+											...encodedDimensions,
+										},
+									},
+								}
+							: {}),
+						hardwareAcceleration,
+						latencyMode: 'quality',
+						keyFrameInterval: keyframeIntervalInSeconds,
+						alpha: transparent ? 'keep' : 'discard',
+					})
+				: null;
+
+		const totalFrames = realFrameRange[1] - realFrameRange[0] + 1;
+		const durationInSeconds = totalFrames / resolved.fps;
+		const renderStart = Date.now();
+		let doneIn: number | null = null;
+		let renderEstimatedTime = 0;
+		const recentFrameTimings: number[] = [];
+
+		if (videoSampleSource) {
+			outputWithCleanup.output.addVideoTrack(
+				videoSampleSource.videoSampleSource,
+				{
+					// 1 packet per frame, + 33% buffer
+					// https://mediabunny.dev/api/BaseTrackMetadata#maximumpacketcount
+					maximumPacketCount: Math.ceil(totalFrames * 1.33),
+					// Mediabunny passes this to `VideoEncoder` as `framerate` and uses it
+					// for the container timescale. Without it, Chromium assumes 30 fps.
+					frameRate: resolved.fps,
+				},
+			);
+		}
+
+		using audioSampleSource = createAudioSampleSource({
+			muted,
+			codec: finalAudioCodec
+				? audioCodecToMediabunnyAudioCodec(finalAudioCodec)
+				: null,
+			bitrate: resolvedAudioBitrate,
+		});
+
+		if (audioSampleSource) {
+			outputWithCleanup.output.addAudioTrack(
+				audioSampleSource.audioSampleSource,
+				{
+					// ~1 packet per 10ms, + 33% buffer; short AAC renders
+					// need room for encoder flush packets beyond their duration.
+					// https://mediabunny.dev/api/BaseTrackMetadata#maximumpacketcount
+					maximumPacketCount: Math.max(
+						8,
+						Math.ceil(durationInSeconds * 100 * 1.33),
+					),
+				},
+			);
+		}
+
+		await outputWithCleanup.output.start();
+
+		if (signal?.aborted) {
+			throw new Error('renderMediaOnWeb() was cancelled');
+		}
+
+		const audioMixer = createAudioMixer({fps: resolved.fps, sampleRate});
+		const encodeReadyAudio = async () => {
+			if (!audioSampleSource) {
+				return;
+			}
+
+			let audio: AudioData | null;
+			while ((audio = audioMixer.getReadyAudio())) {
+				try {
+					await addAudioSample(audio, audioSampleSource.audioSampleSource);
+				} finally {
+					audio.close();
+				}
+
+				await waitForPageResponsiveness();
+			}
+		};
+
+		let timeOfLastFrame = Date.now();
+		const progress = {
+			renderedFrames: 0,
+			encodedFrames: 0,
+		};
+		const getProgressPayload = (): RenderMediaOnWebProgress => {
+			const overallProgress =
+				Math.round(
+					(70 * progress.renderedFrames + 30 * progress.encodedFrames) /
+						totalFrames,
+				) / 100;
+
+			return {
+				renderedFrames: progress.renderedFrames,
+				encodedFrames: progress.encodedFrames,
+				doneIn,
+				renderEstimatedTime,
+				progress: overallProgress,
+			};
+		};
+
+		for (let frame = realFrameRange[0]; frame <= realFrameRange[1]; frame++) {
+			if (signal?.aborted) {
+				throw new Error('renderMediaOnWeb() was cancelled');
+			}
+
+			timeUpdater.current?.update(frame);
+
+			await waitForRenderReady();
+
+			if (signal?.aborted) {
+				throw new Error('renderMediaOnWeb() was cancelled');
+			}
+
+			const timestamp = Math.round(
+				((frame - realFrameRange[0]) / resolved.fps) * 1_000_000,
+			);
+
+			let frameToEncode: VideoFrame | null = null;
+			let layerCanvas: OffscreenCanvas | null = null;
+
+			if (videoEnabled) {
+				const createFrameStart = performance.now();
+				const layer = await createLayer({
+					element: div,
+					scale,
+					logLevel,
+					internalState,
+					onlyBackgroundClipText: false,
+					cutout: new DOMRect(0, 0, resolved.width, resolved.height),
+					htmlInCanvasContext,
+					onHtmlInCanvasLayerOutcome: htmlInCanvasContext
+						? onHtmlInCanvasLayerOutcome
+						: undefined,
+					waitForPageResponsiveness,
+				});
+				internalState.addCreateFrameTime(performance.now() - createFrameStart);
+				layerCanvas = layer.canvas;
+
+				if (signal?.aborted) {
+					throw new Error('renderMediaOnWeb() was cancelled');
+				}
+
+				await waitForPageResponsiveness();
+
+				const videoFrame = new VideoFrame(layer.canvas, {
+					timestamp,
+				});
+
+				frameToEncode = videoFrame;
+				if (onFrame) {
+					const returnedFrame = await onFrame(videoFrame);
+					if (signal?.aborted) {
+						throw new Error('renderMediaOnWeb() was cancelled');
+					}
+
+					frameToEncode = validateVideoFrame({
+						originalFrame: videoFrame,
+						returnedFrame,
+						expectedWidth: sourceDimensions.width,
+						expectedHeight: sourceDimensions.height,
+						expectedTimestamp: timestamp,
+					});
+					await waitForPageResponsiveness();
+				}
+			}
+
+			const now = Date.now();
+			const timeToRenderInMilliseconds = now - timeOfLastFrame;
+			timeOfLastFrame = now;
+
+			progress.renderedFrames++;
+			recentFrameTimings.push(timeToRenderInMilliseconds);
+			if (recentFrameTimings.length > MAX_RECENT_FRAME_TIMINGS) {
+				recentFrameTimings.shift();
+			}
+
+			const recentTimingsSum = recentFrameTimings.reduce(
+				(sum, time) => sum + time,
+				0,
+			);
+			const newAverage = recentTimingsSum / recentFrameTimings.length;
+			const remainingFrames = totalFrames - progress.renderedFrames;
+			renderEstimatedTime = Math.round(remainingFrames * newAverage);
+
+			throttledOnProgress?.(getProgressPayload());
+
+			const audioCombineStart = performance.now();
+			const assets = collectAssets.current!.collectAssets();
+			if (onArtifact) {
+				await artifactsHandler.handle({
+					imageData: layerCanvas,
+					frame,
+					assets,
+					onArtifact,
+				});
+			}
+
+			await waitForPageResponsiveness();
+
+			if (audioSampleSource) {
+				audioMixer.addFrame({
+					assets,
+					timestamp,
+					isLastFrame: frame === realFrameRange[1],
+				});
+			}
+
+			internalState.addAudioMixingTime(performance.now() - audioCombineStart);
+
+			await waitForPageResponsiveness();
+
+			const addSampleStart = performance.now();
+			const encodingPromises: Promise<void>[] = [];
+			if (frameToEncode && videoSampleSource) {
+				encodingPromises.push(
+					addVideoSampleAndCloseFrame(
+						frameToEncode,
+						videoSampleSource.videoSampleSource,
+					),
+				);
+			}
+
+			encodingPromises.push(encodeReadyAudio());
+
+			await Promise.all(encodingPromises);
+			internalState.addAddSampleTime(performance.now() - addSampleStart);
+
+			progress.encodedFrames++;
+			if (progress.encodedFrames === totalFrames) {
+				doneIn = Date.now() - renderStart;
+			}
+
+			throttledOnProgress?.(getProgressPayload());
+
+			if (signal?.aborted) {
+				throw new Error('renderMediaOnWeb() was cancelled');
+			}
+
+			await waitForPageResponsiveness();
+		}
+
+		// Call progress one final time to ensure final state is reported
+		onProgress?.(getProgressPayload());
+
+		await waitForPageResponsiveness();
+
+		videoSampleSource?.videoSampleSource.close();
+		audioSampleSource?.audioSampleSource.close();
+		await outputWithCleanup.output.finalize();
+
+		Internals.Log.verbose(
+			{logLevel, tag: 'web-renderer'},
+			`Render timings: waitForReady=${internalState.getWaitForReadyTime().toFixed(2)}ms, createFrame=${internalState.getCreateFrameTime().toFixed(2)}ms, addSample=${internalState.getAddSampleTime().toFixed(2)}ms, audioMixing=${internalState.getAudioMixingTime().toFixed(2)}ms`,
+		);
+
+		if (outputWritable) {
+			sendUsageEvent({
+				licenseKey: licenseKey ?? null,
+				succeeded: true,
+				apiName: 'renderMediaOnWeb',
+				isStill: false,
+				isProduction: isProduction ?? true,
+			});
+
+			return {
+				getBlob: () =>
+					Promise.reject(
+						new Error('getBlob() is unavailable when outputWritable is used'),
+					),
+				internalState,
+			};
+		}
+
+		if (webFsTarget) {
+			sendUsageEvent({
+				licenseKey: licenseKey ?? null,
+				succeeded: true,
+				apiName: 'renderMediaOnWeb',
+				isStill: false,
+				isProduction: isProduction ?? true,
+			});
+
+			await webFsTarget.close();
+			return {
+				getBlob: async () => {
+					const file = await webFsTarget.getBlob();
+					return new Blob([file], {type: getMimeType(container)});
+				},
+				internalState,
+			};
+		}
+
+		if (!(target instanceof BufferTarget)) {
+			throw new Error('Expected target to be a BufferTarget');
+		}
+
+		sendUsageEvent({
+			licenseKey: licenseKey ?? null,
+			succeeded: true,
+			apiName: 'renderMediaOnWeb',
+			isStill: false,
+			isProduction: isProduction ?? true,
+		});
+
+		return {
+			getBlob: () => {
+				if (!target.buffer) {
+					throw new Error('The resulting buffer is empty');
+				}
+
+				return Promise.resolve(
+					new Blob([target.buffer], {type: getMimeType(container)}),
+				);
+			},
+			internalState,
+		};
+	} catch (err) {
+		if (!signal?.aborted) {
+			sendUsageEvent({
+				succeeded: false,
+				licenseKey: licenseKey ?? null,
+				apiName: 'renderMediaOnWeb',
+				isStill: false,
+				isProduction: isProduction ?? true,
+			}).catch((err2) => {
+				Internals.Log.error(
+					{logLevel: 'error', tag: 'web-renderer'},
+					'Failed to send usage event',
+					err2,
+				);
+			});
+		}
+
+		throw err;
+	}
+};
+
+export const renderMediaOnWeb = <
+	Schema extends $ZodObject,
+	Props extends Record<string, unknown>,
+>(
+	options: RenderMediaOnWebOptions<Schema, Props>,
+): Promise<RenderMediaOnWebResult> => {
+	const container = options.container ?? 'mp4';
+	const codec =
+		options.videoCodec ?? getDefaultVideoCodecForContainer(container) ?? null;
+
+	onlyOneMediaRenderAtATimeQueue.ref = onlyOneMediaRenderAtATimeQueue.ref
+		.catch(() => Promise.resolve())
+		.then(() =>
+			internalRenderMediaOnWeb<Schema, Props>({
+				...options,
+				delayRenderTimeoutInMilliseconds:
+					options.delayRenderTimeoutInMilliseconds ?? 30000,
+				logLevel: options.logLevel ?? window.remotion_logLevel ?? 'info',
+				schema: options.schema ?? undefined,
+				mediaCacheSizeInBytes: options.mediaCacheSizeInBytes ?? null,
+				videoCodec: codec,
+				audioCodec: options.audioCodec ?? null,
+				audioBitrate: options.audioBitrate ?? 'medium',
+				container,
+				signal: options.signal ?? null,
+				onProgress: options.onProgress ?? null,
+				hardwareAcceleration: options.hardwareAcceleration ?? 'no-preference',
+				keyframeIntervalInSeconds: options.keyframeIntervalInSeconds ?? 5,
+				videoBitrate: options.videoBitrate ?? 'medium',
+				frameRange: options.frameRange ?? null,
+				transparent: options.transparent ?? false,
+				onArtifact: options.onArtifact ?? null,
+				onFrame: options.onFrame ?? null,
+				pageResponsiveness: options.pageResponsiveness ?? 'medium',
+				outputTarget: options.outputTarget ?? null,
+				outputWritable: options.outputWritable ?? null,
+				licenseKey: options.licenseKey ?? null,
+				muted: options.muted ?? false,
+				scale: options.scale ?? 1,
+				isProduction: options.isProduction ?? true,
+				allowHtmlInCanvas: options.allowHtmlInCanvas ?? false,
+				sampleRate: options.sampleRate ?? 48000,
+				metadata: options.metadata ?? null,
+			}),
+		);
+
+	return onlyOneMediaRenderAtATimeQueue.ref as Promise<RenderMediaOnWebResult>;
+};

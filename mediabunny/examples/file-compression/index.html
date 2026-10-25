@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+	<head>
+		<meta charset="UTF-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>File compression example | Mediabunny</title>
+		<script type="module" src="../base.ts"></script>
+		<script type="module" src="./file-compression.ts"></script>
+		<link rel="stylesheet" href="../base.css">
+		<link rel="icon" href="../../docs/public/mediabunny-logo.svg">
+	</head>
+
+	<body class="flex flex-col items-center py-10 bg-zinc-50 text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 px-2">
+		<h1 class="text-3xl font-bold text-teal-500 text-center">File compression example</h1>
+		<p class="max-w-lg text-center">Select or drop a media file, and Mediabunny will convert it to a heavily-compressed MP4 file.</p>
+
+		<div class="flex gap-2 mt-4">
+			<button class="rounded-lg bg-zinc-200 dark:bg-zinc-750 hover:bg-zinc-300 dark:hover:bg-zinc-700 px-5 py-2">
+				Select media file
+			</button>
+
+			<a id="sample-file-download" download="big-buck-bunny-trimmed.mp4" class="rounded-lg bg-zinc-200 dark:bg-zinc-750 hover:bg-zinc-300 dark:hover:bg-zinc-700 px-5 group grid place-items-center" title="Download sample file">
+				<img src="../../docs/assets/download-icon.svg" class="opacity-30 group-hover:opacity-80 dark:invert">
+			</a>
+		</div>
+		<p class="text-xs opacity-60 mt-2" id="file-name"></p>
+
+		<hr class="w-full max-w-96 my-4 border-zinc-300 dark:border-zinc-700" style="display: none;">
+
+		<p id="error-element" class="text-red-500"></p>
+
+		<div class="w-full max-w-80 h-2 rounded-full bg-zinc-200 dark:bg-zinc-750 overflow-hidden" id="progress-bar-container" style="display: none;">
+			<div class="h-full bg-emerald-500 w-0" id="progress-bar"></div>
+		</div>
+		<p class="text-xs font-medium mt-1" id="speedometer" style="display: none;"></p>
+
+		<video controls class="rounded-md mt-4" style="display: none;"></video>
+		<p class="text-xs font-medium mt-1" id="compression-facts" style="display: none;"></p>
+
+		<a href="/" class="fixed top-0 left-0 flex gap-2 py-2 px-5 items-center">
+			<img src="../../docs/public/mediabunny-logo.svg" class="size-6">
+			<p class="text-sm font-medium">Mediabunny</p>
+		</a>
+
+		<a
+			href="https://github.com/Vanilagy/mediabunny/tree/main/examples/file-compression"
+			target="_blank"
+			class="flex items-center gap-2 fixed top-0 right-0 py-2 px-5 bg-zinc-200 dark:bg-zinc-750 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded-bl-xl"
+		>
+			<img src="../../docs/assets/github-mark.svg" class="size-6 dark:invert">
+			<p>View source code</p>
+		</a>
+	</body>
+</html>

@@ -1,0 +1,97 @@
+import React, {createContext, useCallback, useMemo, useState} from 'react';
+import {flushSync} from 'react-dom';
+import {
+	getCurrentDuration,
+	getCurrentFrame,
+} from '../components/Timeline/imperative-state';
+import {scrollableRef} from '../components/Timeline/timeline-refs';
+import {prepareToPreserveTimelineCursor} from '../components/Timeline/timeline-scroll-logic';
+import {syncTimelineViewport} from '../components/Timeline/TimelineViewport';
+import {getZoomFromLocalStorage} from '../components/ZoomPersistor';
+import {
+	clampTimelineZoom,
+	getTimelineZoom,
+} from '../helpers/get-timeline-max-zoom';
+
+export type TimelineSetZoomOptions = {
+	anchorFrame: number | null;
+	anchorContentX: number | null;
+};
+
+export const TimelineZoomCtx = createContext<{
+	zoom: Record<string, number>;
+	setZoom: (
+		videoId: string,
+		prev: (prevZoom: number) => number,
+		options?: TimelineSetZoomOptions,
+	) => void;
+}>({
+	zoom: {},
+	setZoom: () => {
+		throw new Error('has no context');
+	},
+});
+
+export const TimelineZoomContext: React.FC<{
+	readonly children: React.ReactNode;
+}> = ({children}) => {
+	const [zoom, setZoomState] = useState<Record<string, number>>(() =>
+		getZoomFromLocalStorage(),
+	);
+
+	const setZoom = useCallback(
+		(
+			videoId: string,
+			callback: (prevZoomLevel: number) => number,
+			options?: TimelineSetZoomOptions,
+		) => {
+			// Capture the old geometry before committing the new timeline width.
+			const preserveTimelineCursor = prepareToPreserveTimelineCursor({
+				currentDurationInFrames: getCurrentDuration(),
+				currentFrame: getCurrentFrame(),
+				anchorFrame: options?.anchorFrame ?? null,
+				anchorContentX: options?.anchorContentX ?? null,
+			});
+
+			flushSync(() => {
+				setZoomState((prevZoomMap) => {
+					const durationInFrames = getCurrentDuration();
+					const timelineViewportWidth = scrollableRef.current?.clientWidth ?? 0;
+					const previousZoom = getTimelineZoom({
+						durationInFrames,
+						timelineViewportWidth,
+						zoom: prevZoomMap[videoId] ?? null,
+					});
+					const newZoom = clampTimelineZoom({
+						zoom: callback(previousZoom),
+						durationInFrames,
+						timelineViewportWidth,
+					});
+
+					return {...prevZoomMap, [videoId]: newZoom};
+				});
+			});
+
+			// The new scroll range exists now, so the browser will not clamp the offset
+			// against the previous width.
+			preserveTimelineCursor();
+			// A large zoom can move beyond the old horizontal render window. Commit
+			// the new window before the browser paints the new scroll position.
+			flushSync(syncTimelineViewport);
+		},
+		[],
+	);
+
+	const value = useMemo(() => {
+		return {
+			zoom,
+			setZoom,
+		};
+	}, [zoom, setZoom]);
+
+	return (
+		<TimelineZoomCtx.Provider value={value}>
+			{children}
+		</TimelineZoomCtx.Provider>
+	);
+};

@@ -1,0 +1,652 @@
+import {afterEach, expect, test} from 'bun:test';
+import type {GitSource} from '@remotion/studio-shared';
+import type {TSequence} from 'remotion';
+import {getOpenInMenuItems} from '../components/get-open-in-menu-items';
+import type {ComboboxValue} from '../components/NewComposition/ComboBox';
+import {getCopyContextForAgentsMenuItem} from '../components/Timeline/get-copy-context-for-agents-menu-item';
+import {
+	findCopyableFrameElement,
+	getSequenceContextMenuItems,
+} from '../components/Timeline/get-sequence-context-menu-items';
+import {getTimelineMediaStartFrame} from '../components/Timeline/get-timeline-media-start-frame';
+import {
+	calculateSequenceFreezeFrame,
+	isSequenceVisibleAtTimelinePosition,
+	shouldShowFreezeFrameMenuItem,
+} from '../components/Timeline/use-sequence-freeze-frame-menu-item';
+
+const originalWindowDescriptor = Object.getOwnPropertyDescriptor(
+	globalThis,
+	'window',
+);
+const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(
+	globalThis,
+	'navigator',
+);
+
+afterEach(() => {
+	if (originalWindowDescriptor) {
+		Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
+	} else {
+		Reflect.deleteProperty(globalThis, 'window');
+	}
+
+	if (originalNavigatorDescriptor) {
+		Object.defineProperty(globalThis, 'navigator', originalNavigatorDescriptor);
+	} else {
+		Reflect.deleteProperty(globalThis, 'navigator');
+	}
+});
+
+const installTestWindow = () => {
+	const testWindow: Pick<
+		Window,
+		| 'open'
+		| 'remotion_cwd'
+		| 'remotion_editorName'
+		| 'remotion_fileSystemPlatform'
+		| 'remotion_gitSource'
+		| 'remotion_isReadOnlyStudio'
+	> = {
+		open: () => null,
+		remotion_cwd: '/project',
+		remotion_editorName: null,
+		remotion_fileSystemPlatform: 'darwin',
+		remotion_gitSource: null,
+		remotion_isReadOnlyStudio: false,
+	};
+
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: testWindow,
+	});
+};
+
+const renameSequenceItem: ComboboxValue = {
+	type: 'item',
+	id: 'rename-sequence',
+	keyHint: null,
+	label: 'Rename...',
+	leftItem: null,
+	disabled: false,
+	onClick: () => undefined,
+	quickSwitcherLabel: null,
+	subMenu: null,
+	value: 'rename-sequence',
+};
+
+const noop = () => undefined;
+
+test('finds direct and nested elements that can copy a frame', () => {
+	const canvas = {tagName: 'CANVAS'} as Element;
+	const video = {tagName: 'VIDEO'} as Element;
+	const wrapper = {
+		tagName: 'DIV',
+		querySelector: (selector: string) => {
+			expect(selector).toBe('canvas, video');
+			return video;
+		},
+	} as unknown as Element;
+
+	expect(findCopyableFrameElement(canvas)).toBe(canvas);
+	expect(findCopyableFrameElement(video)).toBe(video);
+	expect(findCopyableFrameElement(wrapper)).toBe(video);
+	expect(findCopyableFrameElement(null)).toBeNull();
+});
+
+test('copy context menu items write their agent context to the clipboard', () => {
+	const copiedTexts: string[] = [];
+	Object.defineProperty(globalThis, 'navigator', {
+		configurable: true,
+		value: {
+			clipboard: {
+				writeText: (text: string) => {
+					copiedTexts.push(text);
+					return Promise.resolve();
+				},
+			},
+		},
+	});
+
+	const item = getCopyContextForAgentsMenuItem({
+		contextForAgents: 'Property "style.opacity" in src/Video.tsx:10',
+	});
+	if (item.type !== 'item') {
+		throw new Error('Expected a copy context menu item');
+	}
+
+	item.onClick('copy-context-for-agents', null);
+	expect(copiedTexts).toEqual(['Property "style.opacity" in src/Video.tsx:10']);
+});
+
+test('the file manager entry is only shown on macOS', () => {
+	installTestWindow();
+	const getItems = () =>
+		getOpenInMenuItems({
+			canOpenDesktopApps: true,
+			codingAgentInfo: null,
+			editorDisabled: false,
+			editorInfo: null,
+			excludeCodingAgentId: null,
+			excludeEditorId: null,
+			excludeGitSource: false,
+			fileManagerDisabled: false,
+			folder: false,
+			gitSourceDisabled: false,
+			onConfigureApps: noop,
+			onOpenInCodingAgent: noop,
+			onOpenInEditor: noop,
+			onOpenInFileExplorer: noop,
+			onOpenInGitClient: noop,
+			onOpenInGitSource: noop,
+			onOpenInTerminal: null,
+		});
+
+	expect(getItems().some((item) => item.id === 'open-in-file-explorer')).toBe(
+		true,
+	);
+	window.remotion_fileSystemPlatform = 'win32';
+	expect(getItems().some((item) => item.id === 'open-in-file-explorer')).toBe(
+		false,
+	);
+	window.remotion_fileSystemPlatform = 'linux';
+	expect(getItems().some((item) => item.id === 'open-in-file-explorer')).toBe(
+		false,
+	);
+});
+
+const expectNoExtraDividers = (items: ComboboxValue[]) => {
+	expect(items[0]?.type).not.toBe('divider');
+	expect(items[items.length - 1]?.type).not.toBe('divider');
+
+	for (let i = 1; i < items.length; i++) {
+		expect([items[i - 1].type, items[i].type]).not.toEqual([
+			'divider',
+			'divider',
+		]);
+	}
+};
+
+test('sequence context menu adds frame copying and normalizes dividers', () => {
+	installTestWindow();
+
+	const items = getSequenceContextMenuItems({
+		assetLinkInfo: null,
+		canOpenInEditor: false,
+		codingAgentInfo: null,
+		copyImageElement: {tagName: 'CANVAS'} as Element,
+		deleteDisabled: false,
+		disableInteractivityDisabled: false,
+		duplicateDisabled: false,
+		editorInfo: null,
+		includeSourceEditItems: true,
+		isProgrammaticallyDuplicated: false,
+		onConfigureApps: null,
+		onDeleteSequenceFromSource: noop,
+		onDisableSequenceInteractivity: noop,
+		onDuplicateSequenceFromSource: noop,
+		openInCodingAgent: noop,
+		openInEditor: noop,
+		originalLocation: null,
+		selectAsset: noop,
+		sequence: {
+			documentationLink: 'https://www.remotion.dev/docs/sequence',
+			type: 'sequence',
+		} as TSequence,
+		sourceActions: [renameSequenceItem],
+	});
+
+	expectNoExtraDividers(items);
+
+	const copyContextIndex = items.findIndex(
+		(item) => item.id === 'copy-context-for-agents',
+	);
+	const copyFrameIndex = items.findIndex((item) => item.id === 'copy-frame');
+	const renameIndex = items.findIndex((item) => item.id === 'rename-sequence');
+
+	expect(items[copyContextIndex + 1]?.type).toBe('divider');
+	expect(copyFrameIndex).toBe(copyContextIndex + 2);
+	expect(
+		items[copyFrameIndex]?.type === 'item' ? items[copyFrameIndex].label : null,
+	).toBe('Copy frame');
+	expect(
+		items.slice(copyFrameIndex + 1, renameIndex).map((item) => item.type),
+	).toEqual(['divider']);
+});
+
+test('sequence context menu shares alternate apps without repeating defaults', () => {
+	installTestWindow();
+	window.remotion_editorName = 'Cursor Editor';
+	window.remotion_gitSource = {
+		name: 'project',
+		org: 'example',
+		ref: 'main',
+		relativeFromGitRoot: '',
+		type: 'github',
+	};
+
+	const openedEditors: Array<string | null> = [];
+	const openedCodingAgents: Array<{
+		readonly id: string;
+		readonly prompt: string | null;
+	}> = [];
+	let configured = false;
+	const items = getSequenceContextMenuItems({
+		assetLinkInfo: null,
+		canOpenInEditor: true,
+		codingAgentInfo: {
+			defaultCodingAgent: 'cursor',
+			runningCodingAgents: null,
+			installedCodingAgents: [
+				{
+					id: 'cursor',
+					name: 'Cursor',
+					nameWithType: 'Cursor Agent',
+				},
+				{
+					id: 'claude-code',
+					name: 'Claude Code',
+					nameWithType: 'Claude Code',
+				},
+			],
+			installedTerminals: [],
+			installedGitClients: [],
+		},
+		copyImageElement: null,
+		deleteDisabled: false,
+		disableInteractivityDisabled: false,
+		duplicateDisabled: false,
+		editorInfo: {
+			defaultEditor: 'cursor',
+			runningEditors: null,
+			installedEditors: [
+				{
+					id: 'cursor',
+					name: 'Cursor',
+					nameWithType: 'Cursor Editor',
+				},
+				{id: 'vscode', name: 'Code', nameWithType: 'Code'},
+			],
+		},
+		includeSourceEditItems: false,
+		isProgrammaticallyDuplicated: false,
+		onConfigureApps: () => {
+			configured = true;
+		},
+		onDeleteSequenceFromSource: noop,
+		onDisableSequenceInteractivity: noop,
+		onDuplicateSequenceFromSource: noop,
+		openInCodingAgent: (codingAgentId, _codingAgentName, prompt) => {
+			openedCodingAgents.push({id: codingAgentId, prompt});
+		},
+		openInEditor: (editorId) => {
+			openedEditors.push(editorId);
+		},
+		originalLocation: {
+			column: 2,
+			line: 10,
+			source: '/project/src/Video.tsx',
+		},
+		selectAsset: noop,
+		sequence: {displayName: 'Intro card'} as TSequence,
+	});
+
+	expect(items.slice(0, 2).map((item) => item.id)).toEqual([
+		'open-in-editor',
+		'open-in-another-app',
+	]);
+	expect(items[0]?.type === 'item' ? items[0].label : null).toBe(
+		'Open in Cursor Editor',
+	);
+	const openIn = items.find((item) => item.id === 'open-in-another-app');
+	if (openIn?.type !== 'item' || openIn.subMenu === null) {
+		throw new Error('Expected Open in submenu');
+	}
+
+	const submenuIds = openIn.subMenu.items.map((item) => item.id);
+	expect(submenuIds).toContain('open-in-vscode');
+	expect(submenuIds).toContain('open-in-coding-agent-cursor');
+	expect(submenuIds).toContain('open-in-coding-agent-claude-code');
+	expect(submenuIds).toContain('open-in-github');
+	expect(submenuIds).toContain('open-in-file-explorer');
+	expect(submenuIds).toContain('change-default-apps');
+	expect(submenuIds).not.toContain('open-in-cursor');
+	const gitHubIndex = submenuIds.indexOf('open-in-github');
+	expect(openIn.subMenu.items[gitHubIndex - 1]?.type).toBe('divider');
+
+	const cursorAgent = openIn.subMenu.items.find(
+		(item) => item.id === 'open-in-coding-agent-cursor',
+	);
+	if (cursorAgent?.type !== 'item') {
+		throw new Error('Expected Cursor coding agent item');
+	}
+
+	cursorAgent.onClick('open-in-coding-agent-cursor', null);
+	const claudeCode = openIn.subMenu.items.find(
+		(item) => item.id === 'open-in-coding-agent-claude-code',
+	);
+	if (claudeCode?.type !== 'item') {
+		throw new Error('Expected Claude Code menu item');
+	}
+
+	claudeCode.onClick('open-in-coding-agent-claude-code', null);
+	const configure = openIn.subMenu.items.find(
+		(item) => item.id === 'change-default-apps',
+	);
+	if (configure?.type !== 'item') {
+		throw new Error('Expected configure apps item');
+	}
+
+	configure.onClick('change-default-apps', null);
+	expect(openedEditors).toEqual([]);
+	expect(openedCodingAgents).toEqual([
+		{id: 'cursor', prompt: 'Intro card in src/Video.tsx:10'},
+		{id: 'claude-code', prompt: 'Intro card in src/Video.tsx:10'},
+	]);
+	expect(configured).toBe(true);
+});
+
+test('Interactive.Svg context menu can copy the rendered SVG', () => {
+	installTestWindow();
+
+	const copiedTexts: string[] = [];
+	Object.defineProperty(globalThis, 'navigator', {
+		configurable: true,
+		value: {
+			clipboard: {
+				writeText: (text: string) => {
+					copiedTexts.push(text);
+					return new Promise<void>(() => undefined);
+				},
+			},
+		},
+	});
+
+	const items = getSequenceContextMenuItems({
+		assetLinkInfo: null,
+		canOpenInEditor: false,
+		codingAgentInfo: null,
+		copyImageElement: null,
+		deleteDisabled: false,
+		disableInteractivityDisabled: false,
+		duplicateDisabled: false,
+		editorInfo: null,
+		includeSourceEditItems: true,
+		isProgrammaticallyDuplicated: false,
+		onConfigureApps: null,
+		onDeleteSequenceFromSource: noop,
+		onDisableSequenceInteractivity: noop,
+		onDuplicateSequenceFromSource: noop,
+		openInCodingAgent: noop,
+		openInEditor: noop,
+		originalLocation: null,
+		selectAsset: noop,
+		sequence: {
+			controls: {
+				componentIdentity: 'dev.remotion.remotion.Interactive.Svg',
+			},
+			documentationLink: 'https://www.remotion.dev/docs/interactive',
+			refForOutline: {
+				current: {outerHTML: '<svg><circle /></svg>'},
+			},
+		} as unknown as TSequence,
+	});
+
+	const copySvg = items.find((item) => item.id === 'copy-svg');
+	if (copySvg?.type !== 'item') {
+		throw new Error('Expected copy SVG menu item');
+	}
+
+	copySvg.onClick('copy-svg', null);
+	expect(copiedTexts).toEqual(['<svg><circle /></svg>']);
+
+	const copySvgIndex = items.findIndex((item) => item.id === 'copy-svg');
+	expect(items[copySvgIndex + 1]?.type).toBe('divider');
+});
+
+test('programmatically duplicated sequence menus apply actions to all instances', () => {
+	installTestWindow();
+
+	const items = getSequenceContextMenuItems({
+		assetLinkInfo: null,
+		canOpenInEditor: false,
+		codingAgentInfo: null,
+		copyImageElement: null,
+		deleteDisabled: false,
+		disableInteractivityDisabled: false,
+		duplicateDisabled: false,
+		editorInfo: null,
+		includeSourceEditItems: true,
+		isProgrammaticallyDuplicated: true,
+		onConfigureApps: null,
+		onDeleteSequenceFromSource: noop,
+		onDisableSequenceInteractivity: noop,
+		onDuplicateSequenceFromSource: noop,
+		openInCodingAgent: noop,
+		openInEditor: noop,
+		originalLocation: null,
+		selectAsset: noop,
+		sequence: {} as TSequence,
+	});
+
+	const duplicateItem = items.find((item) => item.id === 'duplicate-sequence');
+	const deleteItem = items.find((item) => item.id === 'delete-sequence');
+	if (duplicateItem?.type !== 'item' || deleteItem?.type !== 'item') {
+		throw new Error('Expected duplicate and delete menu items');
+	}
+
+	expect(duplicateItem.disabled).toBe(true);
+	expect(deleteItem.label).toBe('Delete all');
+});
+
+test('read-only sequence menus only contain non-mutating actions', () => {
+	installTestWindow();
+
+	const items = getSequenceContextMenuItems({
+		assetLinkInfo: null,
+		canOpenInEditor: false,
+		codingAgentInfo: null,
+		copyImageElement: null,
+		deleteDisabled: true,
+		disableInteractivityDisabled: true,
+		duplicateDisabled: true,
+		editorInfo: null,
+		includeSourceEditItems: false,
+		isProgrammaticallyDuplicated: false,
+		onConfigureApps: null,
+		onDeleteSequenceFromSource: noop,
+		onDisableSequenceInteractivity: noop,
+		onDuplicateSequenceFromSource: noop,
+		openInCodingAgent: noop,
+		openInEditor: noop,
+		originalLocation: null,
+		selectAsset: noop,
+		sequence: {
+			controls: {
+				componentIdentity: 'dev.remotion.remotion.Interactive.Svg',
+			},
+			documentationLink: 'https://www.remotion.dev/docs/interactive',
+			refForOutline: {
+				current: {outerHTML: '<svg><circle /></svg>'},
+			},
+		} as unknown as TSequence,
+	});
+
+	expect(items.map((item) => item.id)).toEqual([
+		'copy-context-for-agents',
+		'copy-svg',
+	]);
+});
+
+test('read-only sequence menus open source locations on GitHub', () => {
+	installTestWindow();
+	const gitSource: GitSource = {
+		name: 'project',
+		org: 'example',
+		ref: 'main',
+		relativeFromGitRoot: '',
+		type: 'github',
+	};
+	window.remotion_gitSource = gitSource;
+	window.remotion_isReadOnlyStudio = true;
+	const openedUrls: string[] = [];
+	window.open = (url) => {
+		openedUrls.push(String(url));
+		return null;
+	};
+
+	const items = getSequenceContextMenuItems({
+		assetLinkInfo: null,
+		canOpenInEditor: false,
+		codingAgentInfo: null,
+		copyImageElement: null,
+		deleteDisabled: true,
+		disableInteractivityDisabled: true,
+		duplicateDisabled: true,
+		editorInfo: null,
+		includeSourceEditItems: false,
+		isProgrammaticallyDuplicated: false,
+		onConfigureApps: null,
+		onDeleteSequenceFromSource: noop,
+		onDisableSequenceInteractivity: noop,
+		onDuplicateSequenceFromSource: noop,
+		openInCodingAgent: noop,
+		openInEditor: noop,
+		originalLocation: {
+			column: 1,
+			line: 12,
+			source: '/project/src/Video.tsx',
+		},
+		selectAsset: noop,
+		sequence: {} as TSequence,
+	});
+
+	const openInGitHub = items.find((item) => item.id === 'open-in-git-source');
+	if (openInGitHub?.type !== 'item') {
+		throw new Error('Expected Open in GitHub menu item');
+	}
+
+	expect(openInGitHub.label).toBe('Open in GitHub');
+	openInGitHub.onClick('open-in-git-source', null);
+	expect(openedUrls).toEqual([
+		'https://github.com/example/project/blob/main/src/Video.tsx#L12',
+	]);
+	expect(items.some((item) => item.id === 'open-in-another-app')).toBe(false);
+});
+
+test('sequence freeze context menu item is hidden for audio', () => {
+	expect(shouldShowFreezeFrameMenuItem({type: 'audio'} as TSequence)).toBe(
+		false,
+	);
+	expect(shouldShowFreezeFrameMenuItem({type: 'video'} as TSequence)).toBe(
+		true,
+	);
+	expect(shouldShowFreezeFrameMenuItem({type: 'sequence'} as TSequence)).toBe(
+		true,
+	);
+});
+
+test('sequence freeze frame accounts for trimBefore', () => {
+	const sequence = {
+		sequencePlaybackRate: 1,
+		duration: 120,
+		from: 0,
+	} as TSequence;
+
+	expect(
+		calculateSequenceFreezeFrame({
+			sequence,
+			sequenceFrameOffset: 20,
+			timelinePosition: -10,
+		}),
+	).toBe(20);
+	expect(
+		calculateSequenceFreezeFrame({
+			sequence,
+			sequenceFrameOffset: 20,
+			timelinePosition: 0,
+		}),
+	).toBe(20);
+	expect(
+		calculateSequenceFreezeFrame({
+			sequence,
+			sequenceFrameOffset: 20,
+			timelinePosition: 119,
+		}),
+	).toBe(139);
+});
+
+test('sequence freeze frame can only be toggled while the sequence is visible', () => {
+	const sequence = {
+		sequencePlaybackRate: 1,
+		from: 20,
+		duration: 40,
+		premountDisplay: 10,
+		postmountDisplay: 10,
+	} as TSequence;
+
+	expect(
+		isSequenceVisibleAtTimelinePosition({sequence, timelinePosition: 19}),
+	).toBe(false);
+	expect(
+		isSequenceVisibleAtTimelinePosition({sequence, timelinePosition: 20}),
+	).toBe(true);
+	expect(
+		isSequenceVisibleAtTimelinePosition({sequence, timelinePosition: 59}),
+	).toBe(true);
+	expect(
+		isSequenceVisibleAtTimelinePosition({sequence, timelinePosition: 60}),
+	).toBe(false);
+});
+
+test('video freeze preserves the media frame under the playhead at different playback rates', () => {
+	const mediaFrameAtSequenceZero = 5;
+	const playbackRate = 2;
+	const sequence = {
+		sequencePlaybackRate: 1,
+		duration: 120,
+		from: 0,
+		mediaFrameAtSequenceZero,
+		playbackRate,
+		type: 'video',
+	} as Extract<TSequence, {type: 'video'}>;
+	const timelinePosition = 40;
+	const freezeFrame = calculateSequenceFreezeFrame({
+		sequence,
+		sequenceFrameOffset: 0,
+		timelinePosition,
+	});
+	const mediaFrameUnderPlayhead = getTimelineMediaStartFrame({
+		startMediaFrom: mediaFrameAtSequenceZero,
+		mediaFrameAtSequenceZero,
+		sequenceFrameOffset: timelinePosition,
+		playbackRate,
+	});
+	const mediaFrameAfterFreeze =
+		mediaFrameAtSequenceZero + freezeFrame * playbackRate;
+
+	expect(freezeFrame).toBe(timelinePosition);
+	expect(mediaFrameAfterFreeze).toBe(mediaFrameUnderPlayhead);
+});
+
+test('freezing a slowed sequence preserves fractional local frames at its visible boundaries', () => {
+	const sequence = {
+		from: 0.5,
+		duration: 3.75,
+		sequencePlaybackRate: 0.5,
+	} as TSequence;
+	for (const [timelinePosition, expectedFrame] of [
+		[0, 0.25],
+		[3, 1.25],
+		[4, 1.75],
+		[5, 1.75],
+	]) {
+		expect(
+			calculateSequenceFreezeFrame({
+				sequence,
+				sequenceFrameOffset: 0,
+				timelinePosition,
+			}),
+		).toBe(expectedFrame);
+	}
+});

@@ -1,0 +1,323 @@
+import type {VideoConfig} from 'remotion/no-react';
+import {NoReactInternals} from 'remotion/no-react';
+import type {RenderMediaOnDownload} from './assets/download-and-map-assets-to-file';
+import type {DownloadMap} from './assets/download-map';
+import type {HeadlessBrowser} from './browser/Browser';
+import type {Page} from './browser/BrowserPage';
+import {isFlakyNetworkError, isTargetClosedErr} from './browser/flaky-errors';
+import type {CountType} from './get-frame-padded-index';
+import type {VideoImageFormat} from './image-format';
+import {getRetriesLeftFromError} from './is-delay-render-error-with-retry';
+import type {LogLevel} from './log-level';
+import {Log} from './logger';
+import type {CancelSignal} from './make-cancel-signal';
+import {cancelErrorMessages, isUserCancelledRender} from './make-cancel-signal';
+import type {NextFrameToRender} from './next-frame-to-render';
+import type {Pool} from './pool';
+import type {
+	CapturedFrame,
+	RemotionSharedMemoryCapture,
+} from './remotion-shared-memory';
+import {renderFrame} from './render-frame';
+import type {AssetIndex, FrameAndAssets, OnArtifact} from './render-frames';
+import type {BrowserReplacer} from './replace-browser';
+
+export const renderFrameAndRetryTargetClose = async ({
+	retriesLeft,
+	attempt,
+	assets,
+	assetIndex,
+	imageFormat,
+	binariesDirectory,
+	cancelSignal,
+	composition,
+	countType,
+	downloadMap,
+	frameDir,
+	framesToRender,
+	jpegQuality,
+	onArtifact,
+	onDownload,
+	onError,
+	outputDir,
+	poolPromise,
+	scale,
+	stoppedSignal,
+	timeoutInMilliseconds,
+	indent,
+	logLevel,
+	makeBrowser,
+	makeNewPage,
+	browserReplacer,
+	concurrencyOrFramesToRender,
+	framesRenderedObj,
+	lastFrame,
+	onFrameBuffer,
+	onFrame,
+	remotionSharedMemory,
+	onFrameUpdate,
+	nextFrameToRender,
+	imageSequencePattern,
+	trimLeftOffset,
+	trimRightOffset,
+	allFramesAndExtraFrames,
+}: {
+	retriesLeft: number;
+	attempt: number;
+	imageFormat: VideoImageFormat;
+	cancelSignal: CancelSignal | undefined;
+	binariesDirectory: string | null;
+	poolPromise: Promise<Pool>;
+	jpegQuality: number;
+	frameDir: string;
+	scale: number;
+	countType: CountType;
+	assets: FrameAndAssets[];
+	assetIndex: AssetIndex;
+	framesToRender: number[];
+	onArtifact: OnArtifact | null;
+	onDownload: RenderMediaOnDownload | null;
+	downloadMap: DownloadMap;
+	composition: Omit<VideoConfig, 'defaultProps' | 'props'>;
+	onError: (err: Error) => void;
+	stoppedSignal: {stopped: boolean};
+	timeoutInMilliseconds: number;
+	outputDir: string | null;
+	indent: boolean;
+	logLevel: LogLevel;
+	makeBrowser: () => Promise<HeadlessBrowser>;
+	makeNewPage: (frame: number, pageIndex: number) => Promise<Page>;
+	browserReplacer: BrowserReplacer;
+	concurrencyOrFramesToRender: number;
+	lastFrame: number;
+	framesRenderedObj: {count: number};
+	onFrameBuffer:
+		| null
+		| ((buffer: Buffer, frame: number) => void | Promise<void>)
+		| undefined;
+	onFrame:
+		| null
+		| ((frame: CapturedFrame, frameNumber: number) => void | Promise<void>);
+	remotionSharedMemory: RemotionSharedMemoryCapture | null;
+	onFrameUpdate:
+		| null
+		| ((
+				framesRendered: number,
+				frameIndex: number,
+				timeToRenderInMilliseconds: number,
+		  ) => void);
+	nextFrameToRender: NextFrameToRender;
+	imageSequencePattern: string | null;
+	trimLeftOffset: number;
+	trimRightOffset: number;
+	allFramesAndExtraFrames: number[];
+}): Promise<void> => {
+	const currentPool = await poolPromise;
+
+	if (stoppedSignal.stopped) {
+		return;
+	}
+
+	const freePage = await currentPool.acquire();
+
+	const frame = nextFrameToRender.getNextFrame();
+
+	try {
+		await Promise.race([
+			renderFrame({
+				trimLeftOffset,
+				trimRightOffset,
+				allFramesAndExtraFrames,
+				attempt,
+				assets,
+				assetIndex,
+				binariesDirectory,
+				cancelSignal,
+				countType,
+				downloadMap,
+				frameDir,
+				framesToRender,
+				imageFormat,
+				indent,
+				jpegQuality,
+				logLevel,
+				onArtifact,
+				onDownload,
+				scale,
+				composition,
+				framesRenderedObj,
+				lastFrame,
+				onError,
+				onFrameBuffer,
+				onFrame,
+				remotionSharedMemory,
+				onFrameUpdate,
+				outputDir,
+				stoppedSignal,
+				timeoutInMilliseconds,
+				frame,
+				page: freePage,
+				imageSequencePattern,
+			}),
+			new Promise((_, reject) => {
+				cancelSignal?.(() => {
+					reject(new Error(cancelErrorMessages.renderFrames));
+				});
+			}),
+		]);
+		currentPool.release(freePage);
+	} catch (err) {
+		const isTargetClosedError = isTargetClosedErr(err as Error);
+		const shouldRetryError = (err as Error).stack?.includes(
+			NoReactInternals.DELAY_RENDER_RETRY_TOKEN,
+		);
+		const flakyNetworkError = isFlakyNetworkError(err as Error);
+
+		if (isUserCancelledRender(err) && !shouldRetryError) {
+			throw err;
+		}
+
+		if (!isTargetClosedError && !shouldRetryError && !flakyNetworkError) {
+			throw err;
+		}
+
+		if (stoppedSignal.stopped) {
+			return;
+		}
+
+		if (retriesLeft === 0) {
+			Log.warn(
+				{
+					indent,
+					logLevel,
+				},
+				`The browser crashed ${attempt} times while rendering frame ${frame}. Not retrying anymore. Learn more about this error under https://www.remotion.dev/docs/target-closed`,
+			);
+			throw err;
+		}
+
+		if (shouldRetryError) {
+			const pool = await poolPromise;
+			// Retire shared-memory pools before closing the timed-out page.
+			await remotionSharedMemory?.forgetPage(freePage);
+			// Close the timed-out page before creating another main tab at index 0.
+			try {
+				await freePage.close();
+			} catch (closeError) {
+				if (!(closeError instanceof Error) || !isTargetClosedErr(closeError)) {
+					throw closeError;
+				}
+			}
+
+			const newPage = await makeNewPage(frame, freePage.pageIndex);
+			pool.release(newPage);
+			Log.warn(
+				{indent, logLevel},
+				`delayRender() timed out while rendering frame ${frame}: ${(err as Error).message}`,
+			);
+			const actualRetriesLeft = getRetriesLeftFromError(err as Error);
+			nextFrameToRender.returnFrame(frame);
+
+			return renderFrameAndRetryTargetClose({
+				retriesLeft: actualRetriesLeft,
+				attempt: attempt + 1,
+				assets,
+				assetIndex,
+				imageFormat,
+				binariesDirectory,
+				cancelSignal,
+				composition,
+				countType,
+				downloadMap,
+				frameDir,
+				framesToRender,
+				indent,
+				jpegQuality,
+				logLevel,
+				onArtifact,
+				onDownload,
+				onError,
+				outputDir,
+				poolPromise,
+				scale,
+				stoppedSignal,
+				timeoutInMilliseconds,
+				makeBrowser,
+				makeNewPage,
+				browserReplacer,
+				concurrencyOrFramesToRender,
+				framesRenderedObj,
+				lastFrame,
+				onFrameBuffer,
+				onFrame,
+				remotionSharedMemory,
+				onFrameUpdate,
+				nextFrameToRender,
+				imageSequencePattern,
+				trimLeftOffset,
+				trimRightOffset,
+				allFramesAndExtraFrames,
+			});
+		}
+
+		Log.warn(
+			{indent, logLevel},
+			`The browser crashed while rendering frame ${frame}, retrying ${retriesLeft} more times. Learn more about this error under https://www.remotion.dev/docs/target-closed`,
+		);
+		// Replace the entire browser
+		await remotionSharedMemory?.forgetAllPages();
+		await browserReplacer.replaceBrowser(makeBrowser, async () => {
+			const pages = new Array(concurrencyOrFramesToRender)
+				.fill(true)
+				.map((_, i) => makeNewPage(frame, i));
+			const puppeteerPages = await Promise.all(pages);
+			const pool = await poolPromise;
+			for (const newPage of puppeteerPages) {
+				pool.release(newPage);
+			}
+		});
+
+		nextFrameToRender.returnFrame(frame);
+
+		await renderFrameAndRetryTargetClose({
+			retriesLeft: retriesLeft - 1,
+			attempt: attempt + 1,
+			assets,
+			assetIndex,
+			binariesDirectory,
+			cancelSignal,
+			composition,
+			countType,
+			downloadMap,
+			frameDir,
+			framesToRender,
+			imageFormat,
+			indent,
+			jpegQuality,
+			logLevel,
+			onArtifact,
+			makeBrowser,
+			onDownload,
+			onError,
+			outputDir,
+			poolPromise,
+			scale,
+			stoppedSignal,
+			timeoutInMilliseconds,
+			browserReplacer,
+			makeNewPage,
+			concurrencyOrFramesToRender,
+			framesRenderedObj,
+			lastFrame,
+			onFrameBuffer,
+			onFrame,
+			remotionSharedMemory,
+			onFrameUpdate,
+			nextFrameToRender,
+			imageSequencePattern,
+			trimLeftOffset,
+			trimRightOffset,
+			allFramesAndExtraFrames,
+		});
+	}
+};

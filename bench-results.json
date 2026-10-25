@@ -1,0 +1,49 @@
+{
+  "source": "C:\\bun\\packages\\bun-video\\hyperframes\\cli\\src\\commands\\__fixtures__\\silent.mp4",
+  "runtime": "1.4.6",
+  "revision": "169d8c5ea17b2b55a0582c475adc7123118b9623",
+  "results": [
+    {
+      "label": "video.metadata",
+      "n": 15,
+      "medianMs": 0.11,
+      "minMs": 0.09,
+      "maxMs": 0.34
+    },
+    {
+      "label": "video.frame.webp.320",
+      "n": 15,
+      "medianMs": 4.99,
+      "minMs": 4.93,
+      "maxMs": 5.46
+    },
+    {
+      "label": "video.frame.rgba",
+      "n": 15,
+      "medianMs": 1.65,
+      "minMs": 1.57,
+      "maxMs": 1.76
+    },
+    {
+      "label": "video.frames.batch4",
+      "n": 8,
+      "medianMs": 4.02,
+      "minMs": 3.37,
+      "maxMs": 4.08
+    },
+    {
+      "label": "image.png.reencode",
+      "n": 15,
+      "medianMs": 1.74,
+      "minMs": 1.68,
+      "maxMs": 1.81
+    },
+    {
+      "label": "image.jpeg.encode",
+      "n": 15,
+      "medianMs": 0.57,
+      "minMs": 0.56,
+      "maxMs": 0.62
+    }
+  ]
+}

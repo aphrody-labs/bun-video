@@ -1,0 +1,522 @@
+import React, {useContext, useLayoutEffect} from 'react';
+import type {ResolvedStackLocation} from 'remotion';
+import {Internals} from 'remotion';
+import {StudioServerConnectionCtx} from '../helpers/client-id';
+import {getConnectedCompositions} from '../helpers/get-connected-compositions';
+import {
+	getDefaultOpenInTarget,
+	openGitSource,
+} from '../helpers/get-git-menu-item';
+import {getSequenceDoubleClickAction} from '../helpers/get-sequence-double-click-action';
+import {isStudioInteractivityEnabled} from '../helpers/interactivity-enabled';
+import {
+	openInCodingAgent as launchCodingAgent,
+	openOriginalPositionInEditor,
+} from '../helpers/open-in-editor';
+import {getSequenceAnnotationAttributes} from '../helpers/sequence-annotation';
+import {SetSelectedModalContext} from '../state/modals';
+import {Transform3DModeStateContext} from '../state/transform-3d-mode';
+import {useConfirmationDialog} from './ConfirmationDialog';
+import {useSelectComposition} from './InitialCompositionLoader';
+import {showNotification} from './Notifications/NotificationCenter';
+import type {SelectedOutline} from './selected-outline-geometry';
+import {type SelectedOutlineSnapPoint} from './selected-outline-snap';
+import {
+	cropFieldKeys,
+	rotateFieldKey,
+	type SelectedOutlineContextMenuOpenHandler,
+	type SelectedOutlineDragTarget,
+	type SelectedOutlineLayoutTarget,
+	type SelectedOutlineTarget,
+} from './selected-outline-types';
+import {SelectedOutlineCanvasRotation} from './SelectedOutlineCanvasRotation';
+import {SelectedOutlinePolygon} from './SelectedOutlinePolygon';
+import {disableSequenceInteractivity} from './Timeline/disable-sequence-interactivity';
+import {duplicateSequencesFromSource} from './Timeline/duplicate-selected-timeline-item';
+import {
+	findCopyableFrameElement,
+	getSequenceContextMenuItems,
+} from './Timeline/get-sequence-context-menu-items';
+import {getTimelineAssetLinkInfo} from './Timeline/timeline-asset-link';
+import {
+	getTimelineSequenceSelectionKey,
+	type TimelineSelection,
+	type TimelineSelectionInteraction,
+	useTimelineSelection,
+} from './Timeline/TimelineSelection';
+import {getOriginalLocationFromStack} from './Timeline/TimelineStack/get-stack';
+import {useDeleteTimelineItems} from './Timeline/use-delete-timeline-items';
+import {useResolvedStack} from './Timeline/use-resolved-stack';
+import {
+	useDefaultCodingAgentInfo,
+	useEditorOpening,
+} from './use-default-editor-info';
+import {useSelectAsset} from './use-select-asset';
+import {useSelectedOutlineControlTarget} from './use-selected-outline-control-target';
+type SelectedOutlineElementProps = {
+	readonly compositionHeight: number;
+	readonly compositionWidth: number;
+	readonly dragging: boolean;
+	readonly getAllDragOutlines: () => readonly SelectedOutline[];
+	readonly getAllDragTargets: () => readonly SelectedOutlineDragTarget[];
+	readonly getLatestTargetByKey: (
+		key: string,
+	) => SelectedOutlineTarget | undefined;
+	readonly layoutTarget: SelectedOutlineLayoutTarget | undefined;
+	readonly outline: SelectedOutline;
+	readonly onDraggingChange: (dragging: boolean) => void;
+	readonly onSnapPointsChange: (
+		snapPoints: readonly SelectedOutlineSnapPoint[],
+	) => void;
+	readonly onSelect: (
+		item: TimelineSelection,
+		interaction: TimelineSelectionInteraction,
+	) => void;
+	readonly registerContextMenuOpen: (
+		key: string,
+		handler: SelectedOutlineContextMenuOpenHandler | null,
+	) => void;
+	readonly scale: number;
+};
+
+const SelectedOutlineElementUnmemoized: React.FC<
+	SelectedOutlineElementProps
+> = ({
+	compositionHeight,
+	compositionWidth,
+	dragging,
+	getAllDragOutlines,
+	getAllDragTargets,
+	getLatestTargetByKey,
+	layoutTarget,
+	outline,
+	onDraggingChange,
+	onSnapPointsChange,
+	onSelect,
+	registerContextMenuOpen,
+	scale,
+}) => {
+	const {previewServerState} = useContext(StudioServerConnectionCtx);
+	const {
+		canConfigureApps,
+		canOpenInEditor: editorAvailable,
+		defaultEditorId,
+		editorInfo,
+	} = useEditorOpening(previewServerState.type === 'connected');
+	const codingAgentInfo = useDefaultCodingAgentInfo(canConfigureApps);
+	const defaultOpenInTarget = getDefaultOpenInTarget({
+		canOpenInEditor: editorAvailable,
+	});
+	const {setPropStatuses} = useContext(Internals.VisualModeSettersContext);
+	const updateResolvedStackTrace = useContext(
+		Internals.SequenceStackTracesUpdateContext,
+	);
+	const confirm = useConfirmationDialog();
+	const deleteTimelineItems = useDeleteTimelineItems();
+	const selectAsset = useSelectAsset();
+	const selectComposition = useSelectComposition();
+	const {compositions} = useContext(Internals.CompositionManager);
+	const {setSelectedModal} = useContext(SetSelectedModalContext);
+	const {selectItems} = useTimelineSelection();
+	const {setManuallyEnabled} = useContext(Transform3DModeStateContext);
+	const {controlTarget, getLayoutTarget, getTarget, hovered, onHoverChange} =
+		useSelectedOutlineControlTarget({
+			getLatestTargetByKey,
+			layoutTarget,
+		});
+	const annotationLocation = useResolvedStack(
+		layoutTarget?.sequence.getStack() ?? null,
+	);
+
+	const resolveOriginalLocation = React.useCallback(
+		async (resolveTarget: SelectedOutlineTarget) => {
+			const stack = resolveTarget.sequence.getStack();
+			if (!stack) {
+				return null;
+			}
+
+			let originalLocation: ResolvedStackLocation | null = null;
+			try {
+				originalLocation = await getOriginalLocationFromStack(
+					stack,
+					'sequence',
+				);
+			} catch (err) {
+				showNotification((err as Error).message, 2000);
+			}
+
+			updateResolvedStackTrace(stack, originalLocation);
+			return originalLocation;
+		},
+		[updateResolvedStackTrace],
+	);
+
+	const onDoubleClickTarget = React.useCallback(
+		(
+			doubleClickTarget: SelectedOutlineTarget,
+			button: number,
+			sequenceWasDragged: boolean,
+		) => {
+			const connectedCompositions = getConnectedCompositions({
+				compositions,
+				singleChildComponent: doubleClickTarget.sequence.singleChildComponent,
+			});
+			const action = getSequenceDoubleClickAction({
+				button,
+				canOpenSource: defaultOpenInTarget !== null,
+				numberOfConnectedCompositions: connectedCompositions.length,
+				sequenceWasDragged,
+			});
+
+			if (action === null) {
+				return false;
+			}
+
+			if (action === 'open-connected-composition') {
+				selectComposition(connectedCompositions[0], true);
+				return true;
+			}
+
+			const openTargetSource = async () => {
+				const originalLocation =
+					await resolveOriginalLocation(doubleClickTarget);
+				if (originalLocation === null) {
+					return;
+				}
+
+				if (defaultOpenInTarget === 'editor' && defaultEditorId !== null) {
+					await openOriginalPositionInEditor(originalLocation, defaultEditorId);
+					return;
+				}
+
+				if (defaultOpenInTarget === 'git-source') {
+					openGitSource({folder: false, location: originalLocation});
+				}
+			};
+
+			openTargetSource().catch((err) => {
+				showNotification((err as Error).message, 2000);
+			});
+
+			return true;
+		},
+		[
+			compositions,
+			defaultEditorId,
+			defaultOpenInTarget,
+			resolveOriginalLocation,
+			selectComposition,
+		],
+	);
+
+	const onContextMenuOpen = React.useCallback(async () => {
+		const contextMenuTarget = getTarget();
+		if (contextMenuTarget === undefined) {
+			return false;
+		}
+
+		if (!contextMenuTarget.selected) {
+			onSelect(contextMenuTarget.selection, {
+				shiftKey: false,
+				toggleKey: false,
+			});
+		}
+
+		const originalLocation = await resolveOriginalLocation(contextMenuTarget);
+
+		const nodePath = contextMenuTarget.nodePathInfo.sequenceSubscriptionKey;
+		const mediaSrc =
+			contextMenuTarget.sequence.type === 'audio' ||
+			contextMenuTarget.sequence.type === 'video' ||
+			contextMenuTarget.sequence.type === 'image'
+				? contextMenuTarget.sequence.src
+				: null;
+		const assetLinkInfo = mediaSrc ? getTimelineAssetLinkInfo(mediaSrc) : null;
+		const canOpenInEditor = Boolean(originalLocation && editorAvailable);
+		const sourceEditingEnabled = isStudioInteractivityEnabled();
+		const disableInteractivityDisabled =
+			!sourceEditingEnabled || !contextMenuTarget.sequence.showInTimeline;
+		const sourceEditDisabled =
+			!sourceEditingEnabled ||
+			!contextMenuTarget.sequence.controls ||
+			!nodePath.absolutePath;
+		const isProgrammaticallyDuplicated =
+			contextMenuTarget.nodePathInfo.numberOfSequencesWithThisNodePath > 1;
+		const canAddEffect =
+			contextMenuTarget.nodePathInfo.supportsEffects &&
+			!sourceEditDisabled &&
+			previewServerState.type === 'connected';
+		const canCrop = contextMenuTarget.canCrop && !sourceEditDisabled;
+		const canRotate = !sourceEditDisabled && outline.path === null;
+		const outlineElement =
+			contextMenuTarget.sequence.refForOutline?.current ?? null;
+		return getSequenceContextMenuItems({
+			assetLinkInfo,
+			canOpenInEditor,
+			codingAgentInfo,
+			copyImageElement:
+				contextMenuTarget.sequence.type === 'image'
+					? outlineElement
+					: findCopyableFrameElement(outlineElement),
+			deleteDisabled: sourceEditDisabled,
+			disableInteractivityDisabled,
+			duplicateDisabled: sourceEditDisabled || isProgrammaticallyDuplicated,
+			editorInfo,
+			includeSourceEditItems: sourceEditingEnabled,
+			isProgrammaticallyDuplicated,
+			onConfigureApps: canConfigureApps
+				? () => {
+						setSelectedModal({
+							type: 'settings',
+							initialStudioPane: null,
+							initialTab: 'apps',
+							initialPublicLicenseKey:
+								window.remotion_renderDefaults?.publicLicenseKey ?? null,
+						});
+					}
+				: null,
+			onDeleteSequenceFromSource: () => {
+				if (sourceEditDisabled || previewServerState.type !== 'connected') {
+					return;
+				}
+
+				deleteTimelineItems([
+					{
+						type: 'sequence',
+						nodePathInfo: contextMenuTarget.nodePathInfo,
+					},
+				]);
+			},
+			onDisableSequenceInteractivity: () => {
+				if (
+					disableInteractivityDisabled ||
+					previewServerState.type !== 'connected'
+				) {
+					return;
+				}
+
+				disableSequenceInteractivity({
+					fileName: nodePath.absolutePath,
+					nodePath,
+					setPropStatuses,
+					clientId: previewServerState.clientId,
+				});
+			},
+			onDuplicateSequenceFromSource: () => {
+				if (sourceEditDisabled) {
+					return;
+				}
+
+				duplicateSequencesFromSource(
+					[contextMenuTarget.nodePathInfo],
+					confirm,
+				).catch(() => undefined);
+			},
+			openInCodingAgent: (codingAgentId, codingAgentName, contextForAgents) => {
+				launchCodingAgent(codingAgentId, contextForAgents)
+					.then((response) => {
+						if (!response.success) {
+							showNotification(`Could not open ${codingAgentName}`, 2000);
+						}
+					})
+					.catch((err) => {
+						showNotification((err as Error).message, 2000);
+					});
+			},
+			openInEditor: (editorId) => {
+				const resolvedEditorId = editorId ?? defaultEditorId;
+				if (!originalLocation || !resolvedEditorId || !editorAvailable) {
+					return;
+				}
+
+				openOriginalPositionInEditor(originalLocation, resolvedEditorId).catch(
+					(err) => {
+						showNotification((err as Error).message, 2000);
+					},
+				);
+			},
+			originalLocation,
+			selectAsset,
+			sequence: contextMenuTarget.sequence,
+			sourceActions: sourceEditingEnabled
+				? [
+						...(contextMenuTarget.nodePathInfo.supportsEffects
+							? [
+									{
+										type: 'item' as const,
+										id: 'add-effect',
+										keyHint: null,
+										label: 'Add effect...',
+										leftItem: null,
+										disabled: !canAddEffect,
+										onClick: () => {
+											if (
+												!canAddEffect ||
+												previewServerState.type !== 'connected'
+											) {
+												return;
+											}
+
+											setSelectedModal({
+												type: 'add-effect',
+												clientId: previewServerState.clientId,
+												fileName: nodePath.absolutePath,
+												nodePathInfo: contextMenuTarget.nodePathInfo,
+												selectItems,
+											});
+										},
+										quickSwitcherLabel: null,
+										subMenu: null,
+										value: 'add-effect',
+									},
+								]
+							: []),
+						{
+							type: 'item' as const,
+							id: 'crop',
+							keyHint: null,
+							label: isProgrammaticallyDuplicated ? 'Crop all' : 'Crop',
+							leftItem: null,
+							disabled: !canCrop,
+							onClick: () => {
+								if (!canCrop) {
+									return;
+								}
+
+								onSelect(
+									{
+										type: 'sequence-prop',
+										nodePathInfo: {
+											...contextMenuTarget.nodePathInfo,
+											auxiliaryKeys: ['controls', cropFieldKeys.left],
+										},
+										key: cropFieldKeys.left,
+									},
+									{shiftKey: false, toggleKey: false},
+								);
+							},
+							quickSwitcherLabel: null,
+							subMenu: null,
+							value: 'crop',
+						},
+						{
+							type: 'item' as const,
+							id: 'rotate',
+							keyHint: null,
+							label: isProgrammaticallyDuplicated ? 'Rotate all' : 'Rotate',
+							leftItem: null,
+							disabled: !canRotate,
+							onClick: () => {
+								if (!canRotate) {
+									return;
+								}
+
+								setManuallyEnabled(
+									getTimelineSequenceSelectionKey(
+										contextMenuTarget.nodePathInfo,
+									),
+									true,
+								);
+								onSelect(
+									{
+										type: 'sequence-prop',
+										nodePathInfo: {
+											...contextMenuTarget.nodePathInfo,
+											auxiliaryKeys: ['controls', rotateFieldKey],
+										},
+										key: rotateFieldKey,
+									},
+									{shiftKey: false, toggleKey: false},
+								);
+							},
+							quickSwitcherLabel: null,
+							subMenu: null,
+							value: 'rotate',
+						},
+						{
+							type: 'divider' as const,
+							id: 'rotate-divider',
+						},
+					]
+				: [],
+		});
+	}, [
+		canConfigureApps,
+		codingAgentInfo,
+		confirm,
+		deleteTimelineItems,
+		editorInfo,
+		getTarget,
+		onSelect,
+		defaultEditorId,
+		editorAvailable,
+		previewServerState,
+		resolveOriginalLocation,
+		setManuallyEnabled,
+		selectAsset,
+		selectItems,
+		setSelectedModal,
+		setPropStatuses,
+		outline.path,
+	]);
+	useLayoutEffect(() => {
+		registerContextMenuOpen(outline.key, onContextMenuOpen);
+		return () => {
+			registerContextMenuOpen(outline.key, null);
+		};
+	}, [onContextMenuOpen, outline.key, registerContextMenuOpen]);
+
+	return (
+		<>
+			<SelectedOutlinePolygon
+				annotationAttributes={
+					layoutTarget
+						? getSequenceAnnotationAttributes({
+								sequence: layoutTarget.sequence,
+								location: annotationLocation,
+								surface: 'outline',
+							})
+						: null
+				}
+				compositionHeight={compositionHeight}
+				compositionWidth={compositionWidth}
+				containsSelection={layoutTarget?.containsSelection === true}
+				directlySelected={layoutTarget?.selected === true}
+				dragging={dragging}
+				getAllDragOutlines={getAllDragOutlines}
+				getAllDragTargets={getAllDragTargets}
+				getLayoutTarget={getLayoutTarget}
+				getTarget={getTarget}
+				hasTarget={layoutTarget !== undefined}
+				hovered={hovered}
+				outline={outline}
+				onDraggingChange={onDraggingChange}
+				onHoverChange={onHoverChange}
+				onSnapPointsChange={onSnapPointsChange}
+				onSelect={onSelect}
+				onDoubleClickTarget={onDoubleClickTarget}
+				scale={scale}
+				showSelectedOutline={layoutTarget?.showSelectedOutline ?? false}
+				translateWithCommandKey={
+					layoutTarget?.selectedForRotation === true &&
+					Boolean(controlTarget?.rotationDrag)
+				}
+			/>
+			{layoutTarget?.selectedForRotation &&
+			controlTarget?.rotationDrag &&
+			outline.path === null ? (
+				<SelectedOutlineCanvasRotation
+					getLatestTargetByKey={getLatestTargetByKey}
+					layoutTarget={layoutTarget}
+					onDraggingChange={onDraggingChange}
+					outline={outline}
+					transform3DMode={controlTarget.rotationDrag.transform3DMode}
+				/>
+			) : null}
+		</>
+	);
+};
+
+export const SelectedOutlineElement = React.memo(
+	SelectedOutlineElementUnmemoized,
+);

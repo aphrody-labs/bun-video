@@ -1,0 +1,15 @@
+{
+  "name": "shader-blocks-source",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.27.7",
+    "shaders": "4.0.0"
+  },
+  "engines": {
+    "bun": ">=1.4.3"
+  }
+}

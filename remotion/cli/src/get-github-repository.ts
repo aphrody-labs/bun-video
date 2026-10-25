@@ -1,0 +1,234 @@
+import {execFileSync} from 'node:child_process';
+import {existsSync, readFileSync, statSync} from 'node:fs';
+import path from 'node:path';
+import {BundlerInternals} from '@remotion/bundler';
+import type {LogLevel} from '@remotion/renderer';
+import type {GitSource} from '@remotion/studio-shared';
+import {Log} from './log';
+
+export type ParsedGitRemote = {
+	type: 'github';
+	org: string;
+	name: string;
+};
+
+const getGitRemotes = (lines: string[]) => {
+	const sections: string[][] = [];
+
+	let open = false;
+	for (const line of lines) {
+		if (line.startsWith('[')) {
+			if (line.startsWith('[remote')) {
+				open = true;
+				sections.push([line]);
+			} else {
+				open = false;
+			}
+		} else if (open) {
+			(sections[sections.length - 1] as string[]).push(line);
+		}
+	}
+
+	return sections.map((s) => {
+		const url = s.find((l) => l.trimStart().startsWith('url = '));
+
+		return {
+			remote: (s[0] as string).replace('[remote "', '').replace('"]', ''),
+			url: url ? url.replace('url = ', '').trim() : null,
+		};
+	});
+};
+
+const getGitRoot = (remotionRoot: string) => {
+	return BundlerInternals.findClosestFolderWithItem(remotionRoot, '.git');
+};
+
+export const getGitConfig = (remotionRoot: string) => {
+	const gitRoot = getGitRoot(remotionRoot);
+	if (!gitRoot) {
+		return null;
+	}
+
+	const dotGit = path.join(gitRoot, '.git');
+	let gitDirectory = dotGit;
+	if (!statSync(dotGit).isDirectory()) {
+		const match = readFileSync(dotGit, 'utf-8')
+			.trim()
+			.match(/^gitdir:\s*(.+)$/);
+		if (!match?.[1]) {
+			return null;
+		}
+
+		gitDirectory = path.resolve(gitRoot, match[1]);
+		const commonDirectoryFile = path.join(gitDirectory, 'commondir');
+		if (existsSync(commonDirectoryFile)) {
+			gitDirectory = path.resolve(
+				gitDirectory,
+				readFileSync(commonDirectoryFile, 'utf-8').trim(),
+			);
+		}
+	}
+
+	const gitConfig = path.join(gitDirectory, 'config');
+	if (!existsSync(gitConfig)) {
+		return null;
+	}
+
+	return gitConfig;
+};
+
+export const getGitRemoteOrigin = (gitConfig: string) => {
+	const contents = readFileSync(gitConfig, 'utf-8');
+	const lines = contents.split('\n');
+
+	const remotes = getGitRemotes(lines);
+	const origin = remotes.find((r) => r.remote === 'origin');
+	return origin ?? null;
+};
+
+export const normalizeGitRemoteUrl = (url: string): ParsedGitRemote | null => {
+	if (url.startsWith('git@github.com')) {
+		const matched = url.match(/git@github.com:(.*)\/(.*)\.git/);
+		if (matched) {
+			return {
+				type: 'github',
+				name: matched[2] as string,
+				org: matched[1] as string,
+			};
+		}
+	}
+
+	const gitHubMatch = url.match(/https:\/\/github.com\/(.*)\/(.*)\.git/);
+	if (gitHubMatch) {
+		return {
+			type: 'github',
+			name: gitHubMatch[2] as string,
+			org: gitHubMatch[1] as string,
+		};
+	}
+
+	const gitHubMatchWithoutGit = url.match(/https:\/\/github.com\/(.*)\/(.*)/);
+	if (gitHubMatchWithoutGit) {
+		return {
+			type: 'github',
+			name: gitHubMatchWithoutGit[2] as string,
+			org: gitHubMatchWithoutGit[1] as string,
+		};
+	}
+
+	return null;
+};
+
+export const getGifRef = (
+	logLevel: LogLevel,
+	remotionRoot = process.cwd(),
+): string | null => {
+	try {
+		const branch = execFileSync(
+			'git',
+			['-C', remotionRoot, 'rev-parse', '--abbrev-ref', 'HEAD'],
+			{
+				stdio: ['ignore', 'pipe', 'ignore'],
+			},
+		)
+			.toString('utf-8')
+			.trim();
+		if (branch !== 'HEAD') {
+			return branch;
+		}
+
+		return execFileSync('git', ['-C', remotionRoot, 'rev-parse', 'HEAD'], {
+			stdio: ['ignore', 'pipe', 'ignore'],
+		})
+			.toString('utf-8')
+			.trim();
+	} catch (err) {
+		Log.verbose({logLevel, indent: false}, 'Could not get git ref', err);
+		return null;
+	}
+};
+
+const getFromEnvVariables = (remotionRoot: string): GitSource | null => {
+	const {
+		VERCEL_GIT_PROVIDER,
+		VERCEL_GIT_COMMIT_SHA,
+		VERCEL_GIT_REPO_OWNER,
+		VERCEL_GIT_REPO_SLUG,
+	} = process.env;
+	if (
+		VERCEL_GIT_COMMIT_SHA &&
+		VERCEL_GIT_REPO_OWNER &&
+		VERCEL_GIT_REPO_SLUG &&
+		VERCEL_GIT_PROVIDER === 'github'
+	) {
+		let relativeFromGitRoot = '';
+		const gitRoot = getGitRoot(remotionRoot);
+		if (gitRoot) {
+			relativeFromGitRoot = path.relative(gitRoot, remotionRoot);
+		}
+
+		return {
+			name: VERCEL_GIT_REPO_SLUG,
+			org: VERCEL_GIT_REPO_OWNER,
+			ref: VERCEL_GIT_COMMIT_SHA,
+			type: 'github',
+			relativeFromGitRoot,
+		};
+	}
+
+	return null;
+};
+
+export const getGitSource = ({
+	remotionRoot,
+	disableGitSource,
+	logLevel,
+}: {
+	remotionRoot: string;
+	disableGitSource: boolean;
+	logLevel: LogLevel;
+}): GitSource | null => {
+	if (disableGitSource) {
+		return null;
+	}
+
+	const fromEnv = getFromEnvVariables(remotionRoot);
+	if (fromEnv) {
+		return fromEnv;
+	}
+
+	const ref = getGifRef(logLevel, remotionRoot);
+	if (!ref) {
+		return null;
+	}
+
+	const gitConfig = getGitConfig(remotionRoot);
+	if (!gitConfig) {
+		return null;
+	}
+
+	const origin = getGitRemoteOrigin(gitConfig);
+	if (!origin || !origin.url) {
+		return null;
+	}
+
+	const parsed = normalizeGitRemoteUrl(origin.url);
+	if (!parsed) {
+		return null;
+	}
+
+	const gitRoot = getGitRoot(remotionRoot);
+	if (!gitRoot) {
+		return null;
+	}
+
+	const relativeFromGitRoot = path.relative(gitRoot, remotionRoot);
+
+	return {
+		name: parsed.name,
+		org: parsed.org,
+		ref,
+		type: 'github',
+		relativeFromGitRoot,
+	};
+};

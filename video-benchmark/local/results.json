@@ -1,0 +1,44 @@
+[
+ {
+  "label": "video.metadata",
+  "n": 15,
+  "medianMs": 0.11,
+  "minMs": 0.1,
+  "maxMs": 0.34
+ },
+ {
+  "label": "video.frame.webp.320",
+  "n": 15,
+  "medianMs": 5.07,
+  "minMs": 4.93,
+  "maxMs": 6.27
+ },
+ {
+  "label": "video.frame.rgba",
+  "n": 15,
+  "medianMs": 1.68,
+  "minMs": 1.59,
+  "maxMs": 1.89
+ },
+ {
+  "label": "video.frames.batch4",
+  "n": 8,
+  "medianMs": 4.27,
+  "minMs": 4.12,
+  "maxMs": 4.32
+ },
+ {
+  "label": "image.png.reencode",
+  "n": 15,
+  "medianMs": 1.73,
+  "minMs": 1.68,
+  "maxMs": 1.87
+ },
+ {
+  "label": "image.jpeg.encode",
+  "n": 15,
+  "medianMs": 0.58,
+  "minMs": 0.55,
+  "maxMs": 0.62
+ }
+]

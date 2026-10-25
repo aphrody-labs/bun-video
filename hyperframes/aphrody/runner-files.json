@@ -1,0 +1,18 @@
+[
+  "skills\\remotion-to-hyperframes\\assets\\test-corpus\\run.sh",
+  "skills\\embedded-captions\\scripts\\prepare.sh",
+  "skills\\embedded-captions\\scripts\\render-and-composite.sh",
+  "skills\\embedded-captions\\scripts\\render-theme.sh",
+  "scripts\\test-skills-fresh.sh",
+  ".github\\workflows\\catalog-previews.yml",
+  ".github\\workflows\\catalog-publish.yml",
+  ".github\\workflows\\ci.yml",
+  ".github\\workflows\\comments.yml",
+  ".github\\workflows\\docs.yml",
+  ".github\\workflows\\pr-captures.yml",
+  ".github\\workflows\\publish.yml",
+  ".github\\workflows\\regression.yml",
+  ".github\\workflows\\studio-drag-frames.yml",
+  ".github\\workflows\\sync-skills-to-clawhub.yml",
+  ".github\\workflows\\windows-render.yml"
+]

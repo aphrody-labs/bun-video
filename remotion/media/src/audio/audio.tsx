@@ -1,0 +1,245 @@
+import React, {useMemo, useState} from 'react';
+import {
+	Freeze,
+	Internals,
+	Interactive,
+	Sequence,
+	useRemotionEnvironment,
+	useVideoConfig,
+	type SequenceControls,
+	type InteractivitySchema,
+} from 'remotion';
+import {getLoopDisplay} from '../show-in-timeline';
+import {validateToneFrequency} from '../validate-tone-frequency';
+import {
+	getMediaTrimAfter,
+	getVideoSequenceDuration,
+} from '../video/get-video-sequence-duration';
+import {AudioForPreview} from './audio-for-preview';
+import {AudioForRendering} from './audio-for-rendering';
+import type {AudioProps} from './props';
+
+const {validateMediaProps} = Internals;
+
+export const audioSchema: InteractivitySchema = {
+	src: {
+		type: 'asset',
+		assetType: 'audio',
+		default: undefined,
+		description: 'Source',
+		keyframable: false,
+	},
+	...Internals.baseSchema,
+	trimAfter: Internals.trimAfterField,
+	...Internals.premountSchema,
+	volume: {
+		type: 'number',
+		min: 0,
+		max: 20,
+		step: 0.01,
+		default: 1,
+		description: 'Volume',
+		hiddenFromList: false,
+	},
+	playbackRate: {
+		type: 'number',
+		min: 0.1,
+		step: 0.01,
+		default: 1,
+		description: 'Playback rate',
+		hiddenFromList: false,
+		keyframable: false,
+	},
+	toneFrequency: {
+		type: 'number',
+		min: 0.01,
+		max: 2,
+		step: 0.01,
+		default: 1,
+		description: 'Pitch',
+		hiddenFromList: false,
+		keyframable: false,
+	},
+	muted: {type: 'boolean', default: false, description: 'Muted'},
+	loop: {type: 'boolean', default: false, description: 'Loop'},
+} as const satisfies InteractivitySchema;
+
+const AudioInner: React.FC<
+	AudioProps & {
+		readonly controls: SequenceControls | undefined;
+	}
+> = (props) => {
+	// Should only destruct `trimBefore` and `trimAfter` from props,
+	// rest gets drilled down
+	const {
+		name,
+		showInTimeline,
+		controls,
+		from,
+		durationInFrames,
+		freeze,
+		hidden,
+		style,
+		premountFor,
+		postmountFor,
+		...otherProps
+	} = props;
+	const environment = useRemotionEnvironment();
+	const sourceStack = controls ? Internals.getStackForControls(controls) : null;
+
+	const mediaStartsAt = Internals.useMediaStartsAt();
+	const videoConfig = useVideoConfig();
+	const effectiveTrimAfter = getMediaTrimAfter({
+		durationInFrames,
+		trimAfter: props.trimAfter,
+		trimBefore: props.trimBefore,
+	});
+	const audioSequenceDuration = getVideoSequenceDuration({
+		durationInFrames,
+		loop: props.loop ?? false,
+		playbackRate: props.playbackRate ?? 1,
+		trimAfter: effectiveTrimAfter,
+		trimBefore: props.trimBefore,
+	});
+	const sequenceDurationInFrames = Math.min(
+		audioSequenceDuration ?? Infinity,
+		Math.max(0, videoConfig.durationInFrames - (from ?? 0)),
+	);
+	const [mediaDurationInSeconds, setMediaDurationInSeconds] = useState<
+		number | null
+	>(null);
+
+	const basicInfo = Internals.useBasicMediaInTimeline({
+		src: props.src,
+		playbackRate: props.playbackRate ?? 1,
+		trimBefore: props.trimBefore,
+		trimAfter: effectiveTrimAfter,
+		sequenceDurationInFrames,
+		mediaStartsAt,
+		displayName: name ?? '<Audio>',
+		loop: props.loop ?? false,
+		muted: props.muted ?? false,
+	});
+
+	const loopDisplay = useMemo(
+		() =>
+			getLoopDisplay({
+				loop: props.loop ?? false,
+				mediaDurationInSeconds,
+				playbackRate: props.playbackRate ?? 1,
+				trimAfter: effectiveTrimAfter,
+				trimBefore: props.trimBefore,
+				sequenceDurationInFrames,
+				compFps: videoConfig.fps,
+			}),
+		[
+			props.loop,
+			mediaDurationInSeconds,
+			props.playbackRate,
+			effectiveTrimAfter,
+			props.trimBefore,
+			sequenceDurationInFrames,
+			videoConfig.fps,
+		],
+	);
+
+	const isMedia = useMemo(
+		() => ({
+			type: 'audio' as const,
+			data: basicInfo,
+		}),
+		[basicInfo],
+	);
+	const {
+		effectivePostmountFor,
+		effectivePremountFor,
+		freezeFrame,
+		isPremountingOrPostmounting,
+		postmountingActive,
+		premountingActive,
+		premountingStyle,
+	} = Internals.usePremounting({
+		from: from ?? 0,
+		durationInFrames: basicInfo.duration,
+		premountFor: premountFor ?? null,
+		postmountFor: postmountFor ?? null,
+		style: style ?? null,
+		styleWhilePremounted: null,
+		styleWhilePostmounted: null,
+		hideWhilePremounted: 'display-none',
+	});
+
+	if (typeof props.src !== 'string') {
+		throw new TypeError(
+			`The \`<Audio>\` tag requires a string for \`src\`, but got ${JSON.stringify(
+				props.src,
+			)} instead.`,
+		);
+	}
+
+	validateMediaProps(
+		{playbackRate: props.playbackRate, volume: props.volume},
+		'Audio',
+	);
+	validateToneFrequency({
+		toneFrequency: props.toneFrequency,
+		component: 'Audio',
+	});
+
+	if (sequenceDurationInFrames === 0) {
+		return null;
+	}
+
+	return (
+		<Freeze
+			frame={freezeFrame}
+			active={isPremountingOrPostmounting}
+			_remotionInternalIsPremounting={premountingActive}
+		>
+			<Sequence
+				layout="none"
+				from={from ?? 0}
+				durationInFrames={basicInfo.duration}
+				freeze={freeze}
+				_remotionInternalIsMedia={isMedia}
+				_remotionInternalPremountDisplay={effectivePremountFor || null}
+				_remotionInternalPostmountDisplay={effectivePostmountFor || null}
+				_remotionInternalIsPremounting={premountingActive}
+				_remotionInternalIsPostmounting={postmountingActive}
+				name={name ?? '<Audio>'}
+				_remotionInternalDocumentationLink="https://www.remotion.dev/docs/media/audio"
+				controls={controls}
+				_remotionInternalLoopDisplay={loopDisplay}
+				showInTimeline={showInTimeline ?? true}
+				hidden={hidden}
+			>
+				<Internals.SequenceContent>
+					{environment.isRendering ? (
+						<AudioForRendering
+							{...otherProps}
+							trimAfter={effectiveTrimAfter}
+							style={premountingStyle ?? undefined}
+						/>
+					) : (
+						<AudioForPreview
+							name={name}
+							{...otherProps}
+							trimAfter={effectiveTrimAfter}
+							style={premountingStyle}
+							_remotionInternalStack={sourceStack}
+							setMediaDurationInSeconds={setMediaDurationInSeconds}
+						/>
+					)}
+				</Internals.SequenceContent>
+			</Sequence>
+		</Freeze>
+	);
+};
+
+export const Audio = Interactive.withSchema({
+	Component: AudioInner,
+	componentName: '<Audio>',
+	componentIdentity: 'dev.remotion.media.Audio',
+	schema: audioSchema,
+	supportsEffects: false,
+});

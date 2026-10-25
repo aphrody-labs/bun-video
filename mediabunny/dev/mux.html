@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+
+<script src="../dist/bundles/mediabunny.cjs"></script>
+
+<script type="module">
+	function download(blob, filename) {
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = filename;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function sliceAudioBuffer(audioBuffer, newLengthInSeconds, audioContext) {
+		const sampleRate = audioBuffer.sampleRate;
+		const sliceLength = Math.min(newLengthInSeconds * sampleRate, audioBuffer.length);
+
+		// Create a new buffer with the desired duration and the same sample rate
+		const slicedBuffer = audioContext.createBuffer(
+			audioBuffer.numberOfChannels,
+			sliceLength,
+			sampleRate
+		);
+
+		// Copy the data from each channel of the original buffer to the new buffer
+		for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+			const channelData = audioBuffer.getChannelData(channel);
+			const slicedChannelData = slicedBuffer.getChannelData(channel);
+			slicedChannelData.set(channelData.subarray(0, sliceLength));
+		}
+
+		return slicedBuffer;
+	}
+
+	const canvas = document.createElement('canvas');
+	canvas.width = 1280;
+	canvas.height = 720;
+	const context = canvas.getContext('2d');
+
+	let format = new Mediabunny.MkvOutputFormat({ streamable: false });
+	format = new Mediabunny.Mp4OutputFormat({ fastStart: 'fragmented' }); // new Mediabunny.MkvOutputFormat();// new Mediabunny.Mp4OutputFormat({ fastStart: false });
+	format = new Mediabunny.OggOutputFormat();
+	format = new Mediabunny.Mp4OutputFormat({ fastStart: 'fragmented', minimumFragmentDuration: 2 });
+	format = new Mediabunny.MkvOutputFormat({ minimumClusterDuration: 2 });
+	format = new Mediabunny.WavOutputFormat();
+	format = new Mediabunny.MkvOutputFormat();
+	let target = new Mediabunny.BufferTarget();
+
+	/*
+	target = new Mediabunny.StreamTarget(new WritableStream({
+		async write(chunk) {
+			console.log(chunk)
+
+			await new Promise(resolve => setTimeout(resolve, 250));
+		}
+	}), { chunked: true });
+	*/
+
+	let output = new Mediabunny.Output({ format, target });
+
+	/*
+	let sourcy = new Mediabunny.AudioBufferSource({
+		codec: 'pcm-s16',
+		bitrate: Mediabunny.QUALITY_HIGH
+	});
+	output.addAudioTrack(sourcy);
+
+	await output.start();
+
+	for (let i = 0; i < 1000; i++) {
+		let buf = new AudioBuffer({
+			length: 1024,
+			sampleRate: 48000,
+			numberOfChannels: 2
+		});
+		sourcy.add(buf);
+	}
+
+	console.log("Done")
+
+	
+	await output.finalize();
+
+	await new Promise(() => {});
+	*/
+
+	/*
+	let videoSource = new Mediabunny.EncodedVideoChunkSource('avc');
+	output.addTrack(videoSource);
+
+	output.start();
+
+	const timestamps = [0, 0.5, 0.25, 0.75, 1, 1.9, 1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 2];
+	for (const timestamp of timestamps) {
+		const encodedVideoChunk = new EncodedVideoChunk({
+			type: timestamp % 1 === 0 ? 'key' : 'delta',
+			timestamp: 1e6 * timestamp,
+			duration: 1e6 * 0.25,
+			data: new Uint8Array(1024)
+		});
+		videoSource.add(encodedVideoChunk, {
+			decoderConfig: {
+				codedWidth: 64,
+				codedHeight: 64,
+				description: new Uint8Array(64)
+			}
+		});
+	}
+
+	await output.finalize();
+
+	console.log(target);
+	download(new Blob([target.buffer]), 'test.mkv');
+	*/
+
+	let videoSource = new Mediabunny.CanvasSource(canvas, {
+		codec: 'avc',
+		//fullCodecString: 'avc1.42001f',
+		bitrate: 1e6
+	});
+	let audioSource = new Mediabunny.AudioBufferSource({
+		codec: 'opus',
+		bitrate: 128e3,
+	});
+	let subtitleSource = new Mediabunny.TextSubtitleSource('webvtt');
+
+	output.addVideoTrack(videoSource, { languageCode: 'eng' });
+	output.addAudioTrack(audioSource);
+	//output.addSubtitleTrack(subtitleSource);
+
+	output.start();
+
+	let simpleWebvttFile =
+`WEBVTT
+
+1
+00:00:02.000 --> 00:00:10.000
+Example entry 1: Hello <b>world</b>.
+`;
+
+	if (false) simpleWebvttFile =
+`WEBVTT
+
+1
+00:05.000 --> 00:12.500 align:start line:10
+<v Roger Bingham>We are in New York City.
+We are looking straight down 5th Avenue.
+
+00:13.000 --> 00:18.000
+<v Neil DeGrass Tyson>Didn't you already say that?
+
+2
+00:17.000 --> 00:20.000
+Testing... <00:17.350>One... <00:18.125>Two...
+`
+
+	simpleWebvttFile =
+`WEBVTT
+
+00:00:01.000 --> 00:00:01.500 align:start line:1
+1. <b>justify (top, left)</b>,
+
+00:00:01.500 --> 00:00:02.000 align:center line:1.5
+2. <b>justify (top, center)</b>,
+
+00:00:02.000 --> 00:00:02.500 align:end line:2
+3. <b>justify (top, right)</b>,
+
+00:00:02.500 --> 00:00:03.000 align:start line:48%
+4. <b>justify (center, left)</b>,
+
+00:00:03.000 --> 00:00:03.500 align:center line:50%
+5. <b>justify (center, center)</b>,
+
+00:00:03.500 --> 00:00:04.000 align:end line:52%
+6. <b>justify (center, right)</b>,
+
+00:00:04.000 --> 00:00:04.500 align:start line:-1
+7. <b>justify (bottom, left)</b>,
+
+00:00:04.500 --> 00:00:05.000 align:center line:-1.5
+8. <b>justify (bottom, center)</b>,
+
+00:00:05.000 --> 00:00:05.500 align:end line:-2
+9. <b>justify (bottom, right)</b>.
+`;
+
+	//subtitleSource.add(simpleWebvttFile);
+	//subtitleSource.close();
+
+	for (let i = 0; i < 100; i++) {
+		context.fillStyle = ['red', 'green', 'blue', 'yellow'][i % 4];
+		context.fillRect(canvas.width * Math.random(), canvas.height * Math.random(), canvas.width * Math.random(), canvas.height * Math.random());
+
+		await videoSource.add(i / 10, 1 / 10);
+	}
+
+	let audioContext = new AudioContext();
+	let audioBuffer = await audioContext.decodeAudioData(await (await fetch('./CantinaBand60.wav')).arrayBuffer());
+	let length = 10;
+	let slicedAudioBuffer = sliceAudioBuffer(audioBuffer, length, audioContext);
+
+	await audioSource.add(slicedAudioBuffer);
+
+	await output.finalize();
+
+	console.log(target);
+	//download(new Blob([target.buffer]), 'test' + format.fileExtension);
+</script>

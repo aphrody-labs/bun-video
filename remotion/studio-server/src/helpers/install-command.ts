@@ -1,0 +1,33 @@
+import type {PackageManager} from '@remotion/studio-shared';
+
+export const getInstallCommand = ({
+	manager,
+	packages,
+	version,
+	additionalArgs,
+}: {
+	manager: PackageManager;
+	packages: string[];
+	version: string;
+	additionalArgs: string[];
+}): string[] => {
+	const pkgList = packages.map((p) => (version ? `${p}@${version}` : p));
+
+	const commands: {[key in PackageManager]: string[]} = {
+		npm: [
+			'i',
+			'--save-exact',
+			'--no-fund',
+			'--no-audit',
+			'--loglevel=error',
+			...additionalArgs,
+			...pkgList,
+		],
+		pnpm: ['i', ...additionalArgs, ...pkgList],
+		yarn: ['add', '--exact', ...additionalArgs, ...pkgList],
+		bun: ['i', ...additionalArgs, ...pkgList],
+		nub: ['add', ...additionalArgs, ...pkgList],
+	};
+
+	return commands[manager];
+};

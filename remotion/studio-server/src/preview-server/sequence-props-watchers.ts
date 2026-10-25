@@ -1,0 +1,385 @@
+import path from 'node:path';
+import type {LogLevel} from '@remotion/renderer';
+import {RenderInternals} from '@remotion/renderer';
+import {
+	stringifySequenceSubscriptionKey,
+	type SubscribeToSequencePropsResponse,
+} from '@remotion/studio-shared';
+import type {JsxComponentIdentity, SequenceNodePath} from 'remotion';
+import {installFileWatcher} from '../file-watcher';
+import {JsxElementIdentityMismatchError} from './jsx-component-identity';
+import {JsxElementNotFoundAtLocationError} from './jsx-element-not-found-at-location-error';
+import {waitForLiveEventsListener} from './live-events';
+import {getCachedNodePath, setCachedNodePath} from './node-path-cache';
+import {
+	computeSequencePropsStatus,
+	computeSequencePropsStatusFromContent,
+	computeSequencePropsStatusFromFilenameByLocation,
+} from './routes/can-update-sequence-props';
+
+type WatcherInfo = {
+	unwatch: () => void;
+	refCount: number;
+	currentNodePath: Extract<
+		SubscribeToSequencePropsResponse,
+		{success: true}
+	>['nodePath'];
+};
+
+const sequencePropsWatchers: Record<string, Record<string, WatcherInfo>> = {};
+
+const getWatcherKey = (
+	nodePath: {
+		absolutePath: string;
+		nodePath: SequenceNodePath;
+		sequenceKeys: string[];
+		effectKeys: string[][];
+	},
+	assetKeys: string[],
+) => `${stringifySequenceSubscriptionKey(nodePath)}:${assetKeys.join('\0')}`;
+
+const getSequencePropsStatus = ({
+	fileName,
+	line,
+	column,
+	preferredNodePath,
+	resolvedNodePath,
+	componentIdentity,
+	keys,
+	assetKeys,
+	effects,
+	remotionRoot,
+	logLevel,
+}: {
+	fileName: string;
+	line: number;
+	column: number;
+	preferredNodePath: SequenceNodePath | null;
+	resolvedNodePath: SequenceNodePath | null;
+	componentIdentity: JsxComponentIdentity | null;
+	keys: string[];
+	assetKeys: string[];
+	effects: string[][];
+	remotionRoot: string;
+	logLevel: LogLevel;
+}): SubscribeToSequencePropsResponse => {
+	if (preferredNodePath) {
+		try {
+			const fromNodePath = computeSequencePropsStatus({
+				fileName,
+				nodePath: preferredNodePath,
+				componentIdentity,
+				keys,
+				assetKeys,
+				effects,
+				remotionRoot,
+			});
+			return {
+				status: fromNodePath,
+				nodePath: {
+					absolutePath: path.resolve(remotionRoot, fileName),
+					nodePath: preferredNodePath,
+					sequenceKeys: keys,
+					effectKeys: effects,
+					videoConfigValues: null,
+				},
+				success: true,
+			};
+		} catch (error) {
+			if (
+				!(
+					error instanceof JsxElementIdentityMismatchError ||
+					error instanceof JsxElementNotFoundAtLocationError
+				)
+			) {
+				throw error;
+			}
+		}
+	}
+
+	// Try cached nodePath first (handles stale source maps after suppressed rebuilds)
+	const cachedNodePath = getCachedNodePath(fileName, line, column);
+
+	if (cachedNodePath) {
+		const cachedResult = (() => {
+			try {
+				return computeSequencePropsStatus({
+					fileName,
+					nodePath: cachedNodePath,
+					componentIdentity,
+					keys,
+					assetKeys,
+					effects,
+					remotionRoot,
+				});
+			} catch (error) {
+				if (
+					error instanceof JsxElementIdentityMismatchError ||
+					error instanceof JsxElementNotFoundAtLocationError
+				) {
+					return null;
+				}
+
+				throw error;
+			}
+		})();
+
+		if (cachedResult?.canUpdate) {
+			return {
+				status: cachedResult,
+				nodePath: {
+					absolutePath: path.resolve(remotionRoot, fileName),
+					nodePath: cachedNodePath,
+					sequenceKeys: keys,
+					effectKeys: effects,
+					videoConfigValues: null,
+				},
+				success: true,
+			};
+		}
+	}
+
+	if (resolvedNodePath) {
+		try {
+			return {
+				status: computeSequencePropsStatus({
+					fileName,
+					nodePath: resolvedNodePath,
+					componentIdentity,
+					keys,
+					assetKeys,
+					effects,
+					remotionRoot,
+				}),
+				nodePath: {
+					absolutePath: path.resolve(remotionRoot, fileName),
+					nodePath: resolvedNodePath,
+					sequenceKeys: keys,
+					effectKeys: effects,
+					videoConfigValues: null,
+				},
+				success: true,
+			};
+		} catch (error) {
+			if (
+				!(
+					error instanceof JsxElementIdentityMismatchError ||
+					error instanceof JsxElementNotFoundAtLocationError
+				)
+			) {
+				throw error;
+			}
+		}
+	}
+
+	const status = computeSequencePropsStatusFromFilenameByLocation({
+		fileName,
+		line,
+		column,
+		componentIdentity,
+		keys,
+		assetKeys,
+		effects,
+		remotionRoot,
+		logLevel,
+	});
+
+	return status;
+};
+
+export const subscribeToSequencePropsWatchers = ({
+	fileName,
+	line,
+	column,
+	nodePath: preferredNodePath,
+	resolvedNodePath = null,
+	componentIdentity,
+	keys,
+	assetKeys,
+	effects,
+	remotionRoot,
+	clientId,
+	logLevel,
+}: {
+	fileName: string;
+	line: number;
+	column: number;
+	nodePath: SequenceNodePath | null;
+	resolvedNodePath?: SequenceNodePath | null;
+	componentIdentity: JsxComponentIdentity | null;
+	keys: string[];
+	assetKeys: string[];
+	effects: string[][];
+	remotionRoot: string;
+	clientId: string;
+	logLevel: LogLevel;
+}): SubscribeToSequencePropsResponse => {
+	const initialResult = getSequencePropsStatus({
+		fileName,
+		line,
+		column,
+		preferredNodePath,
+		resolvedNodePath,
+		componentIdentity,
+		keys,
+		assetKeys,
+		effects,
+		remotionRoot,
+		logLevel,
+	});
+
+	if (!initialResult.success) {
+		return initialResult;
+	}
+
+	const absolutePath = path.resolve(remotionRoot, fileName);
+
+	// Cache the resolved nodePath for future lookups with stale source maps
+	setCachedNodePath(fileName, line, column, initialResult.nodePath.nodePath);
+
+	const {nodePath} = initialResult;
+	const watcherKey = getWatcherKey(nodePath, assetKeys);
+
+	const existingWatcher = sequencePropsWatchers[clientId]?.[watcherKey];
+	if (existingWatcher) {
+		existingWatcher.refCount++;
+		return initialResult;
+	}
+
+	const watcherInfo: WatcherInfo = {
+		unwatch: () => undefined,
+		refCount: 1,
+		currentNodePath: nodePath,
+	};
+	const {unwatch} = installFileWatcher({
+		file: absolutePath,
+		existenceOnly: false,
+		onChange: (event) => {
+			if (event.type === 'deleted') {
+				return;
+			}
+
+			// Even the editing client needs the saved expression: its optimistic
+			// numeric value only describes the instance that initiated the edit.
+
+			if (event.type === 'changed' && event.skipSequencePropsUpdate) {
+				return;
+			}
+
+			try {
+				const result = computeSequencePropsStatusFromContent({
+					fileContents: event.content,
+					nodePath: watcherInfo.currentNodePath.nodePath,
+					componentIdentity,
+					keys,
+					assetKeys,
+					effects,
+				});
+				const previousEffectChain = result.effects.map(
+					(effect) => effect.canUpdate && effect.callee,
+				);
+				const newEffectChain =
+					initialResult.success &&
+					initialResult.status.effects.map(
+						(effect) => effect.canUpdate && effect.callee,
+					);
+				if (previousEffectChain.join(',') !== newEffectChain.join(',')) {
+					RenderInternals.Log.verbose(
+						{indent: false, logLevel},
+						'Effect chain changed, not sending "sequence-props-updated" event',
+					);
+					return;
+				}
+
+				waitForLiveEventsListener().then((listener) => {
+					listener.sendEventToClientId(clientId, {
+						type: 'sequence-props-updated',
+						fileName,
+						nodePath: watcherInfo.currentNodePath,
+						result,
+					});
+				});
+			} catch (error) {
+				if (
+					error instanceof JsxElementNotFoundAtLocationError ||
+					error instanceof JsxElementIdentityMismatchError
+				) {
+					waitForLiveEventsListener().then((listener) => {
+						listener.sendEventToClientId(clientId, {
+							type: 'lost-node-path',
+							fileName,
+							line,
+							column,
+						});
+					});
+					return;
+				}
+
+				RenderInternals.Log.error({indent: false, logLevel}, error);
+			}
+		},
+	});
+	watcherInfo.unwatch = unwatch;
+
+	if (!sequencePropsWatchers[clientId]) {
+		sequencePropsWatchers[clientId] = {};
+	}
+
+	sequencePropsWatchers[clientId][watcherKey] = watcherInfo;
+
+	return initialResult;
+};
+
+export const unsubscribeFromSequencePropsWatchers = ({
+	fileName,
+	nodePath,
+	remotionRoot,
+	clientId,
+	sequenceKeys,
+	assetKeys,
+	effectKeys,
+}: {
+	fileName: string;
+	nodePath: SequenceNodePath;
+	remotionRoot: string;
+	clientId: string;
+	sequenceKeys: string[];
+	assetKeys: string[];
+	effectKeys: string[][];
+}) => {
+	const absolutePath = path.resolve(remotionRoot, fileName);
+	const watcherKey = getWatcherKey(
+		{
+			absolutePath,
+			nodePath,
+			sequenceKeys,
+			effectKeys,
+		},
+		assetKeys,
+	);
+
+	if (
+		!sequencePropsWatchers[clientId] ||
+		!sequencePropsWatchers[clientId][watcherKey]
+	) {
+		return;
+	}
+
+	sequencePropsWatchers[clientId][watcherKey].refCount--;
+	if (sequencePropsWatchers[clientId][watcherKey].refCount <= 0) {
+		sequencePropsWatchers[clientId][watcherKey].unwatch();
+		delete sequencePropsWatchers[clientId][watcherKey];
+	}
+};
+
+export const unsubscribeClientSequencePropsWatchers = (clientId: string) => {
+	if (!sequencePropsWatchers[clientId]) {
+		return;
+	}
+
+	Object.values(sequencePropsWatchers[clientId]).forEach((watcher) => {
+		watcher.unwatch();
+	});
+
+	delete sequencePropsWatchers[clientId];
+};

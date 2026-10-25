@@ -1,0 +1,187 @@
+import React, {useCallback, useContext, useEffect, useMemo} from 'react';
+import {Internals} from 'remotion';
+import {useBreakpoint} from '../helpers/use-breakpoint';
+import {
+	SIDEBAR_RESPONSIVE_BREAKPOINTS,
+	useResponsiveSidebarStatus,
+} from '../helpers/use-responsive-sidebar-status';
+import {RULER_WIDTH} from '../state/editor-rulers';
+import {SidebarContext} from '../state/sidebar';
+import {CanvasIfSizeIsAvailable} from './CanvasIfSizeIsAvailable';
+import {CanvasTabs} from './CanvasTabs';
+import {TitleUpdater} from './CurrentCompositionSideEffects';
+import {useIsRulerVisible} from './EditorRuler/use-is-ruler-visible';
+import {ExplorerPanel} from './ExplorerPanel';
+import {ObserveDefaultProps} from './ObserveDefaultPropsContext';
+import {OptionsPanel} from './OptionsPanel';
+import {PreviewToolbar} from './PreviewToolbar';
+import {SplitterContainer} from './Splitter/SplitterContainer';
+import {SplitterElement} from './Splitter/SplitterElement';
+import {SplitterHandle} from './Splitter/SplitterHandle';
+
+const container: React.CSSProperties = {
+	height: '100%',
+	width: '100%',
+	display: 'flex',
+	flexDirection: 'column',
+	flex: 1,
+};
+
+const row: React.CSSProperties = {
+	display: 'flex',
+	flexDirection: 'row',
+	flex: 1,
+	minHeight: 0,
+};
+
+const canvasPanel: React.CSSProperties = {
+	display: 'flex',
+	flex: 1,
+	flexDirection: 'column',
+	minHeight: 0,
+};
+
+const MAX_SIDEBAR_WIDTH = 350;
+const MIN_SIDEBAR_WIDTH = 250;
+
+const TopPanelInner: React.FC<{
+	readonly readOnlyStudio: boolean;
+	readonly onMounted: () => void;
+	readonly drawRef: React.Ref<HTMLDivElement>;
+	readonly bufferStateDelayInMilliseconds: number;
+}> = ({readOnlyStudio, onMounted, drawRef, bufferStateDelayInMilliseconds}) => {
+	const {
+		rightSidebarTemporaryExpansion,
+		setRightSidebarTemporaryExpansion,
+		setSidebarCollapsedState,
+		setSidebarCollapsedDuringDrag,
+		sidebarCollapsedStateRight,
+	} = useContext(SidebarContext);
+	const rulersAreVisible = useIsRulerVisible();
+	const isNarrowLayout = useBreakpoint(SIDEBAR_RESPONSIVE_BREAKPOINTS.right);
+
+	const {canvasContent} = useContext(Internals.CompositionManager);
+
+	const actualStateLeft = useResponsiveSidebarStatus('left');
+	const actualStateRight = useResponsiveSidebarStatus('right');
+	useEffect(() => {
+		onMounted();
+	}, [onMounted]);
+
+	const canvasContainerStyle: React.CSSProperties = useMemo(
+		() => ({
+			flex: 1,
+			display: 'flex',
+			minHeight: 0,
+			overflow: 'hidden',
+			position: 'relative',
+			paddingTop: rulersAreVisible ? RULER_WIDTH : 0,
+			paddingLeft: rulersAreVisible ? RULER_WIDTH : 0,
+		}),
+		[rulersAreVisible],
+	);
+
+	const onCollapseLeft = useCallback(() => {
+		setSidebarCollapsedState({left: 'collapsed', right: null});
+	}, [setSidebarCollapsedState]);
+
+	const onCollapseRight = useCallback(() => {
+		if (
+			isNarrowLayout &&
+			rightSidebarTemporaryExpansion &&
+			sidebarCollapsedStateRight === 'responsive'
+		) {
+			setRightSidebarTemporaryExpansion(false);
+			return;
+		}
+
+		setSidebarCollapsedState({left: null, right: 'collapsed'});
+	}, [
+		isNarrowLayout,
+		rightSidebarTemporaryExpansion,
+		setRightSidebarTemporaryExpansion,
+		setSidebarCollapsedState,
+		sidebarCollapsedStateRight,
+	]);
+
+	return (
+		<ObserveDefaultProps
+			compositionId={
+				canvasContent?.type === 'composition'
+					? canvasContent.compositionId
+					: null
+			}
+			readOnlyStudio={readOnlyStudio}
+		>
+			<div style={container}>
+				<div style={row}>
+					<SplitterContainer
+						minFlex={0.15}
+						maxFlex={0.4}
+						defaultFlex={0.2}
+						maxFlexerSize={MAX_SIDEBAR_WIDTH}
+						minFlexerSize={null}
+						maxAntiFlexerSize={null}
+						minAntiFlexerSize={null}
+						id="sidebar-to-preview"
+						orientation="vertical"
+					>
+						{actualStateLeft === 'expanded' ? (
+							<SplitterElement sticky={null} type="flexer">
+								<ExplorerPanel readOnlyStudio={readOnlyStudio} />
+							</SplitterElement>
+						) : null}
+						{actualStateLeft === 'expanded' ? (
+							<SplitterHandle
+								allowToCollapse="left"
+								onCollapse={onCollapseLeft}
+								onCollapseDuringDrag={setSidebarCollapsedDuringDrag}
+							/>
+						) : null}
+						<SplitterElement sticky={null} type="anti-flexer">
+							<SplitterContainer
+								minFlex={0.5}
+								maxFlex={0.8}
+								defaultFlex={0.7}
+								maxFlexerSize={null}
+								minFlexerSize={null}
+								maxAntiFlexerSize={MAX_SIDEBAR_WIDTH}
+								minAntiFlexerSize={MIN_SIDEBAR_WIDTH}
+								id="canvas-to-right-sidebar"
+								orientation="vertical"
+							>
+								<SplitterElement sticky={null} type="flexer">
+									<div style={canvasPanel}>
+										<CanvasTabs />
+										<div ref={drawRef} style={canvasContainerStyle}>
+											<CanvasIfSizeIsAvailable />
+										</div>
+									</div>
+								</SplitterElement>
+								{actualStateRight === 'expanded' ? (
+									<SplitterHandle
+										allowToCollapse="right"
+										onCollapse={onCollapseRight}
+										onCollapseDuringDrag={setSidebarCollapsedDuringDrag}
+									/>
+								) : null}
+								{actualStateRight === 'expanded' ? (
+									<SplitterElement sticky={null} type="anti-flexer">
+										<OptionsPanel readOnlyStudio={readOnlyStudio} />
+									</SplitterElement>
+								) : null}
+							</SplitterContainer>
+						</SplitterElement>
+					</SplitterContainer>
+				</div>
+				<PreviewToolbar
+					bufferStateDelayInMilliseconds={bufferStateDelayInMilliseconds}
+					readOnlyStudio={readOnlyStudio}
+				/>
+				<TitleUpdater />
+			</div>
+		</ObserveDefaultProps>
+	);
+};
+
+export const TopPanel = React.memo(TopPanelInner);

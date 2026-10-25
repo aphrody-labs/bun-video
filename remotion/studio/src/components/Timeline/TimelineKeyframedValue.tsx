@@ -1,0 +1,116 @@
+import React, {useCallback, useMemo} from 'react';
+import type {
+	CanUpdateSequencePropStatusKeyframed,
+	CanUpdateSequencePropStatusStatic,
+	DragOverrideValue,
+	SequencePropsSubscriptionKey,
+} from 'remotion';
+import {Internals} from 'remotion';
+import type {
+	SchemaFieldInfo,
+	TimelineFieldOnDragValueChange,
+	TimelineFieldOnSave,
+} from '../../helpers/timeline-layout';
+import {getKeyframeLocalFrame} from './get-timeline-keyframes';
+import {roundToDecimalPlaces} from './timeline-field-utils';
+import {TimelineFieldValue} from './TimelineSchemaField';
+
+const valuesEqual = (left: unknown, right: unknown): boolean => {
+	return JSON.stringify(left) === JSON.stringify(right);
+};
+
+export const TimelineKeyframedValue: React.FC<{
+	readonly field: SchemaFieldInfo;
+	readonly propStatus: CanUpdateSequencePropStatusKeyframed;
+	readonly sourceFrame: number;
+	readonly dragOverrideValue: DragOverrideValue | undefined;
+	readonly onSave: (value: unknown, sourceFrame: number) => Promise<void>;
+	readonly onDragValueChange: TimelineFieldOnDragValueChange;
+	readonly onDragEnd: () => void;
+	readonly scaleLockNodePath: SequencePropsSubscriptionKey;
+}> = ({
+	field,
+	propStatus,
+	sourceFrame,
+	dragOverrideValue,
+	onSave,
+	onDragValueChange,
+	onDragEnd,
+	scaleLockNodePath,
+}) => {
+	const computedValue = useMemo(() => {
+		const raw = Internals.interpolateKeyframedStatus({
+			forceSpringAllowTail: false,
+			frame: sourceFrame,
+			status: propStatus,
+		});
+		if (typeof raw === 'number') {
+			return roundToDecimalPlaces(raw, 2);
+		}
+
+		return raw;
+	}, [propStatus, sourceFrame]);
+
+	const fakeStatus: CanUpdateSequencePropStatusStatic = useMemo(
+		() => ({
+			status: 'static',
+			keyframeDisplayOffsetAdjustment: null,
+			codeValue: computedValue,
+		}),
+		[computedValue],
+	);
+
+	const effectiveValue = useMemo(() => {
+		const raw = Internals.getEffectiveVisualModeValue({
+			propStatus: fakeStatus,
+			dragOverrideValue,
+			frame: getKeyframeLocalFrame(sourceFrame, propStatus),
+			defaultValue: field.fieldSchema.default,
+			shouldResortToDefaultValueIfUndefined: true,
+		});
+		if (typeof raw === 'number') {
+			return roundToDecimalPlaces(raw, 2);
+		}
+
+		return raw;
+	}, [
+		dragOverrideValue,
+		fakeStatus,
+		field.fieldSchema.default,
+		sourceFrame,
+		propStatus,
+	]);
+
+	const onSaveIfChanged = useCallback<TimelineFieldOnSave>(
+		(value) => {
+			const existingKeyframe = propStatus.keyframes.find(
+				(keyframe) => keyframe.frame === sourceFrame,
+			);
+			if (
+				valuesEqual(value, computedValue) ||
+				(existingKeyframe && valuesEqual(value, existingKeyframe.value))
+			) {
+				return Promise.resolve();
+			}
+
+			return onSave(value, sourceFrame);
+		},
+		[computedValue, onSave, propStatus.keyframes, sourceFrame],
+	);
+
+	if (computedValue === null) {
+		return null;
+	}
+
+	return (
+		<TimelineFieldValue
+			field={field}
+			propStatus={fakeStatus}
+			effectiveValue={effectiveValue}
+			onSave={onSaveIfChanged}
+			onDragValueChange={onDragValueChange}
+			onDragEnd={onDragEnd}
+			scaleLockNodePath={scaleLockNodePath}
+		/>
+	);
+};

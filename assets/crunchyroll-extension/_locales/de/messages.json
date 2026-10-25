@@ -1,0 +1,41 @@
+{
+  "appName": {
+    "message": "Crunchyroll-Verknüpfung"
+  },
+  "description": {
+    "message": "Öffne die offizielle Folge in deiner Chrome-Sitzung."
+  },
+  "title": {
+    "message": "Der Gott der Zerstörung"
+  },
+  "open": {
+    "message": "Auf Crunchyroll ansehen"
+  },
+  "language": {
+    "message": "App-Sprache"
+  },
+  "note": {
+    "message": "Diese Auswahl ändert die Sprache der Verknüpfung. Crunchyroll verwaltet Audio, Untertitel, Kontozugang und Wiedergabe."
+  },
+  "install": {
+    "message": "Diese Verknüpfung installieren"
+  },
+  "installUnavailable": {
+    "message": "Die Installation ist verfügbar, wenn Chrome sie anbietet. Du kannst auch das Browsermenü nutzen."
+  },
+  "offline": {
+    "message": "Die Verknüpfung funktioniert offline; die Folge erfordert Internet und berechtigten Crunchyroll-Zugang."
+  },
+  "online": {
+    "message": "Verknüpfung bereit. Die Wiedergabe erfolgt auf der offiziellen Website."
+  },
+  "installed": {
+    "message": "Installation angefordert. Chrome bestätigt das Ergebnis."
+  },
+  "installDismissed": {
+    "message": "Die Installation wurde abgebrochen. Du kannst es erneut versuchen."
+  },
+  "shellError": {
+    "message": "Die lokale Verknüpfung konnte nicht für die Offline-Nutzung vorbereitet werden."
+  }
+}

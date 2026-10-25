@@ -1,0 +1,323 @@
+[
+  {
+    "path": "package.json",
+    "name": "hyperframes-monorepo",
+    "scripts": {
+      "dev": "bun run studio",
+      "build": "bun run --filter '@hyperframes/{parsers,lint,studio-server}' build && bun run --filter @hyperframes/core build && bun run --filter '@hyperframes/{engine,producer,player,studio,shader-transitions,aws-lambda,gcp-cloud-run,sdk}' build && bun run --filter @hyperframes/cli build && bun run --filter @hyperframes/sdk-playground build",
+      "build:producer": "bun run --filter @hyperframes/producer build",
+      "studio": "bun run --filter @hyperframes/studio dev",
+      "build:hyperframes-runtime": "bun run --filter @hyperframes/core build:hyperframes-runtime",
+      "build:hyperframes-runtime:modular": "bun run --filter @hyperframes/core build:hyperframes-runtime:modular",
+      "verify:packed-manifests": "bun scripts/verify-packed-manifests.mjs",
+      "validate:release-channel": "bun scripts/validate-release-channel.mjs",
+      "set-version": "bun scripts/set-version.ts",
+      "release:prepare": "bun scripts/release-prepare.ts",
+      "changelog:draft": "bun scripts/draft-changelog.ts",
+      "changelog:weekly": "bun scripts/changelog-weekly.ts",
+      "sync-schemas": "bun scripts/sync-schemas.ts",
+      "sync-schemas:check": "bun scripts/sync-schemas.ts --check",
+      "sync:package-subpaths": "bun scripts/package-subpaths.mjs --write",
+      "check:package-subpaths": "bun scripts/package-subpaths.mjs",
+      "lint": "bun run check:docs-snippet-motion && bun run check:tracked-artifacts && bun run check:workspace-contracts && bun run check:gcp-cloud-run-dockerfile && bun run check:package-cycles && bun run check:package-subpaths && bun run check:cli-process-ownership && oxlint . && bun scripts/lint-skills.ts && bun scripts/check-skill-mirror.mjs",
+      "check:gcp-cloud-run-dockerfile": "bun run --cwd packages/gcp-cloud-run test:dockerfile-workspaces",
+      "lint:skills": "bun scripts/lint-skills.ts",
+      "check:skill-mirror": "bun scripts/check-skill-mirror.mjs",
+      "lint:fix": "oxlint --fix .",
+      "check:tracked-artifacts": "bun scripts/check-tracked-artifacts.mjs",
+      "check:docs-snippet-motion": "bun scripts/check-docs-snippet-motion.mjs",
+      "check:docs-catalog": "bun scripts/check-docs-catalog.mjs",
+      "generate:catalog": "bun scripts/generate-catalog.ts",
+      "check:catalog-drift": "bun scripts/catalog-drift.ts",
+      "verify:catalog-payloads": "bun scripts/verify-catalog-payloads.ts",
+      "check:workspace-contracts": "bun scripts/check-workspace-contracts.mjs",
+      "check:package-cycles": "bun scripts/check-package-cycles.mjs",
+      "check:cli-process-ownership": "bun scripts/check-cli-process-ownership.mjs",
+      "format": "oxfmt .",
+      "test": "bun run test:unit",
+      "test:unit": "bun run --filter '*' test",
+      "producer:test:classification": "bun run --cwd packages/producer test:classification",
+      "producer:test:unit": "bun run --cwd packages/producer test:unit",
+      "producer:test:unit:bun": "bun run --cwd packages/producer test:unit:bun",
+      "producer:test:unit:vitest": "bun run --cwd packages/producer test:unit:vitest",
+      "producer:test:integration": "bun run --cwd packages/producer test:integration",
+      "test:regression": "bun run --cwd packages/producer test:regression",
+      "player:perf": "bun run --filter @hyperframes/player perf",
+      "format:check": "oxfmt --check .",
+      "knip": "knip",
+      "test:scripts": "bun test scripts/animejs-v4-guidance.test.mjs scripts/check-tracked-artifacts.test.mjs scripts/check-registry-set-delta.test.mjs scripts/check-no-main-deletions.test.mjs scripts/check-pr-captures.test.mjs scripts/check-comment-citations.test.mjs scripts/comments-workflow.test.mjs scripts/comment-ratchet.test.mjs scripts/check-docs-snippet-motion.test.mjs scripts/registry-target-paths.test.mjs scripts/check-workspace-contracts.test.mjs scripts/check-media-use-copy-parity.test.mjs scripts/check-svg-sanitize-parity.test.mjs scripts/check-media-use-svg-sanitize-generated.test.mjs scripts/check-package-cycles.test.mjs scripts/check-cli-process-ownership.test.mjs scripts/check-large-files.test.mjs scripts/prune-fallow-audit-caches.test.mjs scripts/package-subpaths.test.mjs scripts/validate-release-channel.test.mjs scripts/clawhub-sync.test.mjs scripts/publish-workflow.test.mjs scripts/pr-edit-concurrency.test.mjs scripts/merge-queue-workflows.test.mjs scripts/install-workspace-dependencies.test.mjs scripts/draft-changelog.test.ts scripts/set-version.test.ts scripts/release-prepare.test.ts scripts/cli-options.test.ts scripts/changelog-weekly.test.ts scripts/claude-plugin-compression.test.ts scripts/catalog-payload-assets.test.ts scripts/host-registry-assets.test.ts scripts/catalog-preview-temp.test.ts scripts/backfill-block-previews.test.ts scripts/catalog-hosted-files.test.ts scripts/player-cdn-pin.test.ts scripts/studio-runtime-smoke.test.mjs scripts/verify-packed-manifests.test.mjs scripts/lint-skills.test.mjs scripts/creator-editing-recipes.test.mjs packages/gcp-cloud-run/check-dockerfile-workspaces.test.mjs packages/core/scripts/writeGeneratedFile.test.ts scripts/catalog-publication.test.mjs scripts/ci/resolve-workflow-pr.test.mjs scripts/ci/base-file.test.mjs scripts/check-catalog-source-pr.test.mjs scripts/generate-registry-items.test.ts scripts/catalog-drift.test.ts scripts/catalog-fetch-mirror.test.ts scripts/catalog-script-inlining.test.ts scripts/catalog-detail.test.ts scripts/generate-catalog-pages.test.ts scripts/verify-catalog-payloads.test.ts scripts/registry-skill-files.test.ts scripts/creator-editing-capabilities.test.mjs scripts/generate-catalog-previews.test.ts scripts/registry-primitive-payloads.test.ts registry/components/pan-stations/pan-stations.test.mjs && vitest run scripts/catalog/ scripts/contrastRatchet.test.ts scripts/generate-catalog-payloads.test.ts",
+      "typecheck:scripts": "tsc --noEmit -p scripts/tsconfig.json",
+      "test:skills": "HYPERFRAMES_MEDIA_HOME_REQUIRED=1 bun test --preload ./packages/cli/scripts/test-home.mjs 'skills/**/*.test.mjs' 'packages/cli/src/media-use/**/*.test.mjs'",
+      "generate:previews": "bun scripts/generate-template-previews.ts",
+      "generate:catalog-previews": "bun scripts/generate-catalog-previews.ts",
+      "package:agent-plugin": "bun scripts/package-agent-plugin.mjs",
+      "package:codex-plugin": "bun scripts/package-codex-plugin.mjs",
+      "upload:docs-images": "bash scripts/upload-docs-images.sh",
+      "host:registry-assets": "bun run scripts/host-registry-assets.ts",
+      "prepare": "bun -e \"console.log('Vendored source: repository hooks are managed by the owner checkout')\"",
+      "lint:registry-items": "bun scripts/lint-registry-items.mjs"
+    }
+  },
+  {
+    "path": "skills\\remotion-to-hyperframes\\assets\\test-corpus\\tier-3-data-driven\\remotion-src\\package.json",
+    "name": "tier-3-data-driven-remotion",
+    "scripts": {
+      "render": "remotion render Stargazed out/baseline.mp4"
+    }
+  },
+  {
+    "path": "skills\\remotion-to-hyperframes\\assets\\test-corpus\\tier-2-multi-scene\\remotion-src\\package.json",
+    "name": "tier-2-multi-scene-remotion",
+    "scripts": {
+      "render": "remotion render MultiScene out/baseline.mp4"
+    }
+  },
+  {
+    "path": "skills\\remotion-to-hyperframes\\assets\\test-corpus\\tier-1-title-card\\remotion-src\\package.json",
+    "name": "tier-1-title-card-remotion",
+    "scripts": {
+      "render": "remotion render TitleCard out/baseline.mp4"
+    }
+  },
+  {
+    "path": "registry\\blocks\\godrays\\source\\package.json",
+    "name": "shader-blocks-source",
+    "scripts": {
+      "build": "bun build.mjs"
+    }
+  },
+  {
+    "path": "registry\\blocks\\frost-sequence-camera-orbit\\source\\package.json",
+    "name": "frost-sequence-camera-orbit-source",
+    "scripts": {
+      "build": "bun build.mjs"
+    }
+  },
+  {
+    "path": "packages\\studio-server\\package.json",
+    "name": "@hyperframes/studio-server",
+    "scripts": {
+      "build": "tsup",
+      "test": "vitest run",
+      "test:acorn-writer": "bun scripts/run-acorn-writer-tests.ts",
+      "test:watch": "vitest",
+      "typecheck": "tsc --noEmit",
+      "report:gsap-writers": "bun src/routes/gsapMutationCapabilities.report.ts",
+      "prepublishOnly": "echo skip"
+    }
+  },
+  {
+    "path": "packages\\studio\\package.json",
+    "name": "@hyperframes/studio",
+    "scripts": {
+      "dev": "bun --bun ./node_modules/.bin/vite --host 127.0.0.1",
+      "build": "vite build && tsup",
+      "typecheck": "tsc --noEmit",
+      "test": "vitest run",
+      "test:edit-accuracy": "bun tests/e2e/edit-accuracy/run.mjs",
+      "test:filmstrip-controls": "bun tests/e2e/filmstrip-controls.mjs",
+      "test:webmcp-edit-loop": "bun tests/e2e/webmcp-edit-loop.mjs",
+      "test:thumbnail-save": "bun tests/e2e/thumbnail-save.mjs",
+      "bench:timeline-bulk-actions": "bun tests/e2e/timeline-bulk-actions.mjs",
+      "test:timeline-virtualization": "TIMELINE_ROW_VIRTUALIZATION=on TIMELINE_ELEMENT_COUNT=50000 bun tests/e2e/timeline-virtualization.mjs",
+      "test:watch": "vitest",
+      "test:colors:browser": "bun tests/e2e/native-css-colors.mjs",
+      "test:motion-path-home:browser": "bun tests/e2e/motion-path-home.mjs",
+      "report:sdk-cutover": "bun src/utils/sdkCutoverPolicy.report.ts",
+      "test:timeline-default": "bun run test:timeline-virtualization"
+    }
+  },
+  {
+    "path": "packages\\studio\\tests\\e2e\\fixtures\\design-panel-qa\\package.json",
+    "name": "design-panel-qa-fixture"
+  },
+  {
+    "path": "packages\\studio\\tests\\e2e\\fixtures\\composition-reliability\\package.json",
+    "name": "composition-reliability-fixture"
+  },
+  {
+    "path": "packages\\shader-transitions\\package.json",
+    "name": "@hyperframes/shader-transitions",
+    "scripts": {
+      "build": "tsup",
+      "typecheck": "tsc --noEmit",
+      "test": "vitest run --passWithNoTests"
+    }
+  },
+  {
+    "path": "packages\\sdk-playground\\package.json",
+    "name": "@hyperframes/sdk-playground",
+    "scripts": {
+      "dev": "vite",
+      "build": "vite build",
+      "typecheck": "tsc --noEmit",
+      "test": "vitest run"
+    }
+  },
+  {
+    "path": "packages\\sdk\\package.json",
+    "name": "@hyperframes/sdk",
+    "scripts": {
+      "build": "tsc",
+      "test": "vitest run",
+      "test:watch": "vitest",
+      "typecheck": "tsc --noEmit",
+      "typecheck:examples": "tsc --noEmit -p tsconfig.check.json"
+    }
+  },
+  {
+    "path": "packages\\producer\\package.json",
+    "name": "@hyperframes/producer",
+    "scripts": {
+      "build": "bun run build:hf-early-stub && bun run --cwd ../.. build:hyperframes-runtime:modular && bun build.mjs",
+      "build:hf-early-stub": "bun run scripts/build-hf-early-stub.ts",
+      "typecheck": "tsc --noEmit",
+      "parity:check": "bun src/parity-harness.ts",
+      "parity:plans": "bun src/plan-parity-harness.ts",
+      "parity:fixtures": "bun src/parity-fixtures.ts",
+      "parity:fixtures:ci": "bun src/parity-fixtures.ts",
+      "parity:check:ci": "bun src/parity-harness.ts --preview-url \"http://127.0.0.1:4173/minimal-wysiwyg.html\" --producer-url \"http://127.0.0.1:4173/minimal-wysiwyg.html?mode=producer\" --checkpoints \"0,0.5,1,1.5\" --allow-mismatch-ratio 0 --emulate-producer-swap true --artifacts-dir \".debug/parity-harness-ci\"",
+      "perf:gate": "bun src/perf-gate.ts",
+      "check:runtime-conformance": "bun src/runtime-conformance.ts",
+      "benchmark": "bun src/benchmark.ts",
+      "bench:hdr": "bun src/benchmark.ts --tags hdr",
+      "test": "bun run test:unit",
+      "test:classification": "bun test scripts/test-classification.test.mjs && bun scripts/check-test-classification.mjs",
+      "test:unit": "bun run test:classification && bun scripts/run-test-lane.mjs unit",
+      "test:unit:bun": "bun scripts/run-test-lane.mjs unit bun",
+      "test:unit:vitest": "bun scripts/run-test-lane.mjs unit vitest",
+      "test:integration": "bun run test:classification && bun scripts/run-test-lane.mjs integration",
+      "test:integration:bun": "bun scripts/run-test-lane.mjs integration bun",
+      "test:integration:vitest": "bun scripts/run-test-lane.mjs integration vitest",
+      "test:regression": "bun src/regression-harness.ts --exclude-tags transparency,field-signal-reproducer,webgpu",
+      "test:regression:update": "bun src/regression-harness.ts --update --exclude-tags transparency,field-signal-reproducer,webgpu",
+      "test:distributed": "bun src/regression-harness.ts --exclude-tags transparency,field-signal-reproducer,webgpu --mode=distributed-simulated",
+      "test:transparency": "bun src/transparency-test.ts",
+      "docker:build:test": "docker build -f ../../Dockerfile.test -t hyperframes-producer:test ../..",
+      "docker:test": "docker run --rm --security-opt seccomp=unconfined --shm-size=2g -v ./tests:/app/packages/producer/tests hyperframes-producer:test",
+      "docker:test:update": "docker run --rm --security-opt seccomp=unconfined --shm-size=2g -v ./tests:/app/packages/producer/tests hyperframes-producer:test --update",
+      "docker:test:distributed": "docker run --rm --security-opt seccomp=unconfined --shm-size=2g -v ./tests:/app/packages/producer/tests hyperframes-producer:test --mode=distributed-simulated",
+      "test:lambda-local": "bun src/regression-harness.ts --exclude-tags transparency,field-signal-reproducer,webgpu --mode=lambda-local",
+      "docker:test:lambda-local": "docker run --rm --security-opt seccomp=unconfined --shm-size=2g -v ./tests:/app/packages/producer/tests hyperframes-producer:test --mode=lambda-local",
+      "prepublishOnly": "echo skip"
+    }
+  },
+  {
+    "path": "packages\\player\\package.json",
+    "name": "@hyperframes/player",
+    "scripts": {
+      "build": "tsup && bun scripts/verify-runtime-pin.mjs",
+      "typecheck": "tsc --noEmit && tsc --noEmit -p tests/perf/tsconfig.json",
+      "test": "vitest run",
+      "test:browser-security": "bun run tests/browser/sandbox-origin.ts",
+      "test:browser-raster": "bun run tests/browser/preview-raster-size.ts",
+      "perf": "bun run tests/perf/index.ts"
+    }
+  },
+  {
+    "path": "packages\\parsers\\package.json",
+    "name": "@hyperframes/parsers",
+    "scripts": {
+      "build": "tsup",
+      "test": "vitest run",
+      "test:watch": "vitest",
+      "typecheck": "tsc --noEmit",
+      "prepublishOnly": "echo skip"
+    }
+  },
+  {
+    "path": "packages\\lint\\package.json",
+    "name": "@hyperframes/lint",
+    "scripts": {
+      "build": "tsup",
+      "test": "vitest run",
+      "test:watch": "vitest",
+      "typecheck": "tsc --noEmit",
+      "prepublishOnly": "echo skip"
+    }
+  },
+  {
+    "path": "packages\\gcp-cloud-run\\package.json",
+    "name": "@hyperframes/gcp-cloud-run",
+    "scripts": {
+      "test:dockerfile-workspaces": "bun check-dockerfile-workspaces.mjs",
+      "build": "bun build.mjs",
+      "start": "bun dist/server.js",
+      "test": "bun test",
+      "typecheck": "tsc --noEmit"
+    }
+  },
+  {
+    "path": "packages\\engine\\package.json",
+    "name": "@hyperframes/engine",
+    "scripts": {
+      "build": "tsc",
+      "test": "vitest run",
+      "typecheck": "tsc --noEmit"
+    }
+  },
+  {
+    "path": "packages\\core\\package.json",
+    "name": "@hyperframes/core",
+    "scripts": {
+      "build": "bun run build:fonts && bun run build:svg-selector-aliases && bun run build:hyperframes-runtime && bun run build:position-edits-render && bun run build:audio-fx-runtime && tsc && bun scripts/rewrite-esm-extensions.ts",
+      "build:fonts": "bun scripts/build-fonts.mjs",
+      "test": "bun run check:position-edits-render && bun run check:svg-selector-aliases && bun run build:audio-fx-runtime && vitest run",
+      "test:watch": "vitest",
+      "test:coverage": "vitest run --coverage",
+      "test:runtime-coverage": "vitest run --coverage src/runtime",
+      "typecheck": "tsc --noEmit && bun run typecheck:runtime",
+      "typecheck:runtime": "tsc --noEmit -p tsconfig.runtime.json",
+      "lint:runtime-preview-guards": "bun scripts/lint-runtime-preview-guards.ts",
+      "build:audio-fx-runtime": "bun scripts/build-audio-fx-runtime.ts",
+      "build:hyperframes-runtime": "bun scripts/build-hyperframes-runtime-artifact.ts",
+      "build:position-edits-render": "bun scripts/build-position-edits-render.ts",
+      "check:position-edits-render": "bun run build:position-edits-render && git diff --exit-code -- src/generated/position-edits-render-inline.ts",
+      "build:svg-selector-aliases": "bun scripts/build-svg-selector-aliases.ts",
+      "check:svg-selector-aliases": "bun run build:svg-selector-aliases && git diff --exit-code -- src/generated/svg-selector-aliases-inline.ts",
+      "build:hyperframes-runtime:modular": "SANDBOX_RUNTIME_VARIANT=modular bun scripts/build-hyperframes-runtime-artifact.ts",
+      "build:hyperframe-runtime": "bun scripts/build-hyperframes-runtime-artifact.ts",
+      "test:hyperframe-runtime-contract": "bun scripts/test-hyperframe-runtime-contract.ts",
+      "test:hyperframe-runtime-behavior": "bun scripts/test-hyperframe-runtime-behavior.ts",
+      "test:hyperframe-runtime-seek": "bun scripts/test-hyperframe-runtime-seek.ts",
+      "test:hyperframe-runtime-duration-guards": "bun scripts/test-hyperframe-runtime-duration-guards.ts",
+      "test:hyperframe-runtime-parity": "bun scripts/test-hyperframe-runtime-parity.ts",
+      "test:hyperframe-runtime-security": "bun scripts/test-hyperframe-runtime-security.ts",
+      "test:hyperframe-linter": "bun scripts/test-hyperframe-linter.ts",
+      "test:hyperframe-runtime-ci": "bun run typecheck:runtime && bun run lint:runtime-preview-guards && bun run build:hyperframes-runtime && bun run test:hyperframe-runtime-contract && bun run test:hyperframe-runtime-behavior && bun run test:hyperframe-runtime-seek && bun run test:hyperframe-runtime-duration-guards && bun run test:hyperframe-runtime-parity && bun run test:hyperframe-runtime-security && bun run test:runtime-coverage && bun run test:hyperframe-linter",
+      "check:hyperframe-html": "bun scripts/check-hyperframe-static.ts",
+      "debug:timeline": "bun scripts/debug-timeline.ts",
+      "prepublishOnly": "echo skip"
+    }
+  },
+  {
+    "path": "packages\\cli\\package.json",
+    "name": "@hyperframes/cli",
+    "scripts": {
+      "test": "vitest run",
+      "dev": "bun src/cli.ts",
+      "build": "bun run build:fonts && tsup && bun run build:runtime && bun run build:beat-analyzer && bun run build:copy",
+      "build:fonts": "bun scripts/build-fonts.mjs",
+      "build:runtime": "bun scripts/build-runtime.ts",
+      "build:beat-analyzer": "bun scripts/build-beat-analyzer.mjs",
+      "build:copy": "bun scripts/build-copy.mjs",
+      "typecheck": "tsc --noEmit",
+      "gen:skills-manifest": "bun scripts/gen-skills-manifest.ts",
+      "gen:agent-dirs": "bun scripts/sync-agent-dirs.ts",
+      "bench:startup": "bun scripts/bench-startup.mjs"
+    }
+  },
+  {
+    "path": "packages\\aws-lambda\\package.json",
+    "name": "@hyperframes/aws-lambda",
+    "scripts": {
+      "build": "bun build.mjs",
+      "build:zip": "bun scripts/build-zip.ts",
+      "probe:beginframe": "bun scripts/probe-beginframe.ts",
+      "probe:beginframe:docker": "docker build -f scripts/probe-beginframe.dockerfile -t hyperframes-lambda-probe:local ../.. && docker run --rm hyperframes-lambda-probe:local",
+      "test": "bun test",
+      "typecheck": "tsc --noEmit",
+      "verify:zip-size": "bun scripts/verify-zip-size.ts"
+    }
+  }
+]

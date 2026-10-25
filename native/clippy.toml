@@ -1,0 +1,5 @@
+# This standalone media process is outside the Bun runtime workspace: linking
+# bun_core/bun_spawn_sys would pull engine/JSC ABI into the portable media CLI.
+# Keep safety prohibitions; runtime-only API substitutions do not apply here.
+disallowed-methods = [{ path = "std::mem::zeroed", reason = "use typed initialization or MaybeUninit with proven invariants" }]
+disallowed-macros = [{ path = "std::dbg", reason = "remove debugging before delivery" }]

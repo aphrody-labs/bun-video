@@ -1,0 +1,47 @@
+import {validateDimension} from '../validate';
+import type {AnyRemotionOption} from './option';
+
+let currentHeight: number | null = null;
+
+const cliFlag = 'height' as const;
+
+export const overrideHeightOption = {
+	name: 'Override Height',
+	addedIn: '3.2.40',
+	cliFlag,
+	description: () => <>Overrides the height of the composition.</>,
+	ssrName: null,
+	docLink: 'https://www.remotion.dev/docs/options/height',
+	type: null as number | null,
+	getValue: ({commandLine}) => {
+		if (commandLine[cliFlag] !== undefined) {
+			const value = commandLine[cliFlag] as number;
+			validateDimension(value, 'height', 'in --height flag');
+
+			return {
+				source: 'cli',
+				value,
+			};
+		}
+
+		if (currentHeight !== null) {
+			return {
+				source: 'config',
+				value: currentHeight,
+			};
+		}
+
+		return {
+			source: 'default',
+			value: null,
+		};
+	},
+	setConfig: (height) => {
+		validateDimension(height, 'height', 'in Config.overrideHeight()');
+		currentHeight = height;
+	},
+	reset: () => {
+		currentHeight = null;
+	},
+	id: cliFlag,
+} satisfies AnyRemotionOption<number | null>;

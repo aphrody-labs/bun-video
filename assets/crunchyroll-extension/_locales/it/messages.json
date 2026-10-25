@@ -1,0 +1,41 @@
+{
+  "appName": {
+    "message": "Scorciatoia Crunchyroll"
+  },
+  "description": {
+    "message": "Apri l’episodio ufficiale nella tua sessione Chrome."
+  },
+  "title": {
+    "message": "Il dio della distruzione"
+  },
+  "open": {
+    "message": "Guarda su Crunchyroll"
+  },
+  "language": {
+    "message": "Lingua dell’app"
+  },
+  "note": {
+    "message": "Questa scelta cambia la lingua della scorciatoia. Crunchyroll gestisce audio, sottotitoli, account e riproduzione."
+  },
+  "install": {
+    "message": "Installa questa scorciatoia"
+  },
+  "installUnavailable": {
+    "message": "L’installazione è disponibile quando Chrome la propone. Puoi anche usare il menu del browser."
+  },
+  "offline": {
+    "message": "La scorciatoia funziona offline; l’episodio richiede internet e accesso autorizzato a Crunchyroll."
+  },
+  "online": {
+    "message": "Scorciatoia pronta. La riproduzione avviene sul sito ufficiale."
+  },
+  "installed": {
+    "message": "Installazione richiesta. Chrome conferma il risultato."
+  },
+  "installDismissed": {
+    "message": "Installazione annullata. Puoi riprovare."
+  },
+  "shellError": {
+    "message": "Non è stato possibile preparare la scorciatoia locale per l’uso offline."
+  }
+}

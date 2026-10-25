@@ -1,0 +1,436 @@
+import * as z from 'zod/mini';
+import {
+	parseStudioElementPayload,
+	type StudioElementPayload,
+} from './element-payload';
+import type {StudioProtocolFetcher} from './studio-discovery';
+import {
+	discoverStudios,
+	fetchWithTimeout,
+	getInstallCapability,
+	isAbortError,
+	studioProtocolProbePorts,
+} from './studio-discovery';
+import {
+	isAwaitingConfirmationResponse,
+	parseStudioProtocolError,
+} from './studio-response';
+
+export type InstallInStudioErrorCode =
+	| 'unsupported-origin'
+	| 'no-compatible-studio'
+	| 'loopback-network-permission-denied'
+	| 'studio-upgrade-required'
+	| 'no-installable-target'
+	| 'unsupported-protocol'
+	| 'invalid-response'
+	| 'target-expired'
+	| 'request-rejected'
+	| 'request-timed-out'
+	| 'network-error';
+
+export type InstallInStudioResult =
+	| {
+			readonly success: true;
+			readonly status: 'awaiting-confirmation';
+			readonly target: {
+				readonly projectName: string | null;
+				/**
+				 * @deprecated The installation destination is chosen in Studio. Use projectName or studioOrigin to identify the receiving Studio instead.
+				 */
+				readonly compositionId: string | null;
+				readonly studioOrigin: string;
+				readonly studioVersion: string;
+			};
+	  }
+	| {
+			readonly success: false;
+			readonly code: InstallInStudioErrorCode;
+			readonly message: string;
+	  };
+
+type LoopbackPermissionName = 'loopback-network' | 'local-network-access';
+
+type PermissionQueryFn = (descriptor: {
+	readonly name: LoopbackPermissionName;
+}) => Promise<{readonly state: PermissionState}>;
+
+export type InstallInStudioDependencies = {
+	readonly fetchFn: StudioProtocolFetcher;
+	readonly now: () => number;
+	readonly ports: readonly number[];
+	readonly pageOrigin: string | null;
+	readonly permissionQueryFn: PermissionQueryFn | null;
+};
+
+export type StudioProtocolInstallRequest = {
+	readonly operation: 'install-element';
+	readonly protocol: 'remotion-studio-protocol';
+	readonly protocolVersion: 1;
+	readonly targetId: string;
+	readonly payload: StudioElementPayload;
+};
+
+const studioProtocolInstallRequestEnvelopeSchema = z.object({
+	operation: z.literal('install-element'),
+	protocol: z.literal('remotion-studio-protocol'),
+	protocolVersion: z.literal(1),
+	targetId: z.string(),
+	payload: z.unknown(),
+});
+
+const studioProtocolIframeInstallRequestSchema = z.object({
+	operation: z.literal('install-element'),
+	protocol: z.literal('remotion-studio-protocol'),
+	protocolVersion: z.literal(1),
+	payload: z.unknown(),
+});
+
+const installInStudioResultSchema = z.union([
+	z.object({
+		success: z.literal(true),
+		status: z.literal('awaiting-confirmation'),
+		target: z.object({
+			projectName: z.nullable(z.string()),
+			compositionId: z.nullable(z.string()),
+			studioOrigin: z.string(),
+			studioVersion: z.string(),
+		}),
+	}),
+	z.object({
+		success: z.literal(false),
+		code: z.enum(['no-installable-target', 'request-rejected']),
+		message: z.string(),
+	}),
+]);
+
+export const parseStudioProtocolIframeInstallRequest = (
+	value: unknown,
+): StudioElementPayload | null => {
+	const envelope = z.safeParse(studioProtocolIframeInstallRequestSchema, value);
+	return envelope.success
+		? parseStudioElementPayload(envelope.data.payload)
+		: null;
+};
+
+export const parseStudioProtocolInstallRequest = (
+	value: unknown,
+):
+	| {readonly status: 'valid'; readonly request: StudioProtocolInstallRequest}
+	| {readonly status: 'invalid-request' | 'invalid-payload'} => {
+	const envelope = z.safeParse(
+		studioProtocolInstallRequestEnvelopeSchema,
+		value,
+	);
+	if (!envelope.success) {
+		return {status: 'invalid-request'};
+	}
+
+	const payload = parseStudioElementPayload(envelope.data.payload);
+	if (payload === null) {
+		return {status: 'invalid-payload'};
+	}
+
+	return {
+		status: 'valid',
+		request: {
+			operation: envelope.data.operation,
+			protocol: envelope.data.protocol,
+			protocolVersion: envelope.data.protocolVersion,
+			targetId: envelope.data.targetId,
+			payload,
+		},
+	};
+};
+
+const failure = (
+	code: InstallInStudioErrorCode,
+	message: string,
+): InstallInStudioResult => ({success: false, code, message});
+
+export const isAllowedStudioProtocolPageOrigin = (
+	origin: string | null,
+): boolean => {
+	if (origin === null) {
+		return false;
+	}
+
+	try {
+		const parsed = new URL(origin);
+		return (
+			parsed.protocol === 'https:' ||
+			(parsed.protocol === 'http:' &&
+				(parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'))
+		);
+	} catch {
+		return false;
+	}
+};
+
+export const installInStudioWithDependencies = async (
+	payload: StudioElementPayload,
+	dependencies: InstallInStudioDependencies,
+	fallbackPayload: StudioElementPayload | null = null,
+): Promise<InstallInStudioResult> => {
+	if (!isAllowedStudioProtocolPageOrigin(dependencies.pageOrigin)) {
+		return failure(
+			'unsupported-origin',
+			'Install in Studio is only supported on HTTPS websites and local development origins.',
+		);
+	}
+
+	const discovery = await discoverStudios(dependencies);
+	if (discovery.studios.length === 0) {
+		if (discovery.foundUnsupportedProtocol) {
+			return failure(
+				'unsupported-protocol',
+				'The running Remotion Studio uses an unsupported Studio Protocol version.',
+			);
+		}
+
+		if (discovery.foundInvalidResponse) {
+			return failure(
+				'invalid-response',
+				'Remotion Studio returned an invalid Studio Protocol response.',
+			);
+		}
+
+		if (dependencies.permissionQueryFn !== null) {
+			for (const name of [
+				'loopback-network',
+				'local-network-access',
+			] as const) {
+				try {
+					const permission = await dependencies.permissionQueryFn({name});
+					if (permission.state === 'denied') {
+						return failure(
+							'loopback-network-permission-denied',
+							'Access to localhost is blocked by your browser. Open the site settings, allow local network access for this site, then try again.',
+						);
+					}
+
+					break;
+				} catch {
+					// The compatibility alias may still be supported.
+				}
+			}
+		}
+
+		return failure(
+			'no-compatible-studio',
+			'Start Remotion Studio, then try again.',
+		);
+	}
+
+	const supportedStudios = discovery.studios.flatMap((studio) => {
+		const capability = getInstallCapability(studio.descriptor);
+		return capability?.payloadVersions.includes(payload.version) ||
+			(fallbackPayload !== null &&
+				capability?.payloadVersions.includes(fallbackPayload.version))
+			? [{...studio, capability}]
+			: [];
+	});
+	if (supportedStudios.length === 0) {
+		return failure(
+			payload.version === 2
+				? 'studio-upgrade-required'
+				: 'unsupported-protocol',
+			payload.version === 2
+				? 'Upgrade Remotion Studio to install Elements that include assets.'
+				: 'The running Remotion Studio cannot install this Element payload version.',
+		);
+	}
+
+	const now = dependencies.now();
+	const installable = supportedStudios
+		.filter(({capability}) => {
+			const {target} = capability;
+			return target !== null && target.expiresAt > now;
+		})
+		.sort((a, b) => {
+			const focusDifference =
+				(b.capability.target!.lastFocusedAt ?? 0) -
+				(a.capability.target!.lastFocusedAt ?? 0);
+			return focusDifference === 0
+				? b.discoveredAt - a.discoveredAt
+				: focusDifference;
+		});
+	const selected = installable[0];
+	const selectedTarget = selected?.capability.target;
+	if (
+		!selected ||
+		selectedTarget === null ||
+		selectedTarget === undefined ||
+		(selectedTarget.lastFocusedAt === null && installable.length > 1)
+	) {
+		return failure(
+			'no-installable-target',
+			'Focus Remotion Studio, then try again.',
+		);
+	}
+
+	// Remove the v1 remote-URL fallback after 2026-10-23 (one-month
+	// transition window for Studios without Element asset support).
+	const selectedPayload = selected.capability.payloadVersions.includes(
+		payload.version,
+	)
+		? payload
+		: fallbackPayload;
+	if (selectedPayload === null) {
+		return failure(
+			'unsupported-protocol',
+			'The running Remotion Studio cannot install this Element payload version.',
+		);
+	}
+
+	let response: Response;
+	try {
+		const requestBody = {
+			operation: 'install-element',
+			protocol: 'remotion-studio-protocol',
+			protocolVersion: 1,
+			targetId: selectedTarget.id,
+			payload: selectedPayload,
+		} satisfies StudioProtocolInstallRequest;
+		response = await fetchWithTimeout({
+			fetchFn: dependencies.fetchFn,
+			url: `${selected.origin}/api/studio-protocol/install`,
+			options: {
+				method: 'POST',
+				headers: {'Content-Type': 'application/json'},
+				body: JSON.stringify(requestBody),
+			},
+		});
+	} catch (error) {
+		return failure(
+			isAbortError(error) ? 'request-timed-out' : 'network-error',
+			isAbortError(error)
+				? 'The request to Remotion Studio timed out.'
+				: 'Could not connect to Remotion Studio.',
+		);
+	}
+
+	let result: unknown;
+	try {
+		result = await response.json();
+	} catch {
+		return failure(
+			'invalid-response',
+			'Remotion Studio returned an invalid installation response.',
+		);
+	}
+
+	if (response.ok && isAwaitingConfirmationResponse(result)) {
+		return {
+			success: true,
+			status: 'awaiting-confirmation',
+			target: {
+				projectName: selected.descriptor.projectName,
+				compositionId: selectedTarget.compositionId,
+				studioOrigin: selected.origin,
+				studioVersion: selected.descriptor.studioVersion,
+			},
+		};
+	}
+
+	const protocolError = parseStudioProtocolError(result);
+	if (protocolError !== null) {
+		return failure(
+			protocolError.code === 'target-expired'
+				? 'target-expired'
+				: 'request-rejected',
+			protocolError.message,
+		);
+	}
+
+	return failure(
+		'invalid-response',
+		'Remotion Studio returned an invalid installation response.',
+	);
+};
+
+const installInParentStudio = (
+	payload: StudioElementPayload,
+): Promise<InstallInStudioResult | null> => {
+	if (
+		typeof window === 'undefined' ||
+		window.parent === window ||
+		typeof MessageChannel === 'undefined'
+	) {
+		return Promise.resolve(null);
+	}
+
+	return new Promise((resolve) => {
+		const channel = new MessageChannel();
+		const timeout = setTimeout(() => {
+			channel.port1.close();
+			resolve(null);
+		}, 500);
+
+		channel.port1.onmessage = (event) => {
+			const response = z.safeParse(installInStudioResultSchema, event.data);
+			if (!response.success) {
+				return;
+			}
+
+			clearTimeout(timeout);
+			channel.port1.postMessage(null);
+			channel.port1.onmessage = null;
+			resolve(response.data);
+		};
+
+		window.parent.postMessage(
+			{
+				operation: 'install-element',
+				protocol: 'remotion-studio-protocol',
+				protocolVersion: 1,
+				payload,
+			},
+			'*',
+			[channel.port2],
+		);
+	});
+};
+
+export const installInStudio = async ({
+	payload,
+	fallbackPayload,
+}: {
+	readonly payload: StudioElementPayload;
+	readonly fallbackPayload?: StudioElementPayload;
+}): Promise<InstallInStudioResult> => {
+	const parentResult = await installInParentStudio(payload);
+	if (parentResult !== null) {
+		return parentResult;
+	}
+
+	// Older embedded Studios silently ignore v2. Retry with v1 after the
+	// response timeout rather than preventing new parent Studios from using assets.
+	if (fallbackPayload !== undefined) {
+		const fallbackResult = await installInParentStudio(fallbackPayload);
+		if (fallbackResult !== null) {
+			return fallbackResult;
+		}
+	}
+
+	return installInStudioWithDependencies(
+		payload,
+		{
+			fetchFn: fetch,
+			now: Date.now,
+			pageOrigin:
+				typeof globalThis.location === 'undefined'
+					? null
+					: globalThis.location.origin,
+			permissionQueryFn:
+				typeof globalThis.navigator === 'undefined' ||
+				typeof globalThis.navigator.permissions?.query !== 'function'
+					? null
+					: (descriptor) =>
+							// @ts-expect-error Chromium's loopback permission names are not in lib.dom yet.
+							globalThis.navigator.permissions.query(descriptor),
+			ports: studioProtocolProbePorts,
+		},
+		fallbackPayload ?? null,
+	);
+};

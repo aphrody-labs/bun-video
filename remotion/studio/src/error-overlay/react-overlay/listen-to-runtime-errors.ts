@@ -1,0 +1,120 @@
+/**
+ * Copyright (c) 2015-present, Facebook, Inc.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+import type {SymbolicatedStackFrame} from '@remotion/studio-shared';
+import {reloadUrl} from '../../helpers/url-state';
+import {markErrorAsLoggedByServer} from '../error-origin';
+import {addErrorToOverlay} from '../runtime-error-store';
+import {massageWarning} from './effects/format-warning';
+import {
+	permanentRegister as permanentRegisterConsole,
+	registerReactStack,
+	unregisterReactStack,
+} from './effects/proxy-console';
+import {
+	register as registerStackTraceLimit,
+	unregister as unregisterStackTraceLimit,
+} from './effects/stack-trace-limit';
+import {
+	register as registerError,
+	unregister as unregisterError,
+} from './effects/unhandled-error';
+import {
+	register as registerPromise,
+	unregister as unregisterPromise,
+} from './effects/unhandled-rejection';
+import {getStackFrames} from './utils/get-stack-frames';
+
+export type ErrorRecord = {
+	error: Error;
+	contextSize: number;
+	stackFrames: SymbolicatedStackFrame[];
+};
+
+const CONTEXT_SIZE = 3;
+
+export const getErrorRecord = async (
+	error: Error,
+): Promise<ErrorRecord | null> => {
+	const stackFrames = await getStackFrames(error, CONTEXT_SIZE);
+
+	if (stackFrames === null || stackFrames === undefined) {
+		return null;
+	}
+
+	return {
+		error,
+		contextSize: CONTEXT_SIZE,
+		stackFrames,
+	};
+};
+
+const handleRuntimeError = (error: Error) => {
+	const didHookOrderChange =
+		error.message.startsWith('Rendered fewer hooks') ||
+		error.message.startsWith('Rendered more hooks') ||
+		error.message.startsWith('Should have a queue');
+
+	const key = 'remotion.lastCrashBecauseOfHooks';
+	const previousCrashWasBecauseOfHooks = window.localStorage.getItem(key);
+
+	// When rendering conditional hooks, refreshing does not help.
+	// So we only refresh once.
+	const justRefreshedBecauseOfHooks = previousCrashWasBecauseOfHooks
+		? Date.now() - Number(previousCrashWasBecauseOfHooks) < 5000
+		: false;
+
+	window.localStorage.setItem(
+		'remotion.lastCrashBecauseOfHooks',
+		String(Date.now()),
+	);
+
+	if (didHookOrderChange && !justRefreshedBecauseOfHooks) {
+		// eslint-disable-next-line no-console
+		console.log('Hook order changed. Reloading app...');
+
+		reloadUrl();
+	} else {
+		addErrorToOverlay(error, null);
+	}
+};
+
+export function listenToRuntimeErrors() {
+	registerError(window, (error) => {
+		return handleRuntimeError(error);
+	});
+	registerPromise(window, (error) => {
+		return handleRuntimeError(error);
+	});
+	registerStackTraceLimit();
+	registerReactStack();
+	permanentRegisterConsole('error', (d) => {
+		if (d.type === 'webpack-error') {
+			const {message, frames} = d;
+			const data = massageWarning(message, frames);
+			const error = {
+				message: data.message,
+				stack: data.stack,
+				name: '',
+			};
+
+			markErrorAsLoggedByServer(error);
+			handleRuntimeError(error);
+		}
+
+		if (d.type === 'build-error') {
+			markErrorAsLoggedByServer(d.error);
+			handleRuntimeError(d.error);
+		}
+	});
+
+	return function () {
+		unregisterStackTraceLimit();
+		unregisterPromise(window);
+		unregisterError(window);
+		unregisterReactStack();
+	};
+}

@@ -1,0 +1,293 @@
+{
+  "schema": 1,
+  "buildRecipes": {
+    "ffmpeg": {
+      "owner": "scripts/aphrody/media-sdk-build.ts",
+      "sourcePins": "scripts/aphrody/media-sdk-sources.json",
+      "dependencies": ["zlib"],
+      "nativeSidecar": {
+        "owner": "packages/bun-video/native/Cargo.toml",
+        "features": ["filmcraft", "libav", "mpv"],
+        "gpuQualification": "separate"
+      },
+      "status": "recipes-present; native source/ABI/closure/license gates required per target"
+    },
+    "mpv": {
+      "owner": "scripts/aphrody/media-sdk-build.ts",
+      "sourcePins": "scripts/aphrody/media-sdk-sources.json",
+      "dependencies": [
+        "ffmpeg",
+        "libplacebo",
+        "fast_float",
+        "freetype",
+        "fribidi",
+        "harfbuzz",
+        "libass",
+        "vulkan-headers"
+      ],
+      "profile": "LGPL CPU/null; hardware playback qualification separate",
+      "status": "recipes-present; native source/ABI/closure/license gates required per target"
+    }
+  },
+  "registryBindings": {
+    "package": "ffmpeg-sys-next",
+    "version": "9.0.1",
+    "checksum": "c6f932d8c1cede016c65d4f1435f323369c99c74df55143b18676aa10e7603f9",
+    "registryStatus": "published-raw-native-owner"
+  },
+  "ffmpegABI": {
+    "avutil": 61,
+    "avcodec": 63,
+    "avformat": 63,
+    "avdevice": 63,
+    "avfilter": 12,
+    "swscale": 10,
+    "swresample": 7
+  },
+  "targets": {
+    "windows-x64": {
+      "ffmpeg": {
+        "version": "9.0.2-27-g7e93014c5b",
+        "sourceRevision": "7e93014c5bbb61e7c22afebb478bf92f7a08d59a",
+        "sourceRepository": "https://github.com/FFmpeg/FFmpeg",
+        "license": "LGPL-2.1-or-later",
+        "status": "upstream-digest-pinned-awaiting-sdk-qualification",
+        "assets": [],
+        "upstreamAssets": [
+          {
+            "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-12-13-12/ffmpeg-n9.0.2-27-g7e93014c5b-win64-lgpl-shared-9.0.zip",
+            "sha256": "de3f3b16b3dbf2038a56878aa35795f48bd220f01479697e008470773cecba5b",
+            "bytes": 77230796,
+            "format": "zip"
+          }
+        ]
+      },
+      "mpv": {
+        "version": "0.41.0-dev-gc3ac7f395",
+        "sourceRevision": "c3ac7f39514c7f45bc38a18e66887240539ee33c",
+        "sourceRepository": "https://github.com/mpv-player/mpv",
+        "license": "bundle-notices-awaiting-verification",
+        "status": "upstream-digest-pinned-awaiting-sdk-qualification",
+        "apiMajor": 2,
+        "libraryName": "libmpv-2.dll",
+        "assets": [],
+        "upstreamAssets": [
+          {
+            "url": "https://github.com/mpv-player/mpv/releases/download/git-release/libmpv-v0.41.0-dev-gc3ac7f395-38326895870-x86_64-w64-mingw32-lgpl.zip",
+            "sha256": "9ffbed7a8aa013da07a925dfbb046116683796af76a9b635e4e7b3328d44f9d5",
+            "bytes": 56765949,
+            "format": "zip"
+          },
+          {
+            "url": "https://github.com/mpv-player/mpv/releases/download/git-release/mpv-v0.41.0-dev-gc3ac7f395-38326895870-x86_64-pc-windows-msvc.zip",
+            "sha256": "0e4b520f53de5a608a06cd5c5bb065f354c20253b3c727562c0b583e07efca24",
+            "bytes": 28575932,
+            "format": "zip"
+          }
+        ]
+      }
+    },
+    "linux-x64": {
+      "ffmpeg": {
+        "version": "9.0.2-27-g7e93014c5b",
+        "sourceRevision": "7e93014c5bbb61e7c22afebb478bf92f7a08d59a",
+        "sourceRepository": "https://github.com/FFmpeg/FFmpeg",
+        "license": "LGPL-2.1-or-later",
+        "status": "native-sdk-qualified",
+        "assets": [
+          {
+            "url": "https://bun-lib.aphrody.app/media/ffmpeg-9.0.2-27-g7e93014c5b-linux-x64-sdk.zip",
+            "sha256": "cf975aedbefbcd70615994783bb392e365a98e003535067af5062d01b081e62b",
+            "bytes": 65228800,
+            "format": "zip"
+          }
+        ],
+        "upstreamAssets": [
+          {
+            "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-12-13-12/ffmpeg-n9.0.2-27-g7e93014c5b-linux64-lgpl-shared-9.0.tar.xz",
+            "sha256": "d0dde42b22038f77ee6403e0d60c78a6b502bfea2d1cb410a8f66779484e61ee",
+            "bytes": 63541740,
+            "format": "tar.xz"
+          }
+        ]
+      },
+      "mpv": {
+        "version": "0.41.0-dev-gc3ac7f395",
+        "sourceRevision": "c3ac7f39514c7f45bc38a18e66887240539ee33c",
+        "sourceRepository": "https://github.com/mpv-player/mpv",
+        "license": "LGPL-2.1-or-later",
+        "apiMajor": 2,
+        "libraryName": "libmpv.so.2",
+        "status": "native-sdk-qualified",
+        "assets": [
+          {
+            "url": "https://bun-lib.aphrody.app/media/mpv-0.41.0-dev-gc3ac7f395-linux-x64-sdk.zip",
+            "sha256": "d6dab2bce6ca7fcc3b2812ce192ba7046c65f27d2ab3f2f2e56046497b82553a",
+            "bytes": 64778240,
+            "format": "zip"
+          }
+        ],
+        "upstreamAssets": []
+      }
+    },
+    "windows-arm64": {
+      "ffmpeg": {
+        "version": "9.0.2-27-g7e93014c5b",
+        "sourceRevision": "7e93014c5bbb61e7c22afebb478bf92f7a08d59a",
+        "sourceRepository": "https://github.com/FFmpeg/FFmpeg",
+        "license": "LGPL-2.1-or-later",
+        "status": "upstream-digest-pinned-awaiting-sdk-qualification",
+        "assets": [],
+        "upstreamAssets": [
+          {
+            "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-12-13-12/ffmpeg-n9.0.2-27-g7e93014c5b-winarm64-lgpl-shared-9.0.zip",
+            "sha256": "627952cd8656f6f12b1221efcb59eb83b0134660721d6aab01ff6140dd4d54dd",
+            "bytes": 53762744,
+            "format": "zip"
+          }
+        ]
+      },
+      "mpv": {
+        "version": "0.41.0-dev-gc3ac7f395",
+        "sourceRevision": "c3ac7f39514c7f45bc38a18e66887240539ee33c",
+        "sourceRepository": "https://github.com/mpv-player/mpv",
+        "license": "bundle-notices-awaiting-verification",
+        "status": "upstream-digest-pinned-awaiting-sdk-qualification",
+        "apiMajor": 2,
+        "libraryName": "libmpv-2.dll",
+        "assets": [],
+        "upstreamAssets": [
+          {
+            "url": "https://github.com/mpv-player/mpv/releases/download/git-release/libmpv-v0.41.0-dev-gc3ac7f395-38326895870-aarch64-w64-mingw32-lgpl.zip",
+            "sha256": "f0599227abeafd1d599bb6179876a901a55aace850d7cd0dab50789c36241ce3",
+            "bytes": 40042872,
+            "format": "zip"
+          },
+          {
+            "url": "https://github.com/mpv-player/mpv/releases/download/git-release/mpv-v0.41.0-dev-gc3ac7f395-38326895870-aarch64-pc-windows-msvc.zip",
+            "sha256": "a1e84737046185e9c8b2a10fcc706785af4376019627ea952fcf3a4a118c6822",
+            "bytes": 26093501,
+            "format": "zip"
+          }
+        ]
+      }
+    },
+    "linux-arm64": {
+      "ffmpeg": {
+        "version": "9.0.2-27-g7e93014c5b",
+        "sourceRevision": "7e93014c5bbb61e7c22afebb478bf92f7a08d59a",
+        "sourceRepository": "https://github.com/FFmpeg/FFmpeg",
+        "license": "LGPL-2.1-or-later",
+        "status": "upstream-digest-pinned-awaiting-sdk-qualification",
+        "assets": [],
+        "upstreamAssets": [
+          {
+            "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-12-13-12/ffmpeg-n9.0.2-27-g7e93014c5b-linuxarm64-lgpl-shared-9.0.tar.xz",
+            "sha256": "898213a5bb1a4ee70caa0fa774aee3cf7954fe2fa662b5b7dd7c72b67faef008",
+            "bytes": 54100032,
+            "format": "tar.xz"
+          }
+        ]
+      },
+      "mpv": {
+        "version": "0.41.0-dev-gc3ac7f395",
+        "sourceRevision": "c3ac7f39514c7f45bc38a18e66887240539ee33c",
+        "sourceRepository": "https://github.com/mpv-player/mpv",
+        "license": "bundle-notices-awaiting-verification",
+        "apiMajor": 2,
+        "libraryName": "libmpv.so.2",
+        "status": "source-build-awaiting-sdk-qualification",
+        "assets": [],
+        "upstreamAssets": []
+      }
+    },
+    "linux-x64-musl": {
+      "ffmpeg": {
+        "version": "9.0.2-27-g7e93014c5b",
+        "sourceRevision": "7e93014c5bbb61e7c22afebb478bf92f7a08d59a",
+        "sourceRepository": "https://github.com/FFmpeg/FFmpeg",
+        "license": "LGPL-2.1-or-later",
+        "status": "source-build-awaiting-sdk-qualification",
+        "assets": [],
+        "upstreamAssets": []
+      },
+      "mpv": {
+        "version": "0.41.0-dev-gc3ac7f395",
+        "sourceRevision": "c3ac7f39514c7f45bc38a18e66887240539ee33c",
+        "sourceRepository": "https://github.com/mpv-player/mpv",
+        "license": "bundle-notices-awaiting-verification",
+        "apiMajor": 2,
+        "libraryName": "libmpv.so.2",
+        "status": "source-build-awaiting-sdk-qualification",
+        "assets": [],
+        "upstreamAssets": []
+      }
+    },
+    "linux-arm64-musl": {
+      "ffmpeg": {
+        "version": "9.0.2-27-g7e93014c5b",
+        "sourceRevision": "7e93014c5bbb61e7c22afebb478bf92f7a08d59a",
+        "sourceRepository": "https://github.com/FFmpeg/FFmpeg",
+        "license": "LGPL-2.1-or-later",
+        "status": "source-build-awaiting-sdk-qualification",
+        "assets": [],
+        "upstreamAssets": []
+      },
+      "mpv": {
+        "version": "0.41.0-dev-gc3ac7f395",
+        "sourceRevision": "c3ac7f39514c7f45bc38a18e66887240539ee33c",
+        "sourceRepository": "https://github.com/mpv-player/mpv",
+        "license": "bundle-notices-awaiting-verification",
+        "apiMajor": 2,
+        "libraryName": "libmpv.so.2",
+        "status": "source-build-awaiting-sdk-qualification",
+        "assets": [],
+        "upstreamAssets": []
+      }
+    },
+    "darwin-x64": {
+      "ffmpeg": {
+        "version": "9.0.2-27-g7e93014c5b",
+        "sourceRevision": "7e93014c5bbb61e7c22afebb478bf92f7a08d59a",
+        "sourceRepository": "https://github.com/FFmpeg/FFmpeg",
+        "license": "LGPL-2.1-or-later",
+        "status": "source-build-awaiting-sdk-qualification",
+        "assets": [],
+        "upstreamAssets": []
+      },
+      "mpv": {
+        "version": "0.41.0-dev-gc3ac7f395",
+        "sourceRevision": "c3ac7f39514c7f45bc38a18e66887240539ee33c",
+        "sourceRepository": "https://github.com/mpv-player/mpv",
+        "license": "bundle-notices-awaiting-verification",
+        "apiMajor": 2,
+        "libraryName": "libmpv.2.dylib",
+        "status": "source-build-awaiting-sdk-qualification",
+        "assets": [],
+        "upstreamAssets": []
+      }
+    },
+    "darwin-arm64": {
+      "ffmpeg": {
+        "version": "9.0.2-27-g7e93014c5b",
+        "sourceRevision": "7e93014c5bbb61e7c22afebb478bf92f7a08d59a",
+        "sourceRepository": "https://github.com/FFmpeg/FFmpeg",
+        "license": "LGPL-2.1-or-later",
+        "status": "source-build-awaiting-sdk-qualification",
+        "assets": [],
+        "upstreamAssets": []
+      },
+      "mpv": {
+        "version": "0.41.0-dev-gc3ac7f395",
+        "sourceRevision": "c3ac7f39514c7f45bc38a18e66887240539ee33c",
+        "sourceRepository": "https://github.com/mpv-player/mpv",
+        "license": "bundle-notices-awaiting-verification",
+        "apiMajor": 2,
+        "libraryName": "libmpv.2.dylib",
+        "status": "source-build-awaiting-sdk-qualification",
+        "assets": [],
+        "upstreamAssets": []
+      }
+    }
+  }
+}

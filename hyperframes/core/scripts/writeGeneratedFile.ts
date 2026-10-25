@@ -1,0 +1,69 @@
+/**
+ * Publish a file under `src/generated` so a concurrent reader never observes it
+ * half-written.
+ *
+ * The root build runs several package builds at once, and more than one of them
+ * regenerates files here while a sibling's `tsc` is reading them. A plain
+ * `writeFileSync` leaves the target truncated and then growing for the duration of
+ * the write, which surfaces in whichever build read it mid-flight as
+ * `TS1002: Unterminated string literal` — a failure that never reproduces locally,
+ * because locally nothing is reading at that instant.
+ *
+ * Writing to a temp file in the same directory and renaming over the target makes
+ * publication one atomic step: a reader sees either the whole previous file or the
+ * whole new one, never a prefix. Same directory matters — `rename` is only atomic
+ * within a filesystem.
+ *
+ * Byte-identical content is not republished, so a no-op rebuild leaves the mtime
+ * alone and nothing downstream that keys off mtime is needlessly invalidated.
+ *
+ * Returns whether the target was replaced.
+ *
+ * Lives inside `packages/core` rather than the repo-root `scripts/` because every
+ * container image that builds a package copies `packages/…` wholesale but
+ * cherry-picks root scripts one file at a time. A helper the core build imports
+ * has to travel with the package, or the image build fails on a missing module.
+ */
+
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, extname } from "node:path";
+
+export function writeGeneratedFile(outPath: string, contents: string): boolean {
+  if (existsSync(outPath) && readFileSync(outPath, "utf8") === contents) return false;
+
+  mkdirSync(dirname(outPath), { recursive: true });
+  // Not a `.ts` suffix: the temp file sits inside the package's `src` glob, and a
+  // concurrent `tsc` would otherwise try to compile it.
+  const tempPath = `${outPath}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+  try {
+    writeFileSync(tempPath, contents, "utf8");
+    renameSync(tempPath, outPath);
+  } finally {
+    rmSync(tempPath, { force: true });
+  }
+  return true;
+}
+
+/**
+ * Runs the generated source through Bun's native formatter before publication.
+ * Formatting the file after publishing it would rewrite it in place and
+ * reopen the very window the atomic rename closes.
+ */
+export function formatGeneratedSource(source: string, outPath: string): string {
+  // Native `bun fmt` formats files in place, so format a sibling copy that keeps
+  // the target's extension and repository formatting configuration.
+  const formatPath = `${outPath}.${process.pid}.${randomBytes(4).toString("hex")}.fmt${extname(outPath)}`;
+  try {
+    writeFileSync(formatPath, source, "utf8");
+    const result = Bun.spawnSync([process.execPath, "fmt", formatPath], {
+      stdout: "ignore",
+      stderr: "pipe",
+    });
+    if (!result.success)
+      throw new Error(`bun fmt failed for ${outPath}: ${result.stderr.toString()}`);
+    return readFileSync(formatPath, "utf8");
+  } finally {
+    rmSync(formatPath, { force: true });
+  }
+}

@@ -1,0 +1,16 @@
+{
+	"compilerOptions": {
+		"target": "ES2021",
+		"strict": true,
+		"noImplicitAny": true,
+		"noImplicitOverride": true,
+		"noUncheckedIndexedAccess": true,
+		"noPropertyAccessFromIndexSignature": true,
+		"skipLibCheck": true,
+		"allowJs": true,
+		"noEmit": true
+	},
+	"references": [
+		{ "path": "./tsconfig.vite.json" }
+	]
+}

@@ -1,0 +1,41 @@
+{
+  "appName": {
+    "message": "Raccourci Crunchyroll"
+  },
+  "description": {
+    "message": "Ouvrez l’épisode officiel dans votre session Chrome."
+  },
+  "title": {
+    "message": "Le dieu de la Destruction"
+  },
+  "open": {
+    "message": "Regarder sur Crunchyroll"
+  },
+  "language": {
+    "message": "Langue de l’application"
+  },
+  "note": {
+    "message": "Ce choix change la langue du raccourci. Crunchyroll gère l’audio, les sous-titres, l’accès au compte et la lecture."
+  },
+  "install": {
+    "message": "Installer ce raccourci"
+  },
+  "installUnavailable": {
+    "message": "L’installation est disponible lorsque Chrome la propose. Vous pouvez aussi utiliser le menu du navigateur."
+  },
+  "offline": {
+    "message": "Le raccourci fonctionne hors ligne ; la vidéo nécessite internet et un accès Crunchyroll autorisé."
+  },
+  "online": {
+    "message": "Raccourci prêt. La lecture se fait sur le site officiel."
+  },
+  "installed": {
+    "message": "Installation demandée. Chrome confirme le résultat."
+  },
+  "installDismissed": {
+    "message": "Installation annulée. Vous pouvez réessayer."
+  },
+  "shellError": {
+    "message": "Le raccourci local n’a pas pu être préparé pour le mode hors ligne."
+  }
+}

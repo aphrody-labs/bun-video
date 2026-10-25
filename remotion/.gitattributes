@@ -1,0 +1,6 @@
+packages/google-fonts/scripts/index.ts linguist-generated=true
+packages/google-fonts/scripts/google-fonts.ts linguist-generated=true
+packages/docs/docs/options/*.mdx linguist-generated=true
+packages/docs/static/docs/*.pdf binary
+# Remotion's native formatter uses tabs; retain its package convention.
+* whitespace=blank-at-eol,-blank-at-eof,-space-before-tab,-tab-in-indent

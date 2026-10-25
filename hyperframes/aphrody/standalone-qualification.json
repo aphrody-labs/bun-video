@@ -1,0 +1,71 @@
+{
+  "upstreamVersion": "0.8.144",
+  "checks": {
+    "help": {
+      "exitCode": 0
+    },
+    "htmlLint": {
+      "files": 1,
+      "exitCode": 0,
+      "warnings": 0,
+      "errors": 0
+    },
+    "renderHelp": {
+      "exitCode": 0
+    },
+    "sourceSharp": {
+      "exitCode": 0,
+      "pngBytes": 91
+    },
+    "compiledSharp": {
+      "exitCode": 0,
+      "fixture": "tmp/bun-video-build/sharp-proof/sharp-proof.exe",
+      "pngBytes": 91
+    },
+    "htmlMp4Render": {
+      "backend": "HeadlessChrome/152.0.7977.30 ANGLE D3D11 screenshot on qualified host",
+      "artifact": "tmp/bun-video-build/hyperframes-embedded-render.mp4",
+      "codecOverridesSet": false,
+      "stream": {
+        "codec_name": "h264",
+        "width": 320,
+        "height": 180,
+        "duration": "0.100000",
+        "nb_frames": "3"
+      },
+      "exitCode": 0,
+      "artifactBytes": 2811,
+      "nativeWebViewParity": false
+    }
+  },
+  "qualification": "Complete CLI binary, clean-directory command dispatch, HTML lint and actual H.264 rendering using embedded Sharp, libvips, runtime assets and FFmpeg/FFprobe; browser host remains external",
+  "cleanWorkingDirectory": "tmp/bun-video-build/clean-hyperframes",
+  "commandsBundled": "entire packages/cli/src/cli.ts reachable dynamic graph",
+  "externalRequirements": [
+    "Qualified browser backend; tested existing HeadlessChrome152, native WebView production parity separate",
+    "Hydrated Git LFS media for media-dependent fixtures",
+    "Studio/templates/skills static assets for associated commands"
+  ],
+  "sha256": "c5e8c8ed1719123dc5f93cc7edb230cae5bd4793bb94f9ff61409c9bfbc9bc9d",
+  "platform": "windows-x64",
+  "artifactBytes": 217522176,
+  "runtime": "1.4.3-aphrody.4+41211b568",
+  "artifact": "tmp/bun-video-build/hyperframes.exe",
+  "unifiedExecutable": {
+    "artifact": "tmp/bun-video-build/bun-video.exe",
+    "artifactBytes": 1036963328,
+    "sha256": "ab3ed4cd9e3282befa82db8cb0f230b0cb156915ff7c7c1b8ba0742f272584e1",
+    "cleanWorkingDirectory": "tmp/bun-video-build/clean-hyperframes",
+    "codecOverridesSet": false,
+    "checks": {
+      "htmlMp4Render": {
+        "exitCode": 1,
+        "status": "blockedLowDisk",
+        "reason": "Upstream render preflight requires at least 1024 MiB free at temporary/output paths; only 0.5 GiB was available during invocation",
+        "artifactCreated": false,
+        "log": "tmp/hyperframes-unified-render.log"
+      }
+    },
+    "qualification": "Frozen unified executable invoked with full Hyperframes render route; blocked before capture by low-disk preflight. Individual standalone successful MP4 evidence remains separate."
+  }
+}

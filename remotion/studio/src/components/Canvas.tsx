@@ -1,0 +1,1356 @@
+import type {Size} from '@remotion/player';
+import {StudioProtocolInternals} from '@remotion/studio-protocol';
+import React, {
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from 'react';
+import type {CanvasContent} from 'remotion';
+import {Internals, watchStaticFile, type PreviewSize} from 'remotion';
+import {getStaticFiles} from '../api/get-static-files';
+import {StudioServerConnectionCtx} from '../helpers/client-id';
+import {getClipboardFigmaHtml} from '../helpers/clipboard-figma';
+import {getClipboardImageFiles} from '../helpers/clipboard-images';
+import {getClipboardSvgMarkup} from '../helpers/clipboard-svg';
+import {
+	BACKGROUND,
+	BORDER_TIMELINE_DROP_BLUE,
+	TIMELINE_DROP_BLUE_ALPHA_16,
+} from '../helpers/colors';
+import {
+	getAssetMetadata,
+	getAssetPreviewMetadata,
+	type AssetMetadata,
+} from '../helpers/get-asset-metadata';
+import {
+	applyZoomAroundFocalPoint,
+	getCenterPointWhileScrolling,
+	getEffectiveTranslation,
+	getUnboundedCenterPointWhileScrolling,
+} from '../helpers/get-effective-translation';
+import {useCachedCompositionComponentInfo} from '../helpers/open-in-editor';
+import {
+	MAX_ZOOM,
+	MIN_ZOOM,
+	smoothenZoom,
+	unsmoothenZoom,
+} from '../helpers/smooth-zoom';
+import {calculateStudioScale} from '../helpers/studio-fit-padding';
+import {
+	areKeyboardShortcutsDisabled,
+	useKeybinding,
+} from '../helpers/use-keybinding';
+import {canvasRef} from '../state/canvas-ref';
+import {EditorShowGuidesRefContext} from '../state/editor-guides';
+import {EditorSnappingContext} from '../state/editor-snapping';
+import {EditorZoomGesturesContext} from '../state/editor-zoom-gestures';
+import {SetSelectedModalContext} from '../state/modals';
+import {handleCanvasCaptureDrop} from './canvas-capture-drop';
+import {getCompositionDragPreviewMetadata} from './composition-drag-data';
+import {
+	getCompositionDropPreviewBox,
+	snapCompositionDropPosition,
+	type CompositionDropPreview,
+} from './composition-drop-preview';
+import {isFileDragEvent, isSupportedDropEvent} from './drop-handler-data';
+import EditorGuides from './EditorGuides';
+import {EditorRulers} from './EditorRuler';
+import {useIsRulerVisible} from './EditorRuler/use-is-ruler-visible';
+import {
+	getEffectDragData,
+	isEffectDragOverTarget,
+	isLutEffectDrop,
+} from './effect-drag-and-drop';
+import {getElementDragData, hasElementDragType} from './element-drag-and-drop';
+import {handleDrop} from './handle-drop';
+import {
+	hasSvgFile,
+	importAssets,
+	importFigmaClipboard,
+	insertSvgMarkup,
+	type InsertElementDropPosition,
+} from './import-assets';
+import {SPACING_UNIT} from './layout';
+import {showNotification} from './Notifications/NotificationCenter';
+import {VideoPreview} from './Preview';
+import {ResetZoomButton} from './ResetZoomButton';
+import {SelectedOutlineSnapLines} from './SelectedOutlineSnapIndicators';
+import {useSvgImportDialog} from './SvgImportDialog';
+import {getCurrentFrame} from './Timeline/imperative-state';
+import {useResolvedStack} from './Timeline/use-resolved-stack';
+
+const getCanvasDragPreviewMetadata = (mimeTypes: ArrayLike<string>) => {
+	const composition = getCompositionDragPreviewMetadata(mimeTypes);
+	if (composition !== null) {
+		return {
+			...composition,
+			width: composition.width ?? undefined,
+			height: composition.height ?? undefined,
+			durationInFrames: composition.durationInFrames ?? undefined,
+		};
+	}
+
+	return StudioProtocolInternals.getDragPreviewMetadata(mimeTypes);
+};
+
+const getContainerStyle = (
+	editorZoomGestures: boolean,
+): React.CSSProperties => ({
+	flex: 1,
+	display: 'flex',
+	overflow: 'hidden',
+	position: 'relative',
+	backgroundColor: BACKGROUND,
+	...(editorZoomGestures ? {touchAction: 'none' as const} : {}),
+});
+
+const resetZoom: React.CSSProperties = {
+	position: 'absolute',
+	top: SPACING_UNIT * 2,
+	right: SPACING_UNIT * 2,
+};
+
+const ZOOM_PX_FACTOR = 0.003;
+
+type WebKitGestureEvent = UIEvent & {
+	scale: number;
+	clientX: number;
+	clientY: number;
+};
+
+const calculateCanvasScale = ({
+	addFitPadding,
+	canvasSize,
+	compositionHeight,
+	compositionWidth,
+	previewSize,
+}: {
+	readonly addFitPadding: boolean;
+	readonly canvasSize: Size;
+	readonly compositionHeight: number;
+	readonly compositionWidth: number;
+	readonly previewSize: PreviewSize['size'];
+}) => {
+	const options = {
+		canvasSize,
+		compositionHeight,
+		compositionWidth,
+		previewSize,
+	};
+
+	return addFitPadding
+		? calculateStudioScale(options)
+		: Internals.calculateScale(options);
+};
+
+const getDropPosition = ({
+	addFitPadding,
+	clientX,
+	clientY,
+	contentDimensions,
+	unbounded,
+	previewSize,
+	size,
+}: {
+	addFitPadding: boolean;
+	clientX: number;
+	clientY: number;
+	contentDimensions: {width: number; height: number} | 'none' | null;
+	unbounded: boolean;
+	previewSize: PreviewSize;
+	size: Size;
+}): InsertElementDropPosition | null => {
+	if (contentDimensions === null || contentDimensions === 'none') {
+		return null;
+	}
+
+	const scale = calculateCanvasScale({
+		addFitPadding,
+		canvasSize: size,
+		compositionHeight: contentDimensions.height,
+		compositionWidth: contentDimensions.width,
+		previewSize: previewSize.size,
+	});
+	const getCenterPoint = unbounded
+		? getUnboundedCenterPointWhileScrolling
+		: getCenterPointWhileScrolling;
+	const {centerX, centerY} = getCenterPoint({
+		size,
+		clientX,
+		clientY,
+		compositionWidth: contentDimensions.width,
+		compositionHeight: contentDimensions.height,
+		scale,
+		translation: previewSize.translation,
+	});
+
+	return {centerX, centerY};
+};
+
+const isDragEventInsideCanvas = (event: DragEvent): boolean => {
+	const {current} = canvasRef;
+	if (!current) {
+		return false;
+	}
+
+	const targetIsNode = event.target instanceof Node;
+	if (targetIsNode && current.contains(event.target as Node)) {
+		return true;
+	}
+
+	const rect = current.getBoundingClientRect();
+	return (
+		event.clientX >= rect.left &&
+		event.clientX <= rect.right &&
+		event.clientY >= rect.top &&
+		event.clientY <= rect.bottom
+	);
+};
+
+export const Canvas: React.FC<{
+	readonly canvasContent: CanvasContent;
+	readonly size: Size;
+}> = ({canvasContent, size}) => {
+	const {setSize, size: previewSize} = useContext(Internals.PreviewSizeContext);
+	const {editorZoomGestures} = useContext(EditorZoomGesturesContext);
+	const previewSnapshotRef = useRef({
+		previewSize,
+		canvasSize: size,
+		contentDimensions: null as {width: number; height: number} | 'none' | null,
+	});
+	const pinchBaseZoomRef = useRef<number | null>(null);
+	const suppressWheelFromWebKitPinchRef = useRef(false);
+	const touchPinchRef = useRef<{
+		initialDistance: number;
+		initialZoom: number;
+	} | null>(null);
+	const keybindings = useKeybinding();
+	const chooseSvgImportMode = useSvgImportDialog();
+	const {setSelectedModal} = useContext(SetSelectedModalContext);
+	const config = Internals.useUnsafeVideoConfig();
+	const areRulersVisible = useIsRulerVisible();
+	const guideStateRef = useContext(EditorShowGuidesRefContext);
+	if (guideStateRef === null) {
+		throw new Error('Canvas must be used inside ShowGuidesProvider');
+	}
+
+	const {editorSnapping} = useContext(EditorSnappingContext);
+	const {compositions} = useContext(Internals.CompositionManager);
+	const {setCurrentAssetMetadata} = useContext(Internals.CompositionSetters);
+	const {previewServerState} = useContext(StudioServerConnectionCtx);
+	const [isAddingAsset, setIsAddingAsset] = useState(false);
+	const [compositionDropPreview, setCompositionDropPreview] =
+		useState<CompositionDropPreview | null>(null);
+	const [assetResolution, setAssetResolution] = useState<AssetMetadata | null>(
+		null,
+	);
+	const metadataRequestRef = useRef(0);
+
+	const currentCompositionId =
+		canvasContent.type === 'composition' ? canvasContent.compositionId : null;
+	const currentComposition = useMemo(() => {
+		if (currentCompositionId === null) {
+			return null;
+		}
+
+		return (
+			compositions.find(
+				(composition) => composition.id === currentCompositionId,
+			) ?? null
+		);
+	}, [compositions, currentCompositionId]);
+	const resolvedCompositionLocation = useResolvedStack(
+		currentComposition?.stack ?? null,
+	);
+	const compositionFile = resolvedCompositionLocation?.source ?? null;
+	const compositionComponentInfo = useCachedCompositionComponentInfo({
+		compositionFile,
+		compositionId: currentCompositionId,
+	});
+	const canReceiveElementInstallRequest =
+		previewServerState.type === 'connected' &&
+		!window.remotion_isReadOnlyStudio &&
+		currentCompositionId !== null &&
+		compositionFile !== null;
+	const canInsertIntoCurrentComposition =
+		canReceiveElementInstallRequest &&
+		compositionComponentInfo?.canAddSequence === true;
+	const canDropAssets = canInsertIntoCurrentComposition && !isAddingAsset;
+	const cannotAddSequence = compositionComponentInfo?.canAddSequence === false;
+	const contentDimensions = useMemo(() => {
+		if (
+			(canvasContent.type === 'asset' ||
+				canvasContent.type === 'output' ||
+				canvasContent.type === 'output-blob') &&
+			assetResolution &&
+			assetResolution.type === 'found'
+		) {
+			return assetResolution.dimensions;
+		}
+
+		if (config) {
+			return {width: config.width, height: config.height};
+		}
+
+		return null;
+	}, [assetResolution, config, canvasContent]);
+
+	const isFit = previewSize.size === 'auto';
+	const addFitPadding = canvasContent.type === 'composition';
+
+	previewSnapshotRef.current = {
+		previewSize,
+		canvasSize: size,
+		contentDimensions,
+	};
+
+	const onWheel = useCallback(
+		(e: Event) => {
+			const ev = e as WheelEvent;
+			if (!editorZoomGestures) {
+				return;
+			}
+
+			if (!size) {
+				return;
+			}
+
+			if (!contentDimensions || contentDimensions === 'none') {
+				return;
+			}
+
+			const wantsToZoom = ev.ctrlKey || ev.metaKey;
+
+			if (!wantsToZoom && isFit) {
+				return;
+			}
+
+			if (suppressWheelFromWebKitPinchRef.current && wantsToZoom) {
+				ev.preventDefault();
+				return;
+			}
+
+			ev.preventDefault();
+
+			setSize((prevSize) => {
+				const scale = calculateCanvasScale({
+					addFitPadding,
+					canvasSize: size,
+					compositionHeight: contentDimensions.height,
+					compositionWidth: contentDimensions.width,
+					previewSize: prevSize.size,
+				});
+
+				if (wantsToZoom) {
+					const oldSize = prevSize.size === 'auto' ? scale : prevSize.size;
+					const smoothened = smoothenZoom(oldSize);
+					const added = smoothened + ev.deltaY * ZOOM_PX_FACTOR;
+					const unsmoothened = unsmoothenZoom(added);
+
+					return applyZoomAroundFocalPoint({
+						addFitPadding,
+						canvasSize: size,
+						contentDimensions,
+						previewSizeBefore: prevSize,
+						oldNumericSize: oldSize,
+						newNumericSize: unsmoothened,
+						clientX: ev.clientX,
+						clientY: ev.clientY,
+					});
+				}
+
+				const effectiveTranslation = getEffectiveTranslation({
+					translation: prevSize.translation,
+					canvasSize: size,
+					compositionHeight: contentDimensions.height,
+					compositionWidth: contentDimensions.width,
+					scale,
+				});
+
+				return {
+					...prevSize,
+					translation: getEffectiveTranslation({
+						translation: {
+							x: effectiveTranslation.x + ev.deltaX,
+							y: effectiveTranslation.y + ev.deltaY,
+						},
+						canvasSize: size,
+						compositionHeight: contentDimensions.height,
+						compositionWidth: contentDimensions.width,
+						scale,
+					}),
+				};
+			});
+		},
+		[
+			addFitPadding,
+			editorZoomGestures,
+			contentDimensions,
+			isFit,
+			setSize,
+			size,
+		],
+	);
+
+	useEffect(() => {
+		const {current} = canvasRef;
+		if (!current) {
+			return;
+		}
+
+		current.addEventListener('wheel', onWheel, {passive: false});
+
+		return () => {
+			current.removeEventListener('wheel', onWheel);
+		};
+	}, [onWheel]);
+
+	const supportsWebKitPinch =
+		typeof window !== 'undefined' && 'GestureEvent' in window;
+
+	useEffect(() => {
+		const {current} = canvasRef;
+		if (!current || !editorZoomGestures || !supportsWebKitPinch) {
+			return;
+		}
+
+		const endWebKitPinch = () => {
+			pinchBaseZoomRef.current = null;
+			suppressWheelFromWebKitPinchRef.current = false;
+		};
+
+		const onGestureStart = (event: Event) => {
+			const e = event as WebKitGestureEvent;
+			const snap = previewSnapshotRef.current;
+			const canvasSz = snap.canvasSize;
+			const cdim = snap.contentDimensions;
+			if (!canvasSz || !cdim || cdim === 'none') {
+				return;
+			}
+
+			e.preventDefault();
+			suppressWheelFromWebKitPinchRef.current = true;
+
+			const fitted = calculateCanvasScale({
+				addFitPadding,
+				canvasSize: canvasSz,
+				compositionHeight: cdim.height,
+				compositionWidth: cdim.width,
+				previewSize: snap.previewSize.size,
+			});
+			pinchBaseZoomRef.current =
+				snap.previewSize.size === 'auto' ? fitted : snap.previewSize.size;
+		};
+
+		const onGestureChange = (event: Event) => {
+			const e = event as WebKitGestureEvent;
+			const base = pinchBaseZoomRef.current;
+			const snap = previewSnapshotRef.current;
+			const canvasSz = snap.canvasSize;
+			const cdim = snap.contentDimensions;
+			if (base === null || !canvasSz || !cdim || cdim === 'none') {
+				return;
+			}
+
+			const dimensions = cdim;
+
+			e.preventDefault();
+
+			setSize((prevSize) => {
+				const scale = calculateCanvasScale({
+					addFitPadding,
+					canvasSize: canvasSz,
+					compositionHeight: dimensions.height,
+					compositionWidth: dimensions.width,
+					previewSize: prevSize.size,
+				});
+				const oldNumeric = prevSize.size === 'auto' ? scale : prevSize.size;
+
+				return applyZoomAroundFocalPoint({
+					addFitPadding,
+					canvasSize: canvasSz,
+					contentDimensions: dimensions,
+					previewSizeBefore: prevSize,
+					oldNumericSize: oldNumeric,
+					newNumericSize: base * e.scale,
+					clientX: e.clientX,
+					clientY: e.clientY,
+				});
+			});
+		};
+
+		const onGestureEnd = () => {
+			endWebKitPinch();
+		};
+
+		current.addEventListener('gesturestart', onGestureStart, {
+			passive: false,
+		});
+		current.addEventListener('gesturechange', onGestureChange, {
+			passive: false,
+		});
+		current.addEventListener('gestureend', onGestureEnd);
+		current.addEventListener('gesturecancel', onGestureEnd);
+
+		return () => {
+			current.removeEventListener('gesturestart', onGestureStart);
+			current.removeEventListener('gesturechange', onGestureChange);
+			current.removeEventListener('gestureend', onGestureEnd);
+			current.removeEventListener('gesturecancel', onGestureEnd);
+		};
+	}, [addFitPadding, editorZoomGestures, setSize, supportsWebKitPinch]);
+
+	useEffect(() => {
+		const {current} = canvasRef;
+		if (!current || !editorZoomGestures) {
+			return;
+		}
+
+		const onTouchStart = (event: TouchEvent) => {
+			if (event.touches.length !== 2) {
+				touchPinchRef.current = null;
+				return;
+			}
+
+			const snap = previewSnapshotRef.current;
+			if (
+				!snap.canvasSize ||
+				!snap.contentDimensions ||
+				snap.contentDimensions === 'none'
+			) {
+				return;
+			}
+
+			const [t0, t1] = [event.touches[0], event.touches[1]];
+			const initialDistance = Math.hypot(
+				t1.clientX - t0.clientX,
+				t1.clientY - t0.clientY,
+			);
+			if (initialDistance < 1e-6) {
+				return;
+			}
+
+			const fitted = calculateCanvasScale({
+				addFitPadding,
+				canvasSize: snap.canvasSize,
+				compositionHeight: snap.contentDimensions.height,
+				compositionWidth: snap.contentDimensions.width,
+				previewSize: snap.previewSize.size,
+			});
+			const initialZoom =
+				snap.previewSize.size === 'auto' ? fitted : snap.previewSize.size;
+
+			touchPinchRef.current = {initialDistance, initialZoom};
+		};
+
+		const onTouchMove = (event: TouchEvent) => {
+			const pinch = touchPinchRef.current;
+			const snap = previewSnapshotRef.current;
+			if (
+				pinch === null ||
+				event.touches.length !== 2 ||
+				!snap.canvasSize ||
+				!snap.contentDimensions ||
+				snap.contentDimensions === 'none'
+			) {
+				return;
+			}
+
+			event.preventDefault();
+
+			const [t0, t1] = [event.touches[0], event.touches[1]];
+			const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+			const ratio = dist / pinch.initialDistance;
+			const clientX = (t0.clientX + t1.clientX) / 2;
+			const clientY = (t0.clientY + t1.clientY) / 2;
+
+			setSize((prevSize) => {
+				const canvasSz = snap.canvasSize!;
+				const cdim = snap.contentDimensions as {
+					width: number;
+					height: number;
+				};
+				const scale = calculateCanvasScale({
+					addFitPadding,
+					canvasSize: canvasSz,
+					compositionHeight: cdim.height,
+					compositionWidth: cdim.width,
+					previewSize: prevSize.size,
+				});
+				const oldNumeric = prevSize.size === 'auto' ? scale : prevSize.size;
+
+				return applyZoomAroundFocalPoint({
+					addFitPadding,
+					canvasSize: canvasSz,
+					contentDimensions: cdim,
+					previewSizeBefore: prevSize,
+					oldNumericSize: oldNumeric,
+					newNumericSize: pinch.initialZoom * ratio,
+					clientX,
+					clientY,
+				});
+			});
+		};
+
+		const onTouchEnd = (event: TouchEvent) => {
+			if (event.touches.length < 2) {
+				touchPinchRef.current = null;
+			}
+		};
+
+		current.addEventListener('touchstart', onTouchStart, {passive: true});
+		current.addEventListener('touchmove', onTouchMove, {passive: false});
+		current.addEventListener('touchend', onTouchEnd);
+		current.addEventListener('touchcancel', onTouchEnd);
+
+		return () => {
+			current.removeEventListener('touchstart', onTouchStart);
+			current.removeEventListener('touchmove', onTouchMove);
+			current.removeEventListener('touchend', onTouchEnd);
+			current.removeEventListener('touchcancel', onTouchEnd);
+		};
+	}, [addFitPadding, editorZoomGestures, setSize]);
+
+	const onReset = useCallback(() => {
+		setSize(() => {
+			return {
+				translation: {
+					x: 0,
+					y: 0,
+				},
+				size: 'auto',
+			};
+		});
+	}, [setSize]);
+
+	const onZoomIn = useCallback(() => {
+		if (!contentDimensions || contentDimensions === 'none') {
+			return;
+		}
+
+		if (!size) {
+			return;
+		}
+
+		setSize((prevSize) => {
+			const scale = calculateCanvasScale({
+				addFitPadding,
+				canvasSize: size,
+				compositionHeight: contentDimensions.height,
+				compositionWidth: contentDimensions.width,
+				previewSize: prevSize.size,
+			});
+			return {
+				translation: {
+					x: 0,
+					y: 0,
+				},
+				size: Math.min(MAX_ZOOM, scale * 2),
+			};
+		});
+	}, [addFitPadding, contentDimensions, setSize, size]);
+
+	const onZoomOut = useCallback(() => {
+		if (!contentDimensions || contentDimensions === 'none') {
+			return;
+		}
+
+		if (!size) {
+			return;
+		}
+
+		setSize((prevSize) => {
+			const scale = calculateCanvasScale({
+				addFitPadding,
+				canvasSize: size,
+				compositionHeight: contentDimensions.height,
+				compositionWidth: contentDimensions.width,
+				previewSize: prevSize.size,
+			});
+			return {
+				translation: {
+					x: 0,
+					y: 0,
+				},
+				size: Math.max(MIN_ZOOM, scale / 2),
+			};
+		});
+	}, [addFitPadding, contentDimensions, setSize, size]);
+
+	useEffect(() => {
+		const resetBinding = keybindings.registerKeybinding({
+			event: 'keydown',
+			action: 'resetZoom',
+			callback: onReset,
+			preventDefault: true,
+			triggerIfInputFieldFocused: false,
+			keepRegisteredWhenNotHighestContext: false,
+		});
+
+		const zoomIn = keybindings.registerKeybinding({
+			event: 'keydown',
+			action: 'zoomIn',
+			callback: onZoomIn,
+			preventDefault: true,
+			triggerIfInputFieldFocused: false,
+			keepRegisteredWhenNotHighestContext: false,
+		});
+
+		const zoomOut = keybindings.registerKeybinding({
+			event: 'keydown',
+			action: 'zoomOut',
+			callback: onZoomOut,
+			preventDefault: true,
+			triggerIfInputFieldFocused: false,
+			keepRegisteredWhenNotHighestContext: false,
+		});
+
+		return () => {
+			resetBinding.unregister();
+			zoomIn.unregister();
+			zoomOut.unregister();
+		};
+	}, [keybindings, onReset, onZoomIn, onZoomOut]);
+
+	const fetchMetadata = useCallback(async () => {
+		const request = ++metadataRequestRef.current;
+		setAssetResolution(null);
+		if (canvasContent.type === 'composition') {
+			setCurrentAssetMetadata(null);
+			return;
+		}
+
+		const metadata = await getAssetMetadata(
+			canvasContent,
+			canvasContent.type === 'asset',
+		);
+		if (request !== metadataRequestRef.current) {
+			return;
+		}
+
+		setAssetResolution(metadata);
+		setCurrentAssetMetadata(getAssetPreviewMetadata({canvasContent, metadata}));
+	}, [canvasContent, setCurrentAssetMetadata]);
+
+	useEffect(() => {
+		if (canvasContent.type !== 'asset') {
+			return;
+		}
+
+		const file = watchStaticFile(canvasContent.asset, () => {
+			fetchMetadata();
+		});
+		return () => {
+			file.cancel();
+		};
+	}, [canvasContent, fetchMetadata]);
+
+	useEffect(() => {
+		fetchMetadata();
+	}, [fetchMetadata]);
+
+	const onDragOver = useCallback(
+		(event: DragEvent) => {
+			if (!isSupportedDropEvent(event) || !isDragEventInsideCanvas(event)) {
+				setCompositionDropPreview(null);
+				return;
+			}
+
+			if (isEffectDragOverTarget(event)) {
+				event.preventDefault();
+				if (event.dataTransfer) {
+					event.dataTransfer.dropEffect = 'copy';
+				}
+
+				setCompositionDropPreview(null);
+				return;
+			}
+
+			const mayBeCanvasCapture =
+				isFileDragEvent(event) && !window.remotion_isReadOnlyStudio;
+			const canDropElementIntoNewComposition =
+				cannotAddSequence &&
+				canReceiveElementInstallRequest &&
+				!isAddingAsset &&
+				hasElementDragType(event.dataTransfer);
+
+			if (!canDropAssets && !cannotAddSequence && !mayBeCanvasCapture) {
+				setCompositionDropPreview(null);
+				return;
+			}
+
+			event.preventDefault();
+			if (event.dataTransfer) {
+				event.dataTransfer.dropEffect =
+					canDropAssets ||
+					canDropElementIntoNewComposition ||
+					mayBeCanvasCapture
+						? 'copy'
+						: 'none';
+			}
+
+			if (
+				!canDropAssets ||
+				contentDimensions === null ||
+				contentDimensions === 'none'
+			) {
+				setCompositionDropPreview(null);
+				return;
+			}
+
+			const metadata = getCanvasDragPreviewMetadata(
+				event.dataTransfer?.types ?? [],
+			);
+			if (
+				(metadata?.type !== 'composition' && metadata?.type !== 'element') ||
+				(metadata.type === 'composition' &&
+					(metadata.width === undefined || metadata.height === undefined))
+			) {
+				setCompositionDropPreview(null);
+				return;
+			}
+
+			const isFullscreenElement =
+				metadata.type === 'element' &&
+				(metadata.width === undefined || metadata.height === undefined);
+			let dropPosition = isFullscreenElement
+				? {
+						centerX: contentDimensions.width / 2,
+						centerY: contentDimensions.height / 2,
+					}
+				: getDropPosition({
+						addFitPadding,
+						clientX: event.clientX,
+						clientY: event.clientY,
+						contentDimensions,
+						unbounded: metadata.type === 'composition',
+						previewSize,
+						size,
+					});
+			if (dropPosition === null) {
+				setCompositionDropPreview(null);
+				return;
+			}
+
+			const compositionDimensions =
+				metadata.width === undefined || metadata.height === undefined
+					? contentDimensions
+					: {width: metadata.width, height: metadata.height};
+			let snapPoints: CompositionDropPreview['snapPoints'] = [];
+			if (
+				!isFullscreenElement &&
+				editorSnapping &&
+				!event.metaKey &&
+				!event.ctrlKey
+			) {
+				const {editorShowGuides, guidesList} = guideStateRef.current;
+				const snapped = snapCompositionDropPosition({
+					compositionDimensions,
+					destinationDimensions: contentDimensions,
+					dropPosition,
+					guides: editorShowGuides
+						? guidesList.filter(
+								(guide) => guide.compositionId === currentCompositionId,
+							)
+						: [],
+					scale: calculateCanvasScale({
+						addFitPadding,
+						canvasSize: size,
+						compositionHeight: contentDimensions.height,
+						compositionWidth: contentDimensions.width,
+						previewSize: previewSize.size,
+					}),
+				});
+				dropPosition = snapped.dropPosition;
+				snapPoints = snapped.snapPoints;
+			}
+
+			setCompositionDropPreview((currentPreview) => {
+				if (
+					currentPreview?.compositionDimensions.width ===
+						compositionDimensions.width &&
+					currentPreview.compositionDimensions.height ===
+						compositionDimensions.height &&
+					currentPreview.dropPosition.centerX === dropPosition.centerX &&
+					currentPreview.dropPosition.centerY === dropPosition.centerY &&
+					currentPreview.snapPoints.length === snapPoints.length &&
+					snapPoints.every((snapPoint, index) => {
+						const currentPoint = currentPreview.snapPoints[index];
+						return (
+							currentPoint.edge === snapPoint.edge &&
+							currentPoint.target.type === snapPoint.target.type &&
+							currentPoint.target.position === snapPoint.target.position
+						);
+					})
+				) {
+					return currentPreview;
+				}
+
+				return {compositionDimensions, dropPosition, snapPoints};
+			});
+		},
+		[
+			addFitPadding,
+			canDropAssets,
+			cannotAddSequence,
+			canReceiveElementInstallRequest,
+			contentDimensions,
+			currentCompositionId,
+			editorSnapping,
+			guideStateRef,
+			isAddingAsset,
+			previewSize,
+			size,
+		],
+	);
+
+	const onDragLeave = useCallback((event: DragEvent) => {
+		const canvas = canvasRef.current;
+		if (canvas !== null) {
+			const rect = canvas.getBoundingClientRect();
+			if (
+				(event.clientX >= rect.left &&
+					event.clientX <= rect.right &&
+					event.clientY >= rect.top &&
+					event.clientY <= rect.bottom) ||
+				(event.relatedTarget instanceof Node &&
+					canvas.contains(event.relatedTarget))
+			) {
+				return;
+			}
+		}
+
+		setCompositionDropPreview(null);
+	}, []);
+
+	const onDragEnd = useCallback(() => {
+		setCompositionDropPreview(null);
+	}, []);
+
+	const onDrop = useCallback(
+		async (event: DragEvent) => {
+			setCompositionDropPreview(null);
+
+			if (!isSupportedDropEvent(event) || !isDragEventInsideCanvas(event)) {
+				return;
+			}
+
+			if (isLutEffectDrop(event)) {
+				event.preventDefault();
+				return;
+			}
+
+			const localFiles = isFileDragEvent(event)
+				? Array.from(event.dataTransfer?.files ?? [])
+				: null;
+
+			if (localFiles !== null && !window.remotion_isReadOnlyStudio) {
+				event.preventDefault();
+				event.stopPropagation();
+				if (localFiles.length === 1) {
+					setIsAddingAsset(true);
+					try {
+						if (
+							await handleCanvasCaptureDrop({
+								files: localFiles,
+								setSelectedModal,
+							})
+						) {
+							return;
+						}
+					} finally {
+						setIsAddingAsset(false);
+					}
+				}
+			}
+
+			const canDropElementIntoNewComposition =
+				cannotAddSequence &&
+				canReceiveElementInstallRequest &&
+				!isAddingAsset &&
+				getElementDragData(event.dataTransfer) !== null;
+
+			if (cannotAddSequence && !canDropElementIntoNewComposition) {
+				event.preventDefault();
+				event.stopPropagation();
+				showNotification(
+					'Cannot insert this item: This composition component cannot accept a new <Sequence>.',
+					3000,
+				);
+				return;
+			}
+
+			if (
+				(!canDropAssets && !canDropElementIntoNewComposition) ||
+				compositionFile === null ||
+				currentCompositionId === null ||
+				config === null
+			) {
+				return;
+			}
+
+			if (
+				event.dataTransfer &&
+				getEffectDragData(event.dataTransfer) !== null
+			) {
+				event.preventDefault();
+				return;
+			}
+
+			event.preventDefault();
+			event.stopPropagation();
+
+			setIsAddingAsset(true);
+			try {
+				const metadata = getCanvasDragPreviewMetadata(
+					event.dataTransfer?.types ?? [],
+				);
+				const isComposition = metadata?.type === 'composition';
+				let dropPosition = getDropPosition({
+					addFitPadding,
+					clientX: event.clientX,
+					clientY: event.clientY,
+					contentDimensions,
+					unbounded: isComposition,
+					previewSize,
+					size,
+				});
+				if (
+					dropPosition !== null &&
+					(metadata?.type === 'composition' || metadata?.type === 'element') &&
+					metadata.width !== undefined &&
+					metadata.height !== undefined &&
+					contentDimensions !== null &&
+					contentDimensions !== 'none' &&
+					editorSnapping &&
+					!event.metaKey &&
+					!event.ctrlKey
+				) {
+					const {editorShowGuides, guidesList} = guideStateRef.current;
+					dropPosition = snapCompositionDropPosition({
+						compositionDimensions: {
+							width: metadata.width,
+							height: metadata.height,
+						},
+						destinationDimensions: contentDimensions,
+						dropPosition,
+						guides: editorShowGuides
+							? guidesList.filter(
+									(guide) => guide.compositionId === currentCompositionId,
+								)
+							: [],
+						scale: calculateCanvasScale({
+							addFitPadding,
+							canvasSize: size,
+							compositionHeight: contentDimensions.height,
+							compositionWidth: contentDimensions.width,
+							previewSize: previewSize.size,
+						}),
+					}).dropPosition;
+				}
+
+				await handleDrop({
+					chooseSvgImportMode,
+					compositionFile,
+					compositionId: currentCompositionId,
+					destinationDimensions:
+						contentDimensions === 'none' ? null : contentDimensions,
+					dropPosition,
+					event,
+					fps: config.fps,
+					from: getCurrentFrame(),
+					localFiles,
+					preferCompositionStart: true,
+				});
+			} finally {
+				setIsAddingAsset(false);
+			}
+		},
+		[
+			addFitPadding,
+			canDropAssets,
+			cannotAddSequence,
+			canReceiveElementInstallRequest,
+			chooseSvgImportMode,
+			compositionFile,
+			config,
+			contentDimensions,
+			currentCompositionId,
+			editorSnapping,
+			guideStateRef,
+			isAddingAsset,
+			previewSize,
+			size,
+			setSelectedModal,
+		],
+	);
+
+	const onPaste = useCallback(
+		async (event: ClipboardEvent) => {
+			const {activeElement} = document;
+			if (
+				!canDropAssets ||
+				compositionFile === null ||
+				currentCompositionId === null ||
+				config === null ||
+				event.clipboardData === null ||
+				activeElement instanceof HTMLInputElement ||
+				activeElement instanceof HTMLTextAreaElement ||
+				(activeElement instanceof HTMLElement &&
+					activeElement.isContentEditable)
+			) {
+				return;
+			}
+
+			const dropPosition =
+				contentDimensions === null || contentDimensions === 'none'
+					? null
+					: {
+							centerX: contentDimensions.width / 2,
+							centerY: contentDimensions.height / 2,
+						};
+			const figmaHtml = getClipboardFigmaHtml(event.clipboardData);
+			if (figmaHtml !== null) {
+				event.preventDefault();
+				setIsAddingAsset(true);
+				try {
+					await importFigmaClipboard({
+						compositionFile,
+						compositionId: currentCompositionId,
+						destinationDimensions:
+							contentDimensions === 'none' ? null : contentDimensions,
+						dropPosition,
+						fps: config.fps,
+						html: figmaHtml,
+					});
+				} finally {
+					setIsAddingAsset(false);
+				}
+
+				return;
+			}
+
+			const svgMarkup = getClipboardSvgMarkup(event.clipboardData);
+			if (svgMarkup !== null) {
+				event.preventDefault();
+				setIsAddingAsset(true);
+				try {
+					await insertSvgMarkup({
+						compositionFile,
+						compositionId: currentCompositionId,
+						destinationDimensions:
+							contentDimensions === 'none' ? null : contentDimensions,
+						dropPosition,
+						fps: config.fps,
+						markup: svgMarkup,
+					});
+				} finally {
+					setIsAddingAsset(false);
+				}
+
+				return;
+			}
+
+			const files = getClipboardImageFiles({
+				clipboardData: event.clipboardData,
+				existingFileNames: getStaticFiles().map((file) => file.name),
+			});
+			if (files.length === 0) {
+				return;
+			}
+
+			event.preventDefault();
+			const svgImportMode = hasSvgFile(files)
+				? await chooseSvgImportMode()
+				: 'image';
+			if (svgImportMode === null) {
+				return;
+			}
+
+			setIsAddingAsset(true);
+			try {
+				await importAssets({
+					files,
+					fps: config.fps,
+					compositionFile,
+					compositionId: currentCompositionId,
+					destinationDimensions:
+						contentDimensions === 'none' ? null : contentDimensions,
+					dropPosition,
+					from: null,
+					preferCompositionStart: null,
+					svgImportMode,
+				});
+			} finally {
+				setIsAddingAsset(false);
+			}
+		},
+		[
+			canDropAssets,
+			chooseSvgImportMode,
+			compositionFile,
+			config,
+			contentDimensions,
+			currentCompositionId,
+		],
+	);
+
+	useEffect(() => {
+		document.addEventListener('dragover', onDragOver, {capture: true});
+		document.addEventListener('dragleave', onDragLeave, {capture: true});
+		document.addEventListener('dragend', onDragEnd, {capture: true});
+		document.addEventListener('drop', onDrop, {capture: true});
+
+		return () => {
+			document.removeEventListener('dragover', onDragOver, {capture: true});
+			document.removeEventListener('dragleave', onDragLeave, {capture: true});
+			document.removeEventListener('dragend', onDragEnd, {capture: true});
+			document.removeEventListener('drop', onDrop, {capture: true});
+		};
+	}, [onDragEnd, onDragLeave, onDragOver, onDrop]);
+
+	useEffect(() => {
+		if (
+			!canDropAssets ||
+			!keybindings.isHighestContext ||
+			areKeyboardShortcutsDisabled()
+		) {
+			return;
+		}
+
+		document.addEventListener('paste', onPaste);
+		return () => document.removeEventListener('paste', onPaste);
+	}, [canDropAssets, keybindings.isHighestContext, onPaste]);
+
+	const compositionDropPreviewStyle =
+		useMemo((): React.CSSProperties | null => {
+			if (
+				compositionDropPreview === null ||
+				contentDimensions === null ||
+				contentDimensions === 'none'
+			) {
+				return null;
+			}
+
+			const box = getCompositionDropPreviewBox({
+				canvasSize: size,
+				destinationDimensions: contentDimensions,
+				preview: compositionDropPreview,
+				previewSize,
+			});
+
+			return {
+				...box,
+				position: 'absolute',
+				boxSizing: 'border-box',
+				border: BORDER_TIMELINE_DROP_BLUE,
+				backgroundColor: TIMELINE_DROP_BLUE_ALPHA_16,
+				pointerEvents: 'none',
+				zIndex: 1,
+			};
+		}, [compositionDropPreview, contentDimensions, previewSize, size]);
+	const compositionDropSnapLines = useMemo(() => {
+		if (
+			compositionDropPreview === null ||
+			compositionDropPreview.snapPoints.length === 0 ||
+			contentDimensions === null ||
+			contentDimensions === 'none'
+		) {
+			return null;
+		}
+
+		const scale = calculateCanvasScale({
+			addFitPadding,
+			canvasSize: size,
+			compositionHeight: contentDimensions.height,
+			compositionWidth: contentDimensions.width,
+			previewSize: previewSize.size,
+		});
+		const left =
+			size.width / 2 -
+			(contentDimensions.width * scale) / 2 -
+			previewSize.translation.x;
+		const top =
+			size.height / 2 -
+			(contentDimensions.height * scale) / 2 -
+			previewSize.translation.y;
+
+		return (
+			<svg
+				aria-hidden="true"
+				data-testid="canvas-drop-snap-lines"
+				style={{
+					position: 'absolute',
+					left,
+					top,
+					width: contentDimensions.width * scale,
+					height: contentDimensions.height * scale,
+					pointerEvents: 'none',
+					overflow: 'visible',
+					zIndex: 2,
+				}}
+			>
+				<SelectedOutlineSnapLines
+					compositionHeight={contentDimensions.height}
+					compositionWidth={contentDimensions.width}
+					scale={scale}
+					snapPoints={compositionDropPreview.snapPoints}
+				/>
+			</svg>
+		);
+	}, [
+		addFitPadding,
+		compositionDropPreview,
+		contentDimensions,
+		previewSize,
+		size,
+	]);
+
+	return (
+		<>
+			<div ref={canvasRef} style={getContainerStyle(editorZoomGestures)}>
+				{size ? (
+					<VideoPreview
+						canvasContent={canvasContent}
+						contentDimensions={contentDimensions}
+						canvasSize={size}
+						assetMetadata={assetResolution}
+						onRetryAssetMetadata={fetchMetadata}
+					/>
+				) : null}
+				{compositionDropPreviewStyle === null ? null : (
+					<div
+						className="css-reset"
+						data-testid="composition-drop-preview"
+						style={compositionDropPreviewStyle}
+					/>
+				)}
+				{compositionDropSnapLines}
+				{isFit ? null : (
+					<div style={resetZoom} className="css-reset">
+						<ResetZoomButton onClick={onReset} />
+					</div>
+				)}
+				{canvasContent.type === 'composition' && (
+					<EditorGuides
+						canvasSize={size}
+						contentDimensions={contentDimensions}
+						assetMetadata={assetResolution}
+					/>
+				)}
+			</div>
+			{areRulersVisible && (
+				<EditorRulers
+					canCreateGuides={canvasContent.type === 'composition'}
+					contentDimensions={contentDimensions}
+					canvasSize={size}
+					assetMetadata={assetResolution}
+					containerRef={canvasRef}
+				/>
+			)}
+		</>
+	);
+};

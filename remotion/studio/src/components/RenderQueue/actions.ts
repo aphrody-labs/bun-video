@@ -1,0 +1,512 @@
+import type {
+	AudioCodec,
+	ChromeMode,
+	Codec,
+	ColorSpace,
+	LogLevel,
+	PixelFormat,
+	StillImageFormat,
+	VideoImageFormat,
+	X264Preset,
+} from '@remotion/renderer';
+import type {HardwareAccelerationOption} from '@remotion/renderer/client';
+import type {
+	AddCompositionRequest,
+	AddFolderRequest,
+	DeleteCompositionRequest,
+	DuplicateCompositionRequest,
+	EnumPath,
+	MoveCompositionRequest,
+	MoveFolderRequest,
+	OpenInFileExplorerRequest,
+	RenameCompositionRequest,
+	RenameFolderRequest,
+	RenderJob,
+	RequiredChromiumOptions,
+	UnwrapFolderRequest,
+	UpdateCompositionMetadataRequest,
+	VisualControlChange,
+} from '@remotion/studio-shared';
+import type {_InternalTypes} from 'remotion';
+import {NoReactInternals} from 'remotion/no-react';
+import {getBrowserStudioOperations} from '../../helpers/browser-studio-operations';
+import {callApi} from '../call-api';
+
+export const addStillRenderJob = ({
+	compositionId,
+	outName,
+	imageFormat,
+	jpegQuality,
+	frame,
+	scale,
+	logLevel,
+	chromiumOptions,
+	delayRenderTimeout,
+	envVariables,
+	inputProps,
+	offthreadVideoCacheSizeInBytes,
+	offthreadVideoThreads,
+	multiProcessOnLinux,
+	beepOnFinish,
+	metadata,
+	chromeMode,
+	mediaCacheSizeInBytes,
+	licenseKey,
+}: {
+	compositionId: string;
+	outName: string;
+	imageFormat: StillImageFormat;
+	jpegQuality: number;
+	frame: number;
+	scale: number;
+	logLevel: LogLevel;
+	chromiumOptions: RequiredChromiumOptions;
+	delayRenderTimeout: number;
+	envVariables: Record<string, string>;
+	inputProps: Record<string, unknown>;
+	offthreadVideoCacheSizeInBytes: number | null;
+	offthreadVideoThreads: number | null;
+	multiProcessOnLinux: boolean;
+	beepOnFinish: boolean;
+	metadata: Record<string, string> | null;
+	chromeMode: ChromeMode;
+	mediaCacheSizeInBytes: number | null;
+	licenseKey: string | null;
+}) => {
+	return callApi('/api/render', {
+		compositionId,
+		type: 'still',
+		outName,
+		imageFormat,
+		jpegQuality,
+		frame,
+		scale,
+		logLevel,
+		chromiumOptions,
+		delayRenderTimeout,
+		envVariables,
+		serializedInputPropsWithCustomSchema:
+			NoReactInternals.serializeJSONWithSpecialTypes({
+				data: inputProps,
+				staticBase: window.remotion_staticBase,
+				indent: undefined,
+			}).serializedString,
+		offthreadVideoCacheSizeInBytes,
+		offthreadVideoThreads,
+		multiProcessOnLinux,
+		beepOnFinish,
+		metadata,
+		chromeMode,
+		mediaCacheSizeInBytes,
+		licenseKey,
+	});
+};
+
+export const addSequenceRenderJob = ({
+	compositionId,
+	outName,
+	imageFormat,
+	startFrame,
+	endFrame,
+	scale,
+	logLevel,
+	chromiumOptions,
+	delayRenderTimeout,
+	envVariables,
+	inputProps,
+	concurrency,
+	offthreadVideoCacheSizeInBytes,
+	offthreadVideoThreads,
+	jpegQuality,
+	disallowParallelEncoding,
+	multiProcessOnLinux,
+	beepOnFinish,
+	repro,
+	metadata,
+	chromeMode,
+	mediaCacheSizeInBytes,
+}: {
+	compositionId: string;
+	outName: string;
+	imageFormat: VideoImageFormat;
+	jpegQuality: number;
+	startFrame: number;
+	endFrame: number;
+	scale: number;
+	logLevel: LogLevel;
+	chromiumOptions: RequiredChromiumOptions;
+	concurrency: number;
+	delayRenderTimeout: number;
+	envVariables: Record<string, string>;
+	inputProps: Record<string, unknown>;
+	offthreadVideoCacheSizeInBytes: number | null;
+	offthreadVideoThreads: number | null;
+	disallowParallelEncoding: boolean;
+	multiProcessOnLinux: boolean;
+	beepOnFinish: boolean;
+	repro: boolean;
+	metadata: Record<string, string> | null;
+	chromeMode: ChromeMode;
+	mediaCacheSizeInBytes: number | null;
+}) => {
+	return callApi('/api/render', {
+		compositionId,
+		type: 'sequence',
+		outName,
+		imageFormat,
+		jpegQuality,
+		scale,
+		startFrame,
+		endFrame,
+		logLevel,
+		chromiumOptions,
+		delayRenderTimeout,
+		envVariables,
+		concurrency,
+		serializedInputPropsWithCustomSchema:
+			NoReactInternals.serializeJSONWithSpecialTypes({
+				data: inputProps,
+				staticBase: window.remotion_staticBase,
+				indent: undefined,
+			}).serializedString,
+		offthreadVideoCacheSizeInBytes,
+		offthreadVideoThreads,
+		disallowParallelEncoding,
+		multiProcessOnLinux,
+		beepOnFinish,
+		repro,
+		metadata,
+		chromeMode,
+		mediaCacheSizeInBytes,
+	});
+};
+
+export const addVideoRenderJob = ({
+	compositionId,
+	outName,
+	imageFormat,
+	jpegQuality,
+	scale,
+	logLevel,
+	codec,
+	concurrency,
+	crf,
+	gopSize,
+	startFrame,
+	endFrame,
+	muted,
+	enforceAudioTrack,
+	proResProfile,
+	x264Preset,
+	pixelFormat,
+	audioBitrate,
+	videoBitrate,
+	everyNthFrame,
+	numberOfGifLoops,
+	delayRenderTimeout,
+	audioCodec,
+	disallowParallelEncoding,
+	chromiumOptions,
+	envVariables,
+	inputProps,
+	offthreadVideoCacheSizeInBytes,
+	offthreadVideoThreads,
+	colorSpace,
+	multiProcessOnLinux,
+	encodingMaxRate,
+	encodingBufferSize,
+	beepOnFinish,
+	repro,
+	forSeamlessAacConcatenation,
+	separateAudioTo,
+	metadata,
+	hardwareAcceleration,
+	chromeMode,
+	mediaCacheSizeInBytes,
+	sampleRate,
+	licenseKey,
+}: {
+	compositionId: string;
+	outName: string;
+	imageFormat: VideoImageFormat;
+	jpegQuality: number | null;
+	scale: number;
+	logLevel: LogLevel;
+	codec: Codec;
+	concurrency: number;
+	crf: number | null;
+	gopSize: number | null;
+	startFrame: number;
+	endFrame: number;
+	muted: boolean;
+	enforceAudioTrack: boolean;
+	proResProfile: _InternalTypes['ProResProfile'] | null;
+	x264Preset: X264Preset | null;
+	pixelFormat: PixelFormat;
+	audioBitrate: string | null;
+	videoBitrate: string | null;
+	everyNthFrame: number;
+	numberOfGifLoops: number | null;
+	delayRenderTimeout: number;
+	audioCodec: AudioCodec;
+	disallowParallelEncoding: boolean;
+	chromiumOptions: RequiredChromiumOptions;
+	envVariables: Record<string, string>;
+	inputProps: Record<string, unknown>;
+	offthreadVideoCacheSizeInBytes: number | null;
+	offthreadVideoThreads: number | null;
+	colorSpace: ColorSpace;
+	multiProcessOnLinux: boolean;
+	encodingMaxRate: string | null;
+	encodingBufferSize: string | null;
+	beepOnFinish: boolean;
+	repro: boolean;
+	forSeamlessAacConcatenation: boolean;
+	separateAudioTo: string | null;
+	metadata: Record<string, string> | null;
+	hardwareAcceleration: HardwareAccelerationOption;
+	chromeMode: ChromeMode;
+	mediaCacheSizeInBytes: number | null;
+	sampleRate: number;
+	licenseKey: string | null;
+}) => {
+	return callApi('/api/render', {
+		compositionId,
+		type: 'video',
+		outName,
+		imageFormat,
+		jpegQuality,
+		scale,
+		logLevel,
+		codec,
+		concurrency,
+		crf,
+		gopSize,
+		endFrame,
+		startFrame,
+		muted,
+		enforceAudioTrack,
+		proResProfile,
+		x264Preset,
+		pixelFormat,
+		audioBitrate,
+		videoBitrate,
+		everyNthFrame,
+		numberOfGifLoops,
+		delayRenderTimeout,
+		audioCodec,
+		disallowParallelEncoding,
+		chromiumOptions,
+		envVariables,
+		serializedInputPropsWithCustomSchema:
+			NoReactInternals.serializeJSONWithSpecialTypes({
+				data: inputProps,
+				staticBase: window.remotion_staticBase,
+				indent: undefined,
+			}).serializedString,
+		offthreadVideoCacheSizeInBytes,
+		offthreadVideoThreads,
+		colorSpace,
+		multiProcessOnLinux,
+		encodingBufferSize,
+		encodingMaxRate,
+		beepOnFinish,
+		repro,
+		forSeamlessAacConcatenation,
+		separateAudioTo,
+		metadata,
+		hardwareAcceleration,
+		chromeMode,
+		mediaCacheSizeInBytes,
+		sampleRate,
+		licenseKey,
+	});
+};
+
+export const unsubscribeFromFileExistenceWatcher = ({
+	file,
+	clientId,
+}: {
+	file: string;
+	clientId: string;
+}) => {
+	return callApi('/api/unsubscribe-from-file-existence', {file, clientId});
+};
+
+export const subscribeToFileExistenceWatcher = async ({
+	file,
+	clientId,
+}: {
+	file: string;
+	clientId: string;
+}): Promise<boolean> => {
+	const {exists} = await callApi('/api/subscribe-to-file-existence', {
+		file,
+		clientId,
+	});
+	return exists;
+};
+
+export const openInFileExplorer = ({directory}: {directory: string}) => {
+	const body: OpenInFileExplorerRequest = {
+		directory,
+	};
+	return callApi('/api/open-in-file-explorer', body);
+};
+
+export const addComposition = (
+	request: AddCompositionRequest,
+	signal: AbortSignal,
+) => {
+	const operations = getBrowserStudioOperations();
+	return operations === null
+		? callApi('/api/add-composition', request, signal)
+		: operations.addComposition(request);
+};
+
+export const duplicateComposition = (
+	request: DuplicateCompositionRequest,
+	signal: AbortSignal,
+) => {
+	const operations = getBrowserStudioOperations();
+	return operations === null
+		? callApi('/api/duplicate-composition', request, signal)
+		: operations.duplicateComposition(request);
+};
+
+export const renameComposition = (
+	request: RenameCompositionRequest,
+	signal: AbortSignal,
+) => {
+	const operations = getBrowserStudioOperations();
+	return operations === null
+		? callApi('/api/rename-composition', request, signal)
+		: operations.renameComposition(request);
+};
+
+export const updateCompositionMetadata = (
+	request: UpdateCompositionMetadataRequest,
+	signal: AbortSignal,
+) => {
+	const operations = getBrowserStudioOperations();
+	return operations === null
+		? callApi('/api/update-composition-metadata', request, signal)
+		: operations.updateCompositionMetadata(request);
+};
+
+export const deleteComposition = (
+	request: DeleteCompositionRequest,
+	signal: AbortSignal,
+) => {
+	const operations = getBrowserStudioOperations();
+	return operations === null
+		? callApi('/api/delete-composition', request, signal)
+		: operations.deleteComposition(request);
+};
+
+export const moveComposition = (
+	request: MoveCompositionRequest,
+	signal: AbortSignal,
+) => {
+	const operations = getBrowserStudioOperations();
+	return operations === null
+		? callApi('/api/move-composition', request, signal)
+		: operations.moveComposition(request);
+};
+
+export const addFolder = (request: AddFolderRequest, signal: AbortSignal) => {
+	const operations = getBrowserStudioOperations();
+	return operations === null
+		? callApi('/api/add-folder', request, signal)
+		: operations.addFolder(request);
+};
+
+export const renameFolder = (
+	request: RenameFolderRequest,
+	signal: AbortSignal,
+) => {
+	const operations = getBrowserStudioOperations();
+	return operations === null
+		? callApi('/api/rename-folder', request, signal)
+		: operations.renameFolder(request);
+};
+
+export const unwrapFolder = (
+	request: UnwrapFolderRequest,
+	signal: AbortSignal,
+) => {
+	const operations = getBrowserStudioOperations();
+	return operations === null
+		? callApi('/api/unwrap-folder', request, signal)
+		: operations.unwrapFolder(request);
+};
+
+export const moveFolder = (request: MoveFolderRequest, signal: AbortSignal) => {
+	const operations = getBrowserStudioOperations();
+	return operations === null
+		? callApi('/api/move-folder', request, signal)
+		: operations.moveFolder(request);
+};
+
+export const removeRenderJob = (job: RenderJob) => {
+	return callApi('/api/remove-render', {
+		jobId: job.id,
+	});
+};
+
+export const cancelRenderJob = (job: RenderJob) => {
+	return callApi('/api/cancel', {
+		jobId: job.id,
+	});
+};
+
+export const updateAvailable = (signal: AbortSignal) => {
+	return callApi('/api/update-available', {}, signal);
+};
+
+export const getReleaseNotes = (
+	currentVersion: string,
+	latestVersion: string,
+	signal: AbortSignal,
+) => {
+	return callApi('/api/release-notes', {currentVersion, latestVersion}, signal);
+};
+
+export const getProjectInfo = (signal: AbortSignal) => {
+	return callApi('/api/project-info', {}, signal);
+};
+
+export const callUpdateDefaultPropsApi = (
+	compositionId: string,
+	defaultProps: Record<string, unknown>,
+	enumPaths: EnumPath[],
+) => {
+	const body = {
+		compositionId,
+		defaultProps: NoReactInternals.serializeJSONWithSpecialTypes({
+			data: defaultProps,
+			indent: undefined,
+			staticBase: window.remotion_staticBase,
+		}).serializedString,
+		enumPaths,
+	};
+	const browserStudioOperations = getBrowserStudioOperations();
+	if (browserStudioOperations !== null) {
+		return browserStudioOperations.updateDefaultProps(body);
+	}
+
+	return callApi('/api/update-default-props', body);
+};
+
+export const applyVisualControlChange = ({
+	fileName,
+	changes,
+}: {
+	fileName: string;
+	changes: VisualControlChange[];
+}) => {
+	return callApi('/api/apply-visual-control-change', {
+		fileName,
+		changes,
+	});
+};

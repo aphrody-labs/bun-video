@@ -1,0 +1,41 @@
+{
+  "appName": {
+    "message": "Acceso directo de Crunchyroll"
+  },
+  "description": {
+    "message": "Abre el episodio oficial en tu sesión de Chrome."
+  },
+  "title": {
+    "message": "El dios de la destrucción"
+  },
+  "open": {
+    "message": "Ver en Crunchyroll"
+  },
+  "language": {
+    "message": "Idioma de la aplicación"
+  },
+  "note": {
+    "message": "Esta opción cambia el idioma del acceso directo. Crunchyroll gestiona el audio, los subtítulos, la cuenta y la reproducción."
+  },
+  "install": {
+    "message": "Instalar este acceso directo"
+  },
+  "installUnavailable": {
+    "message": "La instalación está disponible cuando Chrome la ofrece. También puedes usar el menú del navegador."
+  },
+  "offline": {
+    "message": "El acceso directo funciona sin conexión; el episodio requiere internet y acceso autorizado a Crunchyroll."
+  },
+  "online": {
+    "message": "Acceso directo listo. La reproducción se realiza en el sitio oficial."
+  },
+  "installed": {
+    "message": "Instalación solicitada. Chrome confirma el resultado."
+  },
+  "installDismissed": {
+    "message": "Se canceló la instalación. Puedes intentarlo de nuevo."
+  },
+  "shellError": {
+    "message": "No se pudo preparar el acceso directo local para su uso sin conexión."
+  }
+}

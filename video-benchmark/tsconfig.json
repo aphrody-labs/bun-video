@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "*.ts",
+    "../src/frame-plan.ts",
+    "../src/frame-worker.ts",
+    "../src/parallel-capture.ts",
+    "../src/parallel-capture.test.ts",
+    "../src/computer.ts",
+    "../src/encode.ts",
+    "../src/mcp.ts",
+    "../src/mcp.test.ts",
+    "../src/capabilities.ts",
+    "../src/media-runtime.d.ts",
+    "../remotion/.aphrody/native-frame.ts",
+    "../hyperframes/engine/src/services/nativeWebViewCapture.ts",
+    "../hyperframes/engine/src/services/nativeWebViewCapture.test.ts",
+    "../../../packages/bun-types/**/*.d.ts"
+  ],
+  "exclude": [
+    "../../../packages/bun-types/ts7.1",
+    "../../../packages/bun-types/dist",
+    "../../../packages/bun-types/node_modules"
+  ]
+}

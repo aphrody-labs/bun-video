@@ -1,0 +1,2499 @@
+diff --git a/types/dom/parser.d.ts b/types/dom/parser.d.ts
+index 843742059539742fcbf980295d2d3f73f3fe7ff4..940d50d716fb3fba045a250a8c4ddb132afcee96 100644
+--- a/types/dom/parser.d.ts
++++ b/types/dom/parser.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.DOMParser
+- */
+-export class DOMParser implements globalThis.DOMParser {
++export class DOMParser {
+     /** @typedef {{ "text/html": HTMLDocument, "image/svg+xml": SVGDocument, "text/xml": XMLDocument }} MimeToDoc */
+     /**
+      * @template {keyof MimeToDoc} MIME
+diff --git a/types/dom/string-map.d.ts b/types/dom/string-map.d.ts
+index 61c19ee1723ed83f0e9f7bea2d92ad47314faf6f..72c59c7ece0c56ccaf483deee725f84fd6533baf 100644
+--- a/types/dom/string-map.d.ts
++++ b/types/dom/string-map.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.DOMStringMap
+- */
+-export class DOMStringMap implements globalThis.DOMStringMap {
++export class DOMStringMap {
+     /**
+      * @param {Element} ref
+      */
+diff --git a/types/dom/token-list.d.ts b/types/dom/token-list.d.ts
+index fb5379036a603ad17dc5f71c0a437aa2155cebb4..1ef803948944d2bd666cc15b39cbe88d13b3295a 100644
+--- a/types/dom/token-list.d.ts
++++ b/types/dom/token-list.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.DOMTokenList
+- */
+-export class DOMTokenList extends Set<any> implements globalThis.DOMTokenList {
++export class DOMTokenList extends Set<any> {
+     constructor(ownerElement: any);
+     get length(): number;
+     get value(): string;
+diff --git a/types/esm/dom/parser.d.ts b/types/esm/dom/parser.d.ts
+index cba902fd5ef3881b6988071984442693df7d9ba5..7b92a45b9248bf0f197fc3e306bb4a5f2f3794ec 100644
+--- a/types/esm/dom/parser.d.ts
++++ b/types/esm/dom/parser.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.DOMParser
+- */
+-export class DOMParser implements globalThis.DOMParser {
++export class DOMParser {
+     /** @typedef {{ "text/html": HTMLDocument, "image/svg+xml": SVGDocument, "text/xml": XMLDocument }} MimeToDoc */
+     /**
+      * @template {keyof MimeToDoc} MIME
+diff --git a/types/esm/dom/string-map.d.ts b/types/esm/dom/string-map.d.ts
+index 61c19ee1723ed83f0e9f7bea2d92ad47314faf6f..72c59c7ece0c56ccaf483deee725f84fd6533baf 100644
+--- a/types/esm/dom/string-map.d.ts
++++ b/types/esm/dom/string-map.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.DOMStringMap
+- */
+-export class DOMStringMap implements globalThis.DOMStringMap {
++export class DOMStringMap {
+     /**
+      * @param {Element} ref
+      */
+diff --git a/types/esm/dom/token-list.d.ts b/types/esm/dom/token-list.d.ts
+index d4538bd57f5f344b9122207cc08480d86728282c..223c9712c7097313a0d75e9128e61a43702370db 100644
+--- a/types/esm/dom/token-list.d.ts
++++ b/types/esm/dom/token-list.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.DOMTokenList
+- */
+-export class DOMTokenList extends Set<any> implements globalThis.DOMTokenList {
++export class DOMTokenList extends Set<any> {
+     constructor(ownerElement: any);
+     get length(): number;
+     get value(): string;
+diff --git a/types/esm/html/anchor-element.d.ts b/types/esm/html/anchor-element.d.ts
+index 1014f782f390fbcd10ce1e2ab88a1b9d38114609..07ea1fe3d1192bcdf4cf8de388f24d6c276619ff 100644
+--- a/types/esm/html/anchor-element.d.ts
++++ b/types/esm/html/anchor-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLAnchorElement
+- */
+-export class HTMLAnchorElement extends HTMLElement implements globalThis.HTMLAnchorElement {
++export class HTMLAnchorElement extends HTMLElement {
+     set href(value: string);
+     get href(): string;
+     set download(value: string);
+diff --git a/types/esm/html/area-element.d.ts b/types/esm/html/area-element.d.ts
+index 06c0e9f9be87f2c1149992c7fc14dc81a07b5859..bb4141ea2594f3040cd0bd6d9a06a767eeabee2c 100644
+--- a/types/esm/html/area-element.d.ts
++++ b/types/esm/html/area-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLAreaElement
+- */
+-export class HTMLAreaElement extends HTMLElement implements globalThis.HTMLAreaElement {
++export class HTMLAreaElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/audio-element.d.ts b/types/esm/html/audio-element.d.ts
+index 4ab822ec0ec9dd00942608c98e77ce03653ddc78..25becc4fbf5d47031378c317440b50e6567c2e64 100644
+--- a/types/esm/html/audio-element.d.ts
++++ b/types/esm/html/audio-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLAudioElement
+- */
+-export class HTMLAudioElement extends HTMLElement implements globalThis.HTMLAudioElement {
++export class HTMLAudioElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/base-element.d.ts b/types/esm/html/base-element.d.ts
+index 2668d9898a1e13dac52ce5ce577202867004a326..8b20c216e33e5b9002e94339670edae0e63dfe20 100644
+--- a/types/esm/html/base-element.d.ts
++++ b/types/esm/html/base-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLBaseElement
+- */
+-export class HTMLBaseElement extends HTMLElement implements globalThis.HTMLBaseElement {
++export class HTMLBaseElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/body-element.d.ts b/types/esm/html/body-element.d.ts
+index 0692441c8a092d9437921fb54c6219304f338c72..f63d95bc1db37b2cab94ff596a705ec60487dfa1 100644
+--- a/types/esm/html/body-element.d.ts
++++ b/types/esm/html/body-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLBodyElement
+- */
+-export class HTMLBodyElement extends HTMLElement implements globalThis.HTMLBodyElement {
++export class HTMLBodyElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/br-element.d.ts b/types/esm/html/br-element.d.ts
+index db0b73cc975262d271b3bd86ebfa953cd8acb3f4..aa545b0cbbfca087c91028b49fb4f5ed3f154dd2 100644
+--- a/types/esm/html/br-element.d.ts
++++ b/types/esm/html/br-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLBRElement
+- */
+-export class HTMLBRElement extends HTMLElement implements globalThis.HTMLBRElement {
++export class HTMLBRElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/button-element.d.ts b/types/esm/html/button-element.d.ts
+index 1ea3124e01e6917d85942ffc65fb66c79c7485e2..abb40cf26f81fcad7d27ca419c85ed9ca3075fef 100644
+--- a/types/esm/html/button-element.d.ts
++++ b/types/esm/html/button-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLButtonElement
+- */
+-export class HTMLButtonElement extends HTMLElement implements globalThis.HTMLButtonElement {
++export class HTMLButtonElement extends HTMLElement {
+     set disabled(value: any);
+     get disabled(): any;
+     set name(value: any);
+diff --git a/types/esm/html/canvas-element.d.ts b/types/esm/html/canvas-element.d.ts
+index 19473e80b1ceec6ee8de400d36a4a81ee2247b22..ab453854e55496c00dac1245094f8b212d892861 100644
+--- a/types/esm/html/canvas-element.d.ts
++++ b/types/esm/html/canvas-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLCanvasElement
+- */
+-export class HTMLCanvasElement extends HTMLElement implements globalThis.HTMLCanvasElement {
++export class HTMLCanvasElement extends HTMLElement {
+     set width(value: any);
+     get width(): any;
+     set height(value: any);
+diff --git a/types/esm/html/d-list-element.d.ts b/types/esm/html/d-list-element.d.ts
+index 201589444f9c6b8a2b6ad73b8bdaaf3d8adcaaed..326da8081a6f5671c32e0da4d96f78f1885d6f8b 100644
+--- a/types/esm/html/d-list-element.d.ts
++++ b/types/esm/html/d-list-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLDListElement
+- */
+-export class HTMLDListElement extends HTMLElement implements globalThis.HTMLDListElement {
++export class HTMLDListElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/data-element.d.ts b/types/esm/html/data-element.d.ts
+index 7d83d13d23fb7481944c613e5f76294533e71adf..bc9be0aaa78388ed902407e94ada52c7ceb417ab 100644
+--- a/types/esm/html/data-element.d.ts
++++ b/types/esm/html/data-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLDataElement
+- */
+-export class HTMLDataElement extends HTMLElement implements globalThis.HTMLDataElement {
++export class HTMLDataElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/data-list-element.d.ts b/types/esm/html/data-list-element.d.ts
+index 9617125ee5d4860866da46818a4c770656a6608b..79627010c180520c557ac323e2a939914a3013dc 100644
+--- a/types/esm/html/data-list-element.d.ts
++++ b/types/esm/html/data-list-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLDataListElement
+- */
+-export class HTMLDataListElement extends HTMLElement implements globalThis.HTMLDataListElement {
++export class HTMLDataListElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/details-element.d.ts b/types/esm/html/details-element.d.ts
+index 17971f36d677e9875cc79125e3d5afa0c1ccb4b0..5bfb0d9e39e70bf12c55bf7fdfa34afbfc19fdf7 100644
+--- a/types/esm/html/details-element.d.ts
++++ b/types/esm/html/details-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLDetailsElement
+- */
+-export class HTMLDetailsElement extends HTMLElement implements globalThis.HTMLDetailsElement {
++export class HTMLDetailsElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/directory-element.d.ts b/types/esm/html/directory-element.d.ts
+index e547f788c297ad0893561e3c874228c374acc67d..68c86f6f170aa708df51c4cb3d7f724f5a1a309e 100644
+--- a/types/esm/html/directory-element.d.ts
++++ b/types/esm/html/directory-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLDirectoryElement
+- */
+-export class HTMLDirectoryElement extends HTMLElement implements globalThis.HTMLDirectoryElement {
++export class HTMLDirectoryElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/div-element.d.ts b/types/esm/html/div-element.d.ts
+index 9d940a0576230cedb69776b9079681e5e60926c4..3cbe757cd8222f4c2c30a0955a8e3422f25abce8 100644
+--- a/types/esm/html/div-element.d.ts
++++ b/types/esm/html/div-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLDivElement
+- */
+-export class HTMLDivElement extends HTMLElement implements globalThis.HTMLDivElement {
++export class HTMLDivElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/document.d.ts b/types/esm/html/document.d.ts
+index cebc263b5c3ba5bf121f3bfb3dbcfaaa682e2c41..38be09408735cc43d1b65352dc76e4d897603473 100644
+--- a/types/esm/html/document.d.ts
++++ b/types/esm/html/document.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLDocument
+- */
+-export class HTMLDocument extends Document implements globalThis.HTMLDocument {
++export class HTMLDocument extends Document {
+     constructor();
+     get all(): NodeList;
+     /**
+@@ -17,7 +14,7 @@ export class HTMLDocument extends Document implements globalThis.HTMLDocument {
+      * @type HTMLTitleElement
+      */
+     get title(): HTMLTitleElement;
+-    createElement(localName: any, options: any): any;
++    createElement(localName: any, options?: { is?: string }): any;
+ }
+ import { Document } from '../interface/document.js';
+ import { NodeList } from '../interface/node-list.js';
+diff --git a/types/esm/html/element.d.ts b/types/esm/html/element.d.ts
+index 2a3a9e99a4166019d83e260f2ce586c559becf27..979dd39bec36ba35b6cacca728a98f40b3ea2134 100644
+--- a/types/esm/html/element.d.ts
++++ b/types/esm/html/element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLElement
+- */
+-export class HTMLElement extends Element implements globalThis.HTMLElement {
++export class HTMLElement extends Element {
+     static get observedAttributes(): any[];
+     constructor(ownerDocument?: any, localName?: string);
+     blur(): void;
+diff --git a/types/esm/html/embed-element.d.ts b/types/esm/html/embed-element.d.ts
+index 794c179f4d009b250fc1c6643b2455c88575484e..fd5f0d0e5030b22d7b2d07cd4fd252e479f87864 100644
+--- a/types/esm/html/embed-element.d.ts
++++ b/types/esm/html/embed-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLEmbedElement
+- */
+-export class HTMLEmbedElement extends HTMLElement implements globalThis.HTMLEmbedElement {
++export class HTMLEmbedElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/field-set-element.d.ts b/types/esm/html/field-set-element.d.ts
+index 811d1d9ca8fe962c74ae7bcad4e4c60af72fe604..54c4f23c41208dc86fe47bdde2ad12196cb391c8 100644
+--- a/types/esm/html/field-set-element.d.ts
++++ b/types/esm/html/field-set-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLFieldSetElement
+- */
+-export class HTMLFieldSetElement extends HTMLElement implements globalThis.HTMLFieldSetElement {
++export class HTMLFieldSetElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/font-element.d.ts b/types/esm/html/font-element.d.ts
+index 7919ffdba6b570619bde3e9185b93dd10dccf14c..7a69bf2185ac90deb34fdf6ab9685ae1c237b89e 100644
+--- a/types/esm/html/font-element.d.ts
++++ b/types/esm/html/font-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLFontElement
+- */
+-export class HTMLFontElement extends HTMLElement implements globalThis.HTMLFontElement {
++export class HTMLFontElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/form-element.d.ts b/types/esm/html/form-element.d.ts
+index b0e2fa281af927186d96b17a80bba68656eb3c94..683cae1eb439a81a831a68a4c562c3b970682f42 100644
+--- a/types/esm/html/form-element.d.ts
++++ b/types/esm/html/form-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLFormElement
+- */
+-export class HTMLFormElement extends HTMLElement implements globalThis.HTMLFormElement {
++export class HTMLFormElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/frame-element.d.ts b/types/esm/html/frame-element.d.ts
+index 00df340d2e31199178487a8daaf7b296fc3b8f6d..dfc2b27fd7e185e4a2a73e8b914b28d0fe214f73 100644
+--- a/types/esm/html/frame-element.d.ts
++++ b/types/esm/html/frame-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLFrameElement
+- */
+-export class HTMLFrameElement extends HTMLElement implements globalThis.HTMLFrameElement {
++export class HTMLFrameElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/frame-set-element.d.ts b/types/esm/html/frame-set-element.d.ts
+index 150ef2340b4ec27d4d1082a58fd0beb3e3e4e735..ca3f516d20f889b4aed20194a057f65a7d5dfacd 100644
+--- a/types/esm/html/frame-set-element.d.ts
++++ b/types/esm/html/frame-set-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLFrameSetElement
+- */
+-export class HTMLFrameSetElement extends HTMLElement implements globalThis.HTMLFrameSetElement {
++export class HTMLFrameSetElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/head-element.d.ts b/types/esm/html/head-element.d.ts
+index 43e810f76b7f07d65fc8dff900e057906be696ed..09b32848cd37fefcba89c5b64a8a1b68b2d58472 100644
+--- a/types/esm/html/head-element.d.ts
++++ b/types/esm/html/head-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLHeadElement
+- */
+-export class HTMLHeadElement extends HTMLElement implements globalThis.HTMLHeadElement {
++export class HTMLHeadElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/heading-element.d.ts b/types/esm/html/heading-element.d.ts
+index 6892d33c6e3134907a7c087776a04cac4e006677..785c9e44a9f7ae467cc177720564052dbcf758e3 100644
+--- a/types/esm/html/heading-element.d.ts
++++ b/types/esm/html/heading-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLHeadingElement
+- */
+-export class HTMLHeadingElement extends HTMLElement implements globalThis.HTMLHeadingElement {
++export class HTMLHeadingElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/hr-element.d.ts b/types/esm/html/hr-element.d.ts
+index 2fc7c151968143883a6412c0b80fc077d8af38a5..d1e6e2ca7110551375c6adc474aba1ccb7e23938 100644
+--- a/types/esm/html/hr-element.d.ts
++++ b/types/esm/html/hr-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLHRElement
+- */
+-export class HTMLHRElement extends HTMLElement implements globalThis.HTMLHRElement {
++export class HTMLHRElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/html-element.d.ts b/types/esm/html/html-element.d.ts
+index 337f916ab0d5c1bb6ca2109e252e1e0bbce8fbd8..91d0462ec7ff2e18ddab50cc92a9bbd3d68af215 100644
+--- a/types/esm/html/html-element.d.ts
++++ b/types/esm/html/html-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLHtmlElement
+- */
+-export class HTMLHtmlElement extends HTMLElement implements globalThis.HTMLHtmlElement {
++export class HTMLHtmlElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/i-frame-element.d.ts b/types/esm/html/i-frame-element.d.ts
+index 3dcc8fecb03792ed1ca8589f4244c0ead278cd19..d40e86f927d49b204e7125d2ba8756d21d4d16d6 100644
+--- a/types/esm/html/i-frame-element.d.ts
++++ b/types/esm/html/i-frame-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLIFrameElement
+- */
+-export class HTMLIFrameElement extends HTMLElement implements globalThis.HTMLIFrameElement {
++export class HTMLIFrameElement extends HTMLElement {
+     set src(value: any);
+     get src(): any;
+     set srcdoc(value: any);
+diff --git a/types/esm/html/image-element.d.ts b/types/esm/html/image-element.d.ts
+index 91b8d4180a4786dfc0f9731d1fafe25c8ed036ba..b7eb22ba4b31673739cbef70b7a53f70e336ead0 100644
+--- a/types/esm/html/image-element.d.ts
++++ b/types/esm/html/image-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLImageElement
+- */
+-export class HTMLImageElement extends HTMLElement implements globalThis.HTMLImageElement {
++export class HTMLImageElement extends HTMLElement {
+     set alt(value: any);
+     get alt(): any;
+     set sizes(value: any);
+diff --git a/types/esm/html/input-element.d.ts b/types/esm/html/input-element.d.ts
+index 3fa368ebf9b6ff2a5cd03d1affab0340d67b5a6e..beb33c547b02202337b4bee34441729540747a1e 100644
+--- a/types/esm/html/input-element.d.ts
++++ b/types/esm/html/input-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLInputElement
+- */
+-export class HTMLInputElement extends HTMLElement implements globalThis.HTMLInputElement {
++export class HTMLInputElement extends HTMLElement {
+     set autofocus(value: any);
+     get autofocus(): any;
+     set disabled(value: any);
+diff --git a/types/esm/html/label-element.d.ts b/types/esm/html/label-element.d.ts
+index 762b246d16e2ee2c738f2eeda503d9bb849d4cc2..0947410d7f5a5ede94b604d202c4afa3c1eab7ee 100644
+--- a/types/esm/html/label-element.d.ts
++++ b/types/esm/html/label-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLLabelElement
+- */
+-export class HTMLLabelElement extends HTMLElement implements globalThis.HTMLLabelElement {
++export class HTMLLabelElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/legend-element.d.ts b/types/esm/html/legend-element.d.ts
+index fae3561c057cbf6c4b069c7a4e80b1ccb86c8106..89881f1c1ffc1977b967e9d0e1befcc763614f76 100644
+--- a/types/esm/html/legend-element.d.ts
++++ b/types/esm/html/legend-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLLegendElement
+- */
+-export class HTMLLegendElement extends HTMLElement implements globalThis.HTMLLegendElement {
++export class HTMLLegendElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/li-element.d.ts b/types/esm/html/li-element.d.ts
+index 07142d686373489ac2edc2598e0ea5fc776fe4d5..a9b94edec143533378c19f25817cb6bc9b693bf3 100644
+--- a/types/esm/html/li-element.d.ts
++++ b/types/esm/html/li-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLLIElement
+- */
+-export class HTMLLIElement extends HTMLElement implements globalThis.HTMLLIElement {
++export class HTMLLIElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/link-element.d.ts b/types/esm/html/link-element.d.ts
+index 27586a04b2a370fafc06e744142246dda624322f..ed65b6d535acfa7c37f74b7ed4e1c57918892477 100644
+--- a/types/esm/html/link-element.d.ts
++++ b/types/esm/html/link-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLLinkElement
+- */
+-export class HTMLLinkElement extends HTMLElement implements globalThis.HTMLLinkElement {
++export class HTMLLinkElement extends HTMLElement {
+     set disabled(value: any);
+     get disabled(): any;
+     set href(value: any);
+diff --git a/types/esm/html/map-element.d.ts b/types/esm/html/map-element.d.ts
+index b3157bc4732623c3dc44e511a2c92f14c99d51a8..ec4d2f2c4cae7fdcafb72fd18e6dae6432d24712 100644
+--- a/types/esm/html/map-element.d.ts
++++ b/types/esm/html/map-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLMapElement
+- */
+-export class HTMLMapElement extends HTMLElement implements globalThis.HTMLMapElement {
++export class HTMLMapElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/marquee-element.d.ts b/types/esm/html/marquee-element.d.ts
+index 19a639954d08d9c7a3185b8b4b4cef83ed6e74e4..f2bcc1be39ced795cdacad26e92b45e2056231c2 100644
+--- a/types/esm/html/marquee-element.d.ts
++++ b/types/esm/html/marquee-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLMarqueeElement
+- */
+-export class HTMLMarqueeElement extends HTMLElement implements globalThis.HTMLMarqueeElement {
++export class HTMLMarqueeElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/media-element.d.ts b/types/esm/html/media-element.d.ts
+index 2e5606ba71a50273ba50874275c749fbaeb9d8e2..f4dade05dac58ccfe6d741e61298a8812d795333 100644
+--- a/types/esm/html/media-element.d.ts
++++ b/types/esm/html/media-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLMediaElement
+- */
+-export class HTMLMediaElement extends HTMLElement implements globalThis.HTMLMediaElement {
++export class HTMLMediaElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/menu-element.d.ts b/types/esm/html/menu-element.d.ts
+index 4afcc1bd3ad85b8c3b5a8be02d6c3cb1e3324ec6..fc95dfd6ea8881779661e0eaf0e566d50dd5bc27 100644
+--- a/types/esm/html/menu-element.d.ts
++++ b/types/esm/html/menu-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLMenuElement
+- */
+-export class HTMLMenuElement extends HTMLElement implements globalThis.HTMLMenuElement {
++export class HTMLMenuElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/meta-element.d.ts b/types/esm/html/meta-element.d.ts
+index a80016b7b292a851c02ed6b09f180f059b11781d..61267e27eca1a70337e6bef31a7735b4b0014a22 100644
+--- a/types/esm/html/meta-element.d.ts
++++ b/types/esm/html/meta-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLMetaElement
+- */
+-export class HTMLMetaElement extends HTMLElement implements globalThis.HTMLMetaElement {
++export class HTMLMetaElement extends HTMLElement {
+     set name(value: any);
+     get name(): any;
+     set httpEquiv(value: any);
+diff --git a/types/esm/html/meter-element.d.ts b/types/esm/html/meter-element.d.ts
+index c7634d2ad7486a6323baada74f48a1898c00e44c..9ee9be9da2b469d41b764b09267b7b0963c081aa 100644
+--- a/types/esm/html/meter-element.d.ts
++++ b/types/esm/html/meter-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLMeterElement
+- */
+-export class HTMLMeterElement extends HTMLElement implements globalThis.HTMLMeterElement {
++export class HTMLMeterElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/mod-element.d.ts b/types/esm/html/mod-element.d.ts
+index 054ff6d5c4cd081cf544424ee1978d2d3461dbd6..70623bb8ce39bf14d8d805a1505ddb06b18620af 100644
+--- a/types/esm/html/mod-element.d.ts
++++ b/types/esm/html/mod-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLModElement
+- */
+-export class HTMLModElement extends HTMLElement implements globalThis.HTMLModElement {
++export class HTMLModElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/o-list-element.d.ts b/types/esm/html/o-list-element.d.ts
+index c9267e6001565e9f2bfa7da3d5e290d9fa663fa5..84209fe77723116ed14094e83ce41fee2488e27c 100644
+--- a/types/esm/html/o-list-element.d.ts
++++ b/types/esm/html/o-list-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLOListElement
+- */
+-export class HTMLOListElement extends HTMLElement implements globalThis.HTMLOListElement {
++export class HTMLOListElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/object-element.d.ts b/types/esm/html/object-element.d.ts
+index 55e107c72b32d1dd6586c2f41201da36132d19df..55978effdfe335b51636108ef45d3142b211537d 100644
+--- a/types/esm/html/object-element.d.ts
++++ b/types/esm/html/object-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLObjectElement
+- */
+-export class HTMLObjectElement extends HTMLElement implements globalThis.HTMLObjectElement {
++export class HTMLObjectElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/opt-group-element.d.ts b/types/esm/html/opt-group-element.d.ts
+index a7931d5f3e1f14c00485dc57dbf890427bca5b1f..3ad4a9402400d0fde5c15c88cacd2a67cf702b2e 100644
+--- a/types/esm/html/opt-group-element.d.ts
++++ b/types/esm/html/opt-group-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLOptGroupElement
+- */
+-export class HTMLOptGroupElement extends HTMLElement implements globalThis.HTMLOptGroupElement {
++export class HTMLOptGroupElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/option-element.d.ts b/types/esm/html/option-element.d.ts
+index 6ee1b80e6b68a4ea1a60c4bb1f544d3a3a1f10d2..41a71246decb41c4f838370dd574ed7447d91c86 100644
+--- a/types/esm/html/option-element.d.ts
++++ b/types/esm/html/option-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLOptionElement
+- */
+-export class HTMLOptionElement extends HTMLElement implements globalThis.HTMLOptionElement {
++export class HTMLOptionElement extends HTMLElement {
+     set value(value: any);
+     get value(): any;
+     set selected(value: any);
+diff --git a/types/esm/html/output-element.d.ts b/types/esm/html/output-element.d.ts
+index e224681500d3b83e28ebb3d150f60aae26f412ad..35bf7c37503354f4cd1c927d57da1a64c7464619 100644
+--- a/types/esm/html/output-element.d.ts
++++ b/types/esm/html/output-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLOutputElement
+- */
+-export class HTMLOutputElement extends HTMLElement implements globalThis.HTMLOutputElement {
++export class HTMLOutputElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/paragraph-element.d.ts b/types/esm/html/paragraph-element.d.ts
+index 280b8b9b3be220bd9d9612211592bcd2eb7de696..92f9e6d0f21e54a39435b238d0302edca7a37396 100644
+--- a/types/esm/html/paragraph-element.d.ts
++++ b/types/esm/html/paragraph-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLParagraphElement
+- */
+-export class HTMLParagraphElement extends HTMLElement implements globalThis.HTMLParagraphElement {
++export class HTMLParagraphElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/param-element.d.ts b/types/esm/html/param-element.d.ts
+index 933934cca03fcb6e19d2310bd0ec6c7782d61b00..67f8e1fd260f82222d5dab4646be353e884c436b 100644
+--- a/types/esm/html/param-element.d.ts
++++ b/types/esm/html/param-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLParamElement
+- */
+-export class HTMLParamElement extends HTMLElement implements globalThis.HTMLParamElement {
++export class HTMLParamElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/picture-element.d.ts b/types/esm/html/picture-element.d.ts
+index 1bd78093030fbf62757ba5cfd4c748ef0aaf0241..f179dc5155e692e8e96f7a11cdcd4e064d6a926d 100644
+--- a/types/esm/html/picture-element.d.ts
++++ b/types/esm/html/picture-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLPictureElement
+- */
+-export class HTMLPictureElement extends HTMLElement implements globalThis.HTMLPictureElement {
++export class HTMLPictureElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/pre-element.d.ts b/types/esm/html/pre-element.d.ts
+index 1dea963523ff5a147733be7ce4951f1d83add02a..8c06151da2bdf668d909b6c16bef113f73578f4c 100644
+--- a/types/esm/html/pre-element.d.ts
++++ b/types/esm/html/pre-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLPreElement
+- */
+-export class HTMLPreElement extends HTMLElement implements globalThis.HTMLPreElement {
++export class HTMLPreElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/progress-element.d.ts b/types/esm/html/progress-element.d.ts
+index 19c3489a2771216757135dbaca92acbe15078246..a49314cf3e63dd226f9a0033756b738255b68608 100644
+--- a/types/esm/html/progress-element.d.ts
++++ b/types/esm/html/progress-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLProgressElement
+- */
+-export class HTMLProgressElement extends HTMLElement implements globalThis.HTMLProgressElement {
++export class HTMLProgressElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/quote-element.d.ts b/types/esm/html/quote-element.d.ts
+index 42290e49efdb5059f6eed250a1f8efb044c96f54..24158133ceebc3a86594b6decada9aafe50bc410 100644
+--- a/types/esm/html/quote-element.d.ts
++++ b/types/esm/html/quote-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLQuoteElement
+- */
+-export class HTMLQuoteElement extends HTMLElement implements globalThis.HTMLQuoteElement {
++export class HTMLQuoteElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/script-element.d.ts b/types/esm/html/script-element.d.ts
+index 2aa50504e55ccb8c5f7a6180c8943bf7b15f28fd..cc763a1dff590f6d9f1cb50d6ed228940f7bef7e 100644
+--- a/types/esm/html/script-element.d.ts
++++ b/types/esm/html/script-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLScriptElement
+- */
+-export class HTMLScriptElement extends TextElement implements globalThis.HTMLScriptElement {
++export class HTMLScriptElement extends TextElement {
+     set type(value: any);
+     get type(): any;
+     set src(value: any);
+diff --git a/types/esm/html/select-element.d.ts b/types/esm/html/select-element.d.ts
+index df0f3868d45a8173ea58ee276d453f6c12beb681..93968dea9900e9682483b426c074b3e00cbf48d0 100644
+--- a/types/esm/html/select-element.d.ts
++++ b/types/esm/html/select-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLSelectElement
+- */
+-export class HTMLSelectElement extends HTMLElement implements globalThis.HTMLSelectElement {
++export class HTMLSelectElement extends HTMLElement {
+     get options(): NodeList;
+     set disabled(value: any);
+     get disabled(): any;
+diff --git a/types/esm/html/slot-element.d.ts b/types/esm/html/slot-element.d.ts
+index 20338e3e14595e31e104fb0c37a58e3f7d683e67..49a8ec4c2420b3bd201e4ec7033b505bdc730920 100644
+--- a/types/esm/html/slot-element.d.ts
++++ b/types/esm/html/slot-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLSlotElement
+- */
+-export class HTMLSlotElement extends HTMLElement implements globalThis.HTMLSlotElement {
++export class HTMLSlotElement extends HTMLElement {
+     set name(value: any);
+     get name(): any;
+     assign(): void;
+diff --git a/types/esm/html/source-element.d.ts b/types/esm/html/source-element.d.ts
+index 3e022c64a55dc857f19904dcc691c21139c3438e..89a6099494631e2d3dbfaeacb2a1e5fc3ba1bec0 100644
+--- a/types/esm/html/source-element.d.ts
++++ b/types/esm/html/source-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLSourceElement
+- */
+-export class HTMLSourceElement extends HTMLElement implements globalThis.HTMLSourceElement {
++export class HTMLSourceElement extends HTMLElement {
+     set src(value: any);
+     get src(): any;
+     set srcset(value: any);
+diff --git a/types/esm/html/span-element.d.ts b/types/esm/html/span-element.d.ts
+index 730a861f14195e70d387cc9ef1f8e6d353df1f20..ee227d2657d096cfbe62e9e56e8535e54e72138b 100644
+--- a/types/esm/html/span-element.d.ts
++++ b/types/esm/html/span-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLSpanElement
+- */
+-export class HTMLSpanElement extends HTMLElement implements globalThis.HTMLSpanElement {
++export class HTMLSpanElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/style-element.d.ts b/types/esm/html/style-element.d.ts
+index 74e4939796f891fd41bb457e9a320b4e2e375f28..d4042918fe38495b8fe2b0c6ba589bd157ba9d33 100644
+--- a/types/esm/html/style-element.d.ts
++++ b/types/esm/html/style-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLStyleElement
+- */
+-export class HTMLStyleElement extends TextElement implements globalThis.HTMLStyleElement {
++export class HTMLStyleElement extends TextElement {
+     get sheet(): any;
+     set innerText(value: string);
+     get innerText(): string;
+diff --git a/types/esm/html/table-caption-element.d.ts b/types/esm/html/table-caption-element.d.ts
+index a19fc096819456dc0d4a429f2ad6f168753995b7..482711269582ab3df428c15fba4be4194a512919 100644
+--- a/types/esm/html/table-caption-element.d.ts
++++ b/types/esm/html/table-caption-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTableCaptionElement
+- */
+-export class HTMLTableCaptionElement extends HTMLElement implements globalThis.HTMLTableCaptionElement {
++export class HTMLTableCaptionElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/table-cell-element.d.ts b/types/esm/html/table-cell-element.d.ts
+index 588b30ad153969edbc6c8343662eeaa636e3b6f2..3bc6470e7e5338d507fe7ffb3c3f26ffbd7e02c0 100644
+--- a/types/esm/html/table-cell-element.d.ts
++++ b/types/esm/html/table-cell-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTableCellElement
+- */
+-export class HTMLTableCellElement extends HTMLElement implements globalThis.HTMLTableCellElement {
++export class HTMLTableCellElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/table-element.d.ts b/types/esm/html/table-element.d.ts
+index 8d418fcf74594e2f3498a0958fbc85180fc2ac9f..f00173af8d33b5798d62162af7b5fc94b5699e8a 100644
+--- a/types/esm/html/table-element.d.ts
++++ b/types/esm/html/table-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTableElement
+- */
+-export class HTMLTableElement extends HTMLElement implements globalThis.HTMLTableElement {
++export class HTMLTableElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/table-row-element.d.ts b/types/esm/html/table-row-element.d.ts
+index 15b577b996466cb14dc2d13913caa2048f4faed5..6fe33986746ce69bee4c2f87c518c693181844a2 100644
+--- a/types/esm/html/table-row-element.d.ts
++++ b/types/esm/html/table-row-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTableRowElement
+- */
+-export class HTMLTableRowElement extends HTMLElement implements globalThis.HTMLTableRowElement {
++export class HTMLTableRowElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/template-element.d.ts b/types/esm/html/template-element.d.ts
+index aa593b234a9724b1b6e3bae4b1e3b162155e97ff..4fb553161f1bf245f7075dc782aa859023acab68 100644
+--- a/types/esm/html/template-element.d.ts
++++ b/types/esm/html/template-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLTemplateElement
+- */
+-export class HTMLTemplateElement extends HTMLElement implements globalThis.HTMLTemplateElement {
++export class HTMLTemplateElement extends HTMLElement {
+     constructor(ownerDocument: any);
+     get content(): any;
+     [CONTENT]: any;
+diff --git a/types/esm/html/text-area-element.d.ts b/types/esm/html/text-area-element.d.ts
+index d3b31ac58bdb3472cbed83493d0ed19d951b3a53..da6cb603df416c05b607c3a15469b467895c2c9c 100644
+--- a/types/esm/html/text-area-element.d.ts
++++ b/types/esm/html/text-area-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLTextAreaElement
+- */
+-export class HTMLTextAreaElement extends TextElement implements globalThis.HTMLTextAreaElement {
++export class HTMLTextAreaElement extends TextElement {
+     set disabled(value: any);
+     get disabled(): any;
+     set name(value: any);
+diff --git a/types/esm/html/time-element.d.ts b/types/esm/html/time-element.d.ts
+index 488c2b632daed0580a695aa537b6adddb8654e7c..8154e0c0366209bc0549c1b2b50eeddf5001ea87 100644
+--- a/types/esm/html/time-element.d.ts
++++ b/types/esm/html/time-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLTimeElement
+- */
+-export class HTMLTimeElement extends HTMLElement implements globalThis.HTMLTimeElement {
++export class HTMLTimeElement extends HTMLElement {
+     set dateTime(value: string);
+     /**
+      * @type {string}
+diff --git a/types/esm/html/title-element.d.ts b/types/esm/html/title-element.d.ts
+index a242b4961a097df2ca42b581355ae9ece00282a1..4942ed4cb3884adb0dd81e7a20a3f58e652e5ef5 100644
+--- a/types/esm/html/title-element.d.ts
++++ b/types/esm/html/title-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTitleElement
+- */
+-export class HTMLTitleElement extends TextElement implements globalThis.HTMLTitleElement {
++export class HTMLTitleElement extends TextElement {
+ }
+ import { TextElement } from './text-element.js';
+diff --git a/types/esm/html/track-element.d.ts b/types/esm/html/track-element.d.ts
+index 36383da94fd276790dc5eed446a9a86f8a2cea74..b6cf9d7be8f2f1cdce7d6049a170e0a310f1d27a 100644
+--- a/types/esm/html/track-element.d.ts
++++ b/types/esm/html/track-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTrackElement
+- */
+-export class HTMLTrackElement extends HTMLElement implements globalThis.HTMLTrackElement {
++export class HTMLTrackElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/u-list-element.d.ts b/types/esm/html/u-list-element.d.ts
+index 50c3efebfdccc3465a16c3a6277a4bd4ad78d67a..33b04e5e0f34a4135bd33116265cd52a0ac9bf55 100644
+--- a/types/esm/html/u-list-element.d.ts
++++ b/types/esm/html/u-list-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLUListElement
+- */
+-export class HTMLUListElement extends HTMLElement implements globalThis.HTMLUListElement {
++export class HTMLUListElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/unknown-element.d.ts b/types/esm/html/unknown-element.d.ts
+index a8c989180897f99279c5071a0351aa5c7d9253ce..0a41a9fbe9364e5a4e078bbd2c10a2866949e88e 100644
+--- a/types/esm/html/unknown-element.d.ts
++++ b/types/esm/html/unknown-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLUnknownElement
+- */
+-export class HTMLUnknownElement extends HTMLElement implements globalThis.HTMLUnknownElement {
++export class HTMLUnknownElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/html/video-element.d.ts b/types/esm/html/video-element.d.ts
+index 3cb8ba8e1902f3111e994991dc5b1aa5e575d29d..73efbda9b5f552c5cb70e6981b25116179fd5e5c 100644
+--- a/types/esm/html/video-element.d.ts
++++ b/types/esm/html/video-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLVideoElement
+- */
+-export class HTMLVideoElement extends HTMLElement implements globalThis.HTMLVideoElement {
++export class HTMLVideoElement extends HTMLElement {
+ }
+ import { HTMLElement } from './element.js';
+diff --git a/types/esm/interface/attr.d.ts b/types/esm/interface/attr.d.ts
+index 88c8c42c97aa89724fe6ab616e7a9bcb02001803..c2308eb9a8389bf9b1629ef085cf5c684424fd3f 100644
+--- a/types/esm/interface/attr.d.ts
++++ b/types/esm/interface/attr.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Attr
+- */
+-export class Attr extends Node implements globalThis.Attr {
++export class Attr extends Node {
+     constructor(ownerDocument: any, name: any, value?: string);
+     ownerElement: any;
+     name: string;
+diff --git a/types/esm/interface/cdata-section.d.ts b/types/esm/interface/cdata-section.d.ts
+index cd903ec57affc332f4ecf1fa3394e7296bb35f84..f53d919d9d005994e26e8b0b3288f08a36cd4fe3 100644
+--- a/types/esm/interface/cdata-section.d.ts
++++ b/types/esm/interface/cdata-section.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.CDATASection
+- */
+-export class CDATASection extends CharacterData implements globalThis.CDATASection {
++export class CDATASection extends CharacterData {
+     constructor(ownerDocument: any, data?: string);
+     cloneNode(): CDATASection;
+ }
+diff --git a/types/esm/interface/character-data.d.ts b/types/esm/interface/character-data.d.ts
+index 9af94f2589a4bb29a5099909bf5ef1a4d841a66d..6ae92506655adc6e26ec1e96bb98191ac3e53936 100644
+--- a/types/esm/interface/character-data.d.ts
++++ b/types/esm/interface/character-data.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.CharacterData
+- */
+-export class CharacterData extends Node implements globalThis.CharacterData {
++export class CharacterData extends Node {
+     constructor(ownerDocument: any, localName: any, nodeType: any, data: any);
+     before(...nodes: any[]): void;
+     after(...nodes: any[]): void;
+diff --git a/types/esm/interface/comment.d.ts b/types/esm/interface/comment.d.ts
+index 39afa1e928933bb05c1a6b4f05f7d85cba72971b..4b3d8f17a3310be5c76399b544e1781a999fb89c 100644
+--- a/types/esm/interface/comment.d.ts
++++ b/types/esm/interface/comment.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Comment
+- */
+-export class Comment extends CharacterData implements globalThis.Comment {
++export class Comment extends CharacterData {
+     constructor(ownerDocument: any, data?: string);
+     cloneNode(): Comment;
+ }
+diff --git a/types/esm/interface/css-style-declaration.d.ts b/types/esm/interface/css-style-declaration.d.ts
+index 45e32d2f6030a4e079aeb2f971de55417dcabf08..8adb7fbf122832356448bbbcba819371a342a345 100644
+--- a/types/esm/interface/css-style-declaration.d.ts
++++ b/types/esm/interface/css-style-declaration.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.CSSStyleDeclaration
+- */
+-export class CSSStyleDeclaration extends Map<any, any> implements globalThis.CSSStyleDeclaration {
++export class CSSStyleDeclaration extends Map<any, any> {
+     constructor(element: any);
+     set cssText(value: string);
+     get cssText(): string;
+diff --git a/types/esm/interface/custom-element-registry.d.ts b/types/esm/interface/custom-element-registry.d.ts
+index c4bbd72ded7a595947ecdcc506b0b1ec882b4fa1..1719c1600fdb2354e5502fef853b1184a6f39386 100644
+--- a/types/esm/interface/custom-element-registry.d.ts
++++ b/types/esm/interface/custom-element-registry.d.ts
+@@ -3,10 +3,7 @@ export const customElements: WeakMap<WeakKey, any>;
+ export function attributeChangedCallback(element: any, attributeName: any, oldValue: any, newValue: any): void;
+ export function connectedCallback(element: any): void;
+ export function disconnectedCallback(element: any): void;
+-/**
+- * @implements globalThis.CustomElementRegistry
+- */
+-export class CustomElementRegistry implements globalThis.CustomElementRegistry {
++export class CustomElementRegistry {
+     /**
+      * @param {Document} ownerDocument
+      */
+diff --git a/types/esm/interface/custom-event.d.ts b/types/esm/interface/custom-event.d.ts
+index 771b04265a86d15496e787100c8630c91a894999..0045e6fccab5b6586970e2a5659b674c43b907cf 100644
+--- a/types/esm/interface/custom-event.d.ts
++++ b/types/esm/interface/custom-event.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.CustomEvent
+- */
+-export class CustomEvent extends Event implements globalThis.CustomEvent {
++export class CustomEvent extends Event {
+     detail: any;
+ }
+ import { Event } from './event.js';
+diff --git a/types/esm/interface/document-fragment.d.ts b/types/esm/interface/document-fragment.d.ts
+index 38fe406b7cc00addab00c4ee65af98ad08b13820..e11328d6ab8d1b7975de56d8e29d07cbd5011c94 100644
+--- a/types/esm/interface/document-fragment.d.ts
++++ b/types/esm/interface/document-fragment.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.DocumentFragment
+- */
+-export class DocumentFragment extends NonElementParentNode implements globalThis.DocumentFragment {
++export class DocumentFragment extends NonElementParentNode {
+     constructor(ownerDocument: any);
+ }
+ import { NonElementParentNode } from '../mixin/non-element-parent-node.js';
+diff --git a/types/esm/interface/document-type.d.ts b/types/esm/interface/document-type.d.ts
+index 7dbdb56ae1919dd2aa4b6b2a0ab8cdb63733ace8..9501e6984072f5424c870d02f12f5ded38af8ff3 100644
+--- a/types/esm/interface/document-type.d.ts
++++ b/types/esm/interface/document-type.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.DocumentType
+- */
+-export class DocumentType extends Node implements globalThis.DocumentType {
++export class DocumentType extends Node {
+     constructor(ownerDocument: any, name: any, publicId?: string, systemId?: string);
+     name: any;
+     publicId: string;
+diff --git a/types/esm/interface/document.d.ts b/types/esm/interface/document.d.ts
+index 516c9249b835820257208a4e854e2d8a72c7ea44..0af843791a4935f7f9f7b049d0538ebe9d4d029c 100644
+--- a/types/esm/interface/document.d.ts
++++ b/types/esm/interface/document.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Document
+- */
+-export class Document extends NonElementParentNode implements globalThis.Document {
++export class Document extends NonElementParentNode {
+     constructor(type: any);
+     /**
+      * @type {globalThis.Document['defaultView']}
+diff --git a/types/esm/interface/element.d.ts b/types/esm/interface/element.d.ts
+index eae53136c38139a210e1cfa832100c5b9dc18e83..26b9753b1460349b04308f831a45c56716e84af6 100644
+--- a/types/esm/interface/element.d.ts
++++ b/types/esm/interface/element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Element
+- */
+-export class Element extends ParentNode implements globalThis.Element {
++export class Element extends ParentNode {
+     constructor(ownerDocument: any, localName: any);
+     get namespaceURI(): string;
+     before(...nodes: any[]): void;
+diff --git a/types/esm/interface/event-target.d.ts b/types/esm/interface/event-target.d.ts
+index e34a1f03dac528434493fb60db100a5c9b655813..01da859a7a1ad20774c940112246c0e9a594ebbf 100644
+--- a/types/esm/interface/event-target.d.ts
++++ b/types/esm/interface/event-target.d.ts
+@@ -1,8 +1,5 @@
+ export { DOMEventTarget as EventTarget };
+-/**
+- * @implements globalThis.EventTarget
+- */
+-declare class DOMEventTarget implements globalThis.EventTarget {
++declare class DOMEventTarget {
+     /**
+      * @protected
+      */
+diff --git a/types/esm/interface/event.d.ts b/types/esm/interface/event.d.ts
+index 2e49eee5865527f72cb84827498371e3ef133a55..8bb535fcd8d3468ba916790f806806fac46fa4ec 100644
+--- a/types/esm/interface/event.d.ts
++++ b/types/esm/interface/event.d.ts
+@@ -1,8 +1,5 @@
+ export { GlobalEvent as Event };
+-/**
+- * @implements globalThis.Event
+- */
+-declare class GlobalEvent implements globalThis.Event {
++declare class GlobalEvent {
+     static get BUBBLING_PHASE(): number;
+     static get AT_TARGET(): number;
+     static get CAPTURING_PHASE(): number;
+diff --git a/types/esm/interface/input-event.d.ts b/types/esm/interface/input-event.d.ts
+index ffe7cbce8e087a3239a4a2606a273ae4e96a8fac..51242021ecbe3e2741f5374585016eb7e2970b7a 100644
+--- a/types/esm/interface/input-event.d.ts
++++ b/types/esm/interface/input-event.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.InputEvent
+- */
+-export class InputEvent extends Event implements globalThis.InputEvent {
++export class InputEvent extends Event {
+     inputType: any;
+     data: any;
+     dataTransfer: any;
+diff --git a/types/esm/interface/mutation-observer.d.ts b/types/esm/interface/mutation-observer.d.ts
+index f5d10ca29b984d004eae0842e462f57701f09973..10b491bef7b585e922bf024e2ae62e8bff98c095 100644
+--- a/types/esm/interface/mutation-observer.d.ts
++++ b/types/esm/interface/mutation-observer.d.ts
+@@ -4,9 +4,6 @@ export class MutationObserverClass {
+     constructor(ownerDocument: any);
+     observers: Set<any>;
+     active: boolean;
+-    /**
+-     * @implements globalThis.MutationObserver
+-     */
+     class: {
+         new (callback: any): {
+             /**
+diff --git a/types/esm/interface/named-node-map.d.ts b/types/esm/interface/named-node-map.d.ts
+index acbcee8dad930e592e5e38deebfa4f420516802b..5b7d571b5048c482a1f55fafbb2ca1a23b5a9d2d 100644
+--- a/types/esm/interface/named-node-map.d.ts
++++ b/types/esm/interface/named-node-map.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.NamedNodeMap
+- */
+-export class NamedNodeMap extends Array<any> implements globalThis.NamedNodeMap {
++export class NamedNodeMap extends Array<any> {
+     constructor(ownerElement: any);
+     ownerElement: any;
+     getNamedItem(name: any): any;
+diff --git a/types/esm/interface/node-list.d.ts b/types/esm/interface/node-list.d.ts
+index 1452e2d005372088327826f86414e8cf499cb195..29fb67a2c2aa6a976936ffb0b29ad9e52f18e8aa 100644
+--- a/types/esm/interface/node-list.d.ts
++++ b/types/esm/interface/node-list.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.NodeList
+- */
+-export class NodeList extends Array<any> implements globalThis.NodeList {
++export class NodeList extends Array<any> {
+     constructor(arrayLength?: number);
+     constructor(arrayLength: number);
+     constructor(...items: any[]);
+diff --git a/types/esm/interface/node.d.ts b/types/esm/interface/node.d.ts
+index 80d4b3ee9c3320c08eb4ed9ebf40c9277378414a..2c886ff8c0c398033e9fdd03fb5ff2570c0b2d1d 100644
+--- a/types/esm/interface/node.d.ts
++++ b/types/esm/interface/node.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Node
+- */
+-export class Node extends EventTarget implements globalThis.Node {
++export class Node extends EventTarget {
+     static get ELEMENT_NODE(): number;
+     static get ATTRIBUTE_NODE(): number;
+     static get TEXT_NODE(): number;
+@@ -39,8 +36,8 @@ export class Node extends EventTarget implements globalThis.Node {
+     set textContent(value: any);
+     get textContent(): any;
+     normalize(): void;
+-    cloneNode(): any;
+-    contains(): boolean;
++    cloneNode(deep?: boolean): any;
++    contains(node?: Node | null): boolean;
+     /**
+      * Inserts a node before a reference node as a child of this parent node.
+      * @param {Node} newNode The node to be inserted.
+diff --git a/types/esm/interface/range.d.ts b/types/esm/interface/range.d.ts
+index ca51a00616d77f7d5ec8e18fe49e02a53e582a97..1b2f2d66d3b54dede3fb29d196169b72efbdaa69 100644
+--- a/types/esm/interface/range.d.ts
++++ b/types/esm/interface/range.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Range
+- */
+-export class Range implements globalThis.Range {
++export class Range {
+     commonAncestorContainer: any;
+     insertNode(newNode: any): void;
+     selectNode(node: any): void;
+diff --git a/types/esm/interface/shadow-root.d.ts b/types/esm/interface/shadow-root.d.ts
+index 58c87d2904a411ef26b9df7a19d68d7c97763840..59bdbaa3177749a5b8836e6b103f628467784206 100644
+--- a/types/esm/interface/shadow-root.d.ts
++++ b/types/esm/interface/shadow-root.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.ShadowRoot
+- */
+-export class ShadowRoot extends NonElementParentNode implements globalThis.ShadowRoot {
++export class ShadowRoot extends NonElementParentNode {
+     constructor(host: any);
+     host: any;
+     set innerHTML(html: string);
+diff --git a/types/esm/interface/text.d.ts b/types/esm/interface/text.d.ts
+index 821de82139f532ff65fff9959c9114de349f0cfa..927ee354452567f95a7aecb48cdc5146e795ae8d 100644
+--- a/types/esm/interface/text.d.ts
++++ b/types/esm/interface/text.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Text
+- */
+-export class Text extends CharacterData implements globalThis.Text {
++export class Text extends CharacterData {
+     constructor(ownerDocument: any, data?: string);
+     get wholeText(): string;
+     cloneNode(): Text;
+diff --git a/types/esm/interface/tree-walker.d.ts b/types/esm/interface/tree-walker.d.ts
+index 51026c1cf08f1af5d7f24501af022cb2fa569cfe..444ba6629be4742372618c274433a2a876f52305 100644
+--- a/types/esm/interface/tree-walker.d.ts
++++ b/types/esm/interface/tree-walker.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.TreeWalker
+- */
+-export class TreeWalker implements globalThis.TreeWalker {
++export class TreeWalker {
+     constructor(root: any, whatToShow?: number);
+     root: any;
+     currentNode: any;
+diff --git a/types/esm/mixin/parent-node.d.ts b/types/esm/mixin/parent-node.d.ts
+index 6a0af4656bd00f5c1f100704cb830fcfe7c628c8..6d6cb5ff91db4e4c2018b3de18ea3f3ae7ab8e62 100644
+--- a/types/esm/mixin/parent-node.d.ts
++++ b/types/esm/mixin/parent-node.d.ts
+@@ -1,7 +1,7 @@
+ /** @typedef { import('../interface/element.js').Element & {
+-    [typeof NEXT]: NodeStruct,
+-    [typeof PREV]: NodeStruct,
+-    [typeof START]: NodeStruct,
++    [NEXT]: NodeStruct,
++    [PREV]: NodeStruct,
++    [START]: NodeStruct,
+     nodeType: typeof ATTRIBUTE_NODE | typeof DOCUMENT_FRAGMENT_NODE | typeof ELEMENT_NODE | typeof TEXT_NODE | typeof NODE_END | typeof COMMENT_NODE | typeof CDATA_SECTION_NODE,
+     ownerDocument: Document,
+     parentNode: ParentNode,
+@@ -34,9 +34,9 @@ export class ParentNode extends Node {
+     [END]: NodeStruct;
+ }
+ export type NodeStruct = import('../interface/element.js').Element & {
+-    [typeof NEXT]: NodeStruct;
+-    [typeof PREV]: NodeStruct;
+-    [typeof START]: NodeStruct;
++    [NEXT]: NodeStruct;
++    [PREV]: NodeStruct;
++    [START]: NodeStruct;
+     nodeType: typeof ATTRIBUTE_NODE | typeof DOCUMENT_FRAGMENT_NODE | typeof ELEMENT_NODE | typeof TEXT_NODE | typeof NODE_END | typeof COMMENT_NODE | typeof CDATA_SECTION_NODE;
+     ownerDocument: Document;
+     parentNode: ParentNode;
+diff --git a/types/esm/svg/document.d.ts b/types/esm/svg/document.d.ts
+index 20ce9201a44740fff1f0881ef81cca1799624d3f..1185edd65882507694dcf4ed20f6fa41045d9708 100644
+--- a/types/esm/svg/document.d.ts
++++ b/types/esm/svg/document.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Document
+- */
+-export class SVGDocument extends Document implements globalThis.Document {
++export class SVGDocument extends Document {
+     constructor();
+ }
+ import { Document } from '../interface/document.js';
+diff --git a/types/esm/svg/element.d.ts b/types/esm/svg/element.d.ts
+index ae46775eb0aab421cbb40e498996328cd59cadbc..8a7dc78ed367284a9310bd258cdb14f8110453b5 100644
+--- a/types/esm/svg/element.d.ts
++++ b/types/esm/svg/element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.SVGElement
+- */
+-export class SVGElement extends Element implements globalThis.SVGElement {
++export class SVGElement extends Element {
+     constructor(ownerDocument: any, localName: any, ownerSVGElement?: any);
+     ownerSVGElement: any;
+ }
+diff --git a/types/esm/xml/document.d.ts b/types/esm/xml/document.d.ts
+index 6b152c1a7fdde9d8e2439908a4b9fc29ddc8d51f..fb66c045922f5a7a711c5a0cdfea74fbed077634 100644
+--- a/types/esm/xml/document.d.ts
++++ b/types/esm/xml/document.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.XMLDocument
+- */
+-export class XMLDocument extends Document implements globalThis.XMLDocument {
++export class XMLDocument extends Document {
+     constructor();
+ }
+ import { Document } from '../interface/document.js';
+diff --git a/types/html/anchor-element.d.ts b/types/html/anchor-element.d.ts
+index e50b2e91d47889aaf4414e29811439e477e5eec2..ff17fb5641f2926421a2ee345f3b401038cac638 100644
+--- a/types/html/anchor-element.d.ts
++++ b/types/html/anchor-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLAnchorElement
+- */
+-export class HTMLAnchorElement extends HTMLElement implements globalThis.HTMLAnchorElement {
++export class HTMLAnchorElement extends HTMLElement {
+     set href(arg: string);
+     get href(): string;
+     set download(arg: string);
+diff --git a/types/html/area-element.d.ts b/types/html/area-element.d.ts
+index c883620a41dadf16105cd562e052a76596002a63..a4a4860f83aa6833bd1e8fdc2f9ae563baf1e346 100644
+--- a/types/html/area-element.d.ts
++++ b/types/html/area-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLAreaElement
+- */
+-export class HTMLAreaElement extends HTMLElement implements globalThis.HTMLAreaElement {
++export class HTMLAreaElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/audio-element.d.ts b/types/html/audio-element.d.ts
+index 7785456b3e8c6fcd37ba4af194a351d07bbd2ef8..b8c672b2fdaf9e3e640f1f3dd74227d6b1a3a63f 100644
+--- a/types/html/audio-element.d.ts
++++ b/types/html/audio-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLAudioElement
+- */
+-export class HTMLAudioElement extends HTMLElement implements globalThis.HTMLAudioElement {
++export class HTMLAudioElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/base-element.d.ts b/types/html/base-element.d.ts
+index 0832ccfcde44598ede5a3e3e13ba5b280c04b7d0..f3911878586172a90936b6aff00f704f10110ef1 100644
+--- a/types/html/base-element.d.ts
++++ b/types/html/base-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLBaseElement
+- */
+-export class HTMLBaseElement extends HTMLElement implements globalThis.HTMLBaseElement {
++export class HTMLBaseElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/body-element.d.ts b/types/html/body-element.d.ts
+index cdb2527769433f0216ea0d228bd85182572b6038..54de42cc2fa37db0ec02bbaccea31cb009af9ddf 100644
+--- a/types/html/body-element.d.ts
++++ b/types/html/body-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLBodyElement
+- */
+-export class HTMLBodyElement extends HTMLElement implements globalThis.HTMLBodyElement {
++export class HTMLBodyElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/br-element.d.ts b/types/html/br-element.d.ts
+index 3e70a5783abb367009929b292c010f0de70708cd..9127a805052a263f0ee09edfc86eafa36f63f810 100644
+--- a/types/html/br-element.d.ts
++++ b/types/html/br-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLBRElement
+- */
+-export class HTMLBRElement extends HTMLElement implements globalThis.HTMLBRElement {
++export class HTMLBRElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/button-element.d.ts b/types/html/button-element.d.ts
+index ce78f0e76f4840e726ffe5d43e4184701488480b..bc155825597f73f1f85840ac1c501f6a390c7bd2 100644
+--- a/types/html/button-element.d.ts
++++ b/types/html/button-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLButtonElement
+- */
+-export class HTMLButtonElement extends HTMLElement implements globalThis.HTMLButtonElement {
++export class HTMLButtonElement extends HTMLElement {
+     set disabled(arg: any);
+     get disabled(): any;
+     set name(arg: any);
+diff --git a/types/html/canvas-element.d.ts b/types/html/canvas-element.d.ts
+index a5cbcc57cffac8f9551b8e79eaa868e7f8ba8fe8..6d19430853d25a5ab10d376505a43fc39cc2fc7b 100644
+--- a/types/html/canvas-element.d.ts
++++ b/types/html/canvas-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLCanvasElement
+- */
+-export class HTMLCanvasElement extends HTMLElement implements globalThis.HTMLCanvasElement {
++export class HTMLCanvasElement extends HTMLElement {
+     set width(arg: any);
+     get width(): any;
+     set height(arg: any);
+diff --git a/types/html/d-list-element.d.ts b/types/html/d-list-element.d.ts
+index 0ad12f3f2afc1eed3a61fb8944ea515c63dd5af3..85b776d39e15d5f81b444ee167f14fef964012e4 100644
+--- a/types/html/d-list-element.d.ts
++++ b/types/html/d-list-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLDListElement
+- */
+-export class HTMLDListElement extends HTMLElement implements globalThis.HTMLDListElement {
++export class HTMLDListElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/data-element.d.ts b/types/html/data-element.d.ts
+index 475f1fa32fa9e4b584b003f9b545acc01ae1bdf3..f60671a431e73e3817bb703ba012afe2208a506e 100644
+--- a/types/html/data-element.d.ts
++++ b/types/html/data-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLDataElement
+- */
+-export class HTMLDataElement extends HTMLElement implements globalThis.HTMLDataElement {
++export class HTMLDataElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/data-list-element.d.ts b/types/html/data-list-element.d.ts
+index e6e9dee0b863808eadfd8b99fa88645b2c92da4c..fd47bf76be66aab71854a5d4a16d0c110ea05bb5 100644
+--- a/types/html/data-list-element.d.ts
++++ b/types/html/data-list-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLDataListElement
+- */
+-export class HTMLDataListElement extends HTMLElement implements globalThis.HTMLDataListElement {
++export class HTMLDataListElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/details-element.d.ts b/types/html/details-element.d.ts
+index 4973031616f48099b6a0c875886ad282e1e082bb..73150fbafdf4d35ae6f87fd6cc35eb65ff133d74 100644
+--- a/types/html/details-element.d.ts
++++ b/types/html/details-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLDetailsElement
+- */
+-export class HTMLDetailsElement extends HTMLElement implements globalThis.HTMLDetailsElement {
++export class HTMLDetailsElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/directory-element.d.ts b/types/html/directory-element.d.ts
+index c38c91acfcb30974b9fe17dc0f61cbb1304e51e2..9ed16f7c931371b76538ddeef623b19b6c410077 100644
+--- a/types/html/directory-element.d.ts
++++ b/types/html/directory-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLDirectoryElement
+- */
+-export class HTMLDirectoryElement extends HTMLElement implements globalThis.HTMLDirectoryElement {
++export class HTMLDirectoryElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/div-element.d.ts b/types/html/div-element.d.ts
+index 6370f7eaba8160d9779539fb0da04a1cf564fb05..adf31f070203674b7677b5f8618c793ef34af038 100644
+--- a/types/html/div-element.d.ts
++++ b/types/html/div-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLDivElement
+- */
+-export class HTMLDivElement extends HTMLElement implements globalThis.HTMLDivElement {
++export class HTMLDivElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/document.d.ts b/types/html/document.d.ts
+index 357e293e5ab802999e5280637015c0686bb064db..cbc0a30bbe32516ed08a42a7d2cbd721240ffe95 100644
+--- a/types/html/document.d.ts
++++ b/types/html/document.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLDocument
+- */
+-export class HTMLDocument extends Document implements globalThis.HTMLDocument {
++export class HTMLDocument extends Document {
+     constructor();
+     get all(): NodeList;
+     /**
+diff --git a/types/html/element.d.ts b/types/html/element.d.ts
+index f08331f2b33e0e0f3b02ac27637d5e584c0442d5..7695a7b1ec2e34317de88bec7204b482fa7c0b04 100644
+--- a/types/html/element.d.ts
++++ b/types/html/element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLElement
+- */
+-export class HTMLElement extends Element implements globalThis.HTMLElement {
++export class HTMLElement extends Element {
+     static get observedAttributes(): any[];
+     constructor(ownerDocument?: any, localName?: string);
+     blur(): void;
+diff --git a/types/html/embed-element.d.ts b/types/html/embed-element.d.ts
+index 3417a8dd63e7007a66571b496f9a866620c0c4df..3e0ade695a7f9c28ea5ef5625184a0e478601b4e 100644
+--- a/types/html/embed-element.d.ts
++++ b/types/html/embed-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLEmbedElement
+- */
+-export class HTMLEmbedElement extends HTMLElement implements globalThis.HTMLEmbedElement {
++export class HTMLEmbedElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/field-set-element.d.ts b/types/html/field-set-element.d.ts
+index 95b8299e12338849898614a2460c4b4c4d72afaa..99760db4a1a1d794fd0a140f43d7466060d3a18c 100644
+--- a/types/html/field-set-element.d.ts
++++ b/types/html/field-set-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLFieldSetElement
+- */
+-export class HTMLFieldSetElement extends HTMLElement implements globalThis.HTMLFieldSetElement {
++export class HTMLFieldSetElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/font-element.d.ts b/types/html/font-element.d.ts
+index 8a20a2f8f311eeabad25e3be760c20c8ab202ca0..3344b450a4566677792127d32af042e7bbefd212 100644
+--- a/types/html/font-element.d.ts
++++ b/types/html/font-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLFontElement
+- */
+-export class HTMLFontElement extends HTMLElement implements globalThis.HTMLFontElement {
++export class HTMLFontElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/form-element.d.ts b/types/html/form-element.d.ts
+index e65760d36f19a870d8a10966f571967e81adf49c..4b67a31bd62fd1bd904c0fbab7db2c7136b4298b 100644
+--- a/types/html/form-element.d.ts
++++ b/types/html/form-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLFormElement
+- */
+-export class HTMLFormElement extends HTMLElement implements globalThis.HTMLFormElement {
++export class HTMLFormElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/frame-element.d.ts b/types/html/frame-element.d.ts
+index f135b22248fd6ab873b59a9e25c1c05322f4f418..b05c8c461186d00e431d02098b6286ebae06694f 100644
+--- a/types/html/frame-element.d.ts
++++ b/types/html/frame-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLFrameElement
+- */
+-export class HTMLFrameElement extends HTMLElement implements globalThis.HTMLFrameElement {
++export class HTMLFrameElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/frame-set-element.d.ts b/types/html/frame-set-element.d.ts
+index 8280c96093dc534ff86b89e89289fba79d8d3d21..463a789630e73e02e126e52ff211119caf3c0b45 100644
+--- a/types/html/frame-set-element.d.ts
++++ b/types/html/frame-set-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLFrameSetElement
+- */
+-export class HTMLFrameSetElement extends HTMLElement implements globalThis.HTMLFrameSetElement {
++export class HTMLFrameSetElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/head-element.d.ts b/types/html/head-element.d.ts
+index 7d3b27630238ad32860e4144e89fcfa9a77b04f3..3d7caa9c53042b45bd7555d3cd479553727cd150 100644
+--- a/types/html/head-element.d.ts
++++ b/types/html/head-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLHeadElement
+- */
+-export class HTMLHeadElement extends HTMLElement implements globalThis.HTMLHeadElement {
++export class HTMLHeadElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/heading-element.d.ts b/types/html/heading-element.d.ts
+index 667a0d1361c7ae759d0c033150246f4aa9d145a9..113025dde4ac71046a97dd687eab64ab5aba2335 100644
+--- a/types/html/heading-element.d.ts
++++ b/types/html/heading-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLHeadingElement
+- */
+-export class HTMLHeadingElement extends HTMLElement implements globalThis.HTMLHeadingElement {
++export class HTMLHeadingElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/hr-element.d.ts b/types/html/hr-element.d.ts
+index 76d72db49528396e4bafc5b249bb32c09126c37c..1866e1c7f02a0ee263fd93049a66f66d662a54c3 100644
+--- a/types/html/hr-element.d.ts
++++ b/types/html/hr-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLHRElement
+- */
+-export class HTMLHRElement extends HTMLElement implements globalThis.HTMLHRElement {
++export class HTMLHRElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/html-element.d.ts b/types/html/html-element.d.ts
+index 95de127e3cf277c0cc1c3ebf5999b66d43f989cd..3eb55da0cae25232199366d40c7dcbe4f548a537 100644
+--- a/types/html/html-element.d.ts
++++ b/types/html/html-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLHtmlElement
+- */
+-export class HTMLHtmlElement extends HTMLElement implements globalThis.HTMLHtmlElement {
++export class HTMLHtmlElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/i-frame-element.d.ts b/types/html/i-frame-element.d.ts
+index 8d3f6956427a5c60003b4800837596d92ae3dafc..6ab9fd73a2b3e37648cf0dc35dff5da772701d16 100644
+--- a/types/html/i-frame-element.d.ts
++++ b/types/html/i-frame-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLIFrameElement
+- */
+-export class HTMLIFrameElement extends HTMLElement implements globalThis.HTMLIFrameElement {
++export class HTMLIFrameElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/image-element.d.ts b/types/html/image-element.d.ts
+index f94da6bd2b13d5fdbdf466cff86dd04e5f52f612..bef02cd28e751340696d2ea801334af05b5758e5 100644
+--- a/types/html/image-element.d.ts
++++ b/types/html/image-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLImageElement
+- */
+-export class HTMLImageElement extends HTMLElement implements globalThis.HTMLImageElement {
++export class HTMLImageElement extends HTMLElement {
+     set alt(arg: any);
+     get alt(): any;
+     set sizes(arg: any);
+diff --git a/types/html/input-element.d.ts b/types/html/input-element.d.ts
+index 6a1ac910f691dcd8cbdb70f5509ec7f832ea8aaf..fd02b3948e0979e5772422766ae3c8b77c7bb459 100644
+--- a/types/html/input-element.d.ts
++++ b/types/html/input-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLInputElement
+- */
+-export class HTMLInputElement extends HTMLElement implements globalThis.HTMLInputElement {
++export class HTMLInputElement extends HTMLElement {
+     set autofocus(arg: any);
+     get autofocus(): any;
+     set disabled(arg: any);
+diff --git a/types/html/label-element.d.ts b/types/html/label-element.d.ts
+index 0f2529c8555a62e37921cce1c2b86ccff4c15070..f807a6f164c00aa95b5d5468cc9ab81d4952175e 100644
+--- a/types/html/label-element.d.ts
++++ b/types/html/label-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLLabelElement
+- */
+-export class HTMLLabelElement extends HTMLElement implements globalThis.HTMLLabelElement {
++export class HTMLLabelElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/legend-element.d.ts b/types/html/legend-element.d.ts
+index e9801345300fa55e2ebb04f8670535693005adbd..ded2ac6f073a0bd71a29bdfb74ed9c5bbe3a1f0c 100644
+--- a/types/html/legend-element.d.ts
++++ b/types/html/legend-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLLegendElement
+- */
+-export class HTMLLegendElement extends HTMLElement implements globalThis.HTMLLegendElement {
++export class HTMLLegendElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/li-element.d.ts b/types/html/li-element.d.ts
+index 59a6a1c670b9d809b7e469943b93eb663cb641c4..0cdcd3f8fad59fdf54a089535e347d5e061ba40a 100644
+--- a/types/html/li-element.d.ts
++++ b/types/html/li-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLLIElement
+- */
+-export class HTMLLIElement extends HTMLElement implements globalThis.HTMLLIElement {
++export class HTMLLIElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/link-element.d.ts b/types/html/link-element.d.ts
+index 5b9d66a3c94c1b6fe058301fce40c71080ae3471..71fb3710e4cae95b98ca850624d09c66f9d108fd 100644
+--- a/types/html/link-element.d.ts
++++ b/types/html/link-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLLinkElement
+- */
+-export class HTMLLinkElement extends HTMLElement implements globalThis.HTMLLinkElement {
++export class HTMLLinkElement extends HTMLElement {
+     set disabled(arg: any);
+     get disabled(): any;
+     set href(arg: any);
+diff --git a/types/html/map-element.d.ts b/types/html/map-element.d.ts
+index b788cb74c4c6500acc4b22f88f22d2439c4eb879..02e96a227e9f7d28b457a151eb46d2a217c08521 100644
+--- a/types/html/map-element.d.ts
++++ b/types/html/map-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLMapElement
+- */
+-export class HTMLMapElement extends HTMLElement implements globalThis.HTMLMapElement {
++export class HTMLMapElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/marquee-element.d.ts b/types/html/marquee-element.d.ts
+index 40cad9c9934c134cab00a2ec18b99b25d5142a1f..f694cd36b7f73a3ef78b9bab19da092fccf7e93f 100644
+--- a/types/html/marquee-element.d.ts
++++ b/types/html/marquee-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLMarqueeElement
+- */
+-export class HTMLMarqueeElement extends HTMLElement implements globalThis.HTMLMarqueeElement {
++export class HTMLMarqueeElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/media-element.d.ts b/types/html/media-element.d.ts
+index 52fc1f78eb477b77d041fe21c4a2cca67bdc8e9c..036952dd49cd458b0e6e0318ce9cddcac88fbf68 100644
+--- a/types/html/media-element.d.ts
++++ b/types/html/media-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLMediaElement
+- */
+-export class HTMLMediaElement extends HTMLElement implements globalThis.HTMLMediaElement {
++export class HTMLMediaElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/menu-element.d.ts b/types/html/menu-element.d.ts
+index c3c50a84e99b01ba0d733253261164cd790ae133..b1260e55a07052dc1a6071ba3e99e04f18389dc0 100644
+--- a/types/html/menu-element.d.ts
++++ b/types/html/menu-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLMenuElement
+- */
+-export class HTMLMenuElement extends HTMLElement implements globalThis.HTMLMenuElement {
++export class HTMLMenuElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/meta-element.d.ts b/types/html/meta-element.d.ts
+index 64dad4dc3c8e2ddf8f3e5fdb47428e99ce4e1097..6d2667387e53e5b242b97aa16eefbd6d33b0dc07 100644
+--- a/types/html/meta-element.d.ts
++++ b/types/html/meta-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLMetaElement
+- */
+-export class HTMLMetaElement extends HTMLElement implements globalThis.HTMLMetaElement {
++export class HTMLMetaElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/meter-element.d.ts b/types/html/meter-element.d.ts
+index a41622a391b9e481310110f36c58fee56bf1b20e..8dbf9d27443e662d890bbf524b2475a6678e0021 100644
+--- a/types/html/meter-element.d.ts
++++ b/types/html/meter-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLMeterElement
+- */
+-export class HTMLMeterElement extends HTMLElement implements globalThis.HTMLMeterElement {
++export class HTMLMeterElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/mod-element.d.ts b/types/html/mod-element.d.ts
+index b013bf89d3bd1d669c5a8811c718c8fa5bacc3c3..5aa08eb77e1bff008c358f467dba23e7cd958072 100644
+--- a/types/html/mod-element.d.ts
++++ b/types/html/mod-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLModElement
+- */
+-export class HTMLModElement extends HTMLElement implements globalThis.HTMLModElement {
++export class HTMLModElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/o-list-element.d.ts b/types/html/o-list-element.d.ts
+index 130cf40e52a1acab8381d71ddf10dc4d31f2d36e..a10a687de5a2a7513319bc1d1a1860faae839f4b 100644
+--- a/types/html/o-list-element.d.ts
++++ b/types/html/o-list-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLOListElement
+- */
+-export class HTMLOListElement extends HTMLElement implements globalThis.HTMLOListElement {
++export class HTMLOListElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/object-element.d.ts b/types/html/object-element.d.ts
+index a0e39914de2d00731e51adb9737d60314db1ea1f..e8bf144a8a892c51991bf25a132cda932dbc6ed3 100644
+--- a/types/html/object-element.d.ts
++++ b/types/html/object-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLObjectElement
+- */
+-export class HTMLObjectElement extends HTMLElement implements globalThis.HTMLObjectElement {
++export class HTMLObjectElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/opt-group-element.d.ts b/types/html/opt-group-element.d.ts
+index b0cda25648678526315048628eef7736e1c036bb..81466187c9c5e3a9a4c662055a4c367b22fb11dc 100644
+--- a/types/html/opt-group-element.d.ts
++++ b/types/html/opt-group-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLOptGroupElement
+- */
+-export class HTMLOptGroupElement extends HTMLElement implements globalThis.HTMLOptGroupElement {
++export class HTMLOptGroupElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/option-element.d.ts b/types/html/option-element.d.ts
+index 968bffeb4ee740c207302fcdb9b1b457086cd481..623f6b027d84bf7725e0aad5be7bd66817f29fd7 100644
+--- a/types/html/option-element.d.ts
++++ b/types/html/option-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLOptionElement
+- */
+-export class HTMLOptionElement extends HTMLElement implements globalThis.HTMLOptionElement {
++export class HTMLOptionElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/output-element.d.ts b/types/html/output-element.d.ts
+index 7f087a5002fbb781b19110f8b10f40febc756e57..3258a99fe6005c0926461b6e20b314a4cd16f4a4 100644
+--- a/types/html/output-element.d.ts
++++ b/types/html/output-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLOutputElement
+- */
+-export class HTMLOutputElement extends HTMLElement implements globalThis.HTMLOutputElement {
++export class HTMLOutputElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/paragraph-element.d.ts b/types/html/paragraph-element.d.ts
+index beb53e8834a381ea6bf36e65e8477fb30fe9f7e2..a804d4470fdbb92777fa1aea86cc537f54a91cc8 100644
+--- a/types/html/paragraph-element.d.ts
++++ b/types/html/paragraph-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLParagraphElement
+- */
+-export class HTMLParagraphElement extends HTMLElement implements globalThis.HTMLParagraphElement {
++export class HTMLParagraphElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/param-element.d.ts b/types/html/param-element.d.ts
+index 073abe1c01c92fa2b276c81e9ab838791aa71b9d..b05c7a4e91cb95d774ef3bddbade5f453be90ae4 100644
+--- a/types/html/param-element.d.ts
++++ b/types/html/param-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLParamElement
+- */
+-export class HTMLParamElement extends HTMLElement implements globalThis.HTMLParamElement {
++export class HTMLParamElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/picture-element.d.ts b/types/html/picture-element.d.ts
+index d060fb08355541bac7d1ac228211c4669dc45ce2..34737a27aa9c9c7829f54e9e44558934734e4841 100644
+--- a/types/html/picture-element.d.ts
++++ b/types/html/picture-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLPictureElement
+- */
+-export class HTMLPictureElement extends HTMLElement implements globalThis.HTMLPictureElement {
++export class HTMLPictureElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/pre-element.d.ts b/types/html/pre-element.d.ts
+index 6d5c8c8e1511fb36f7e933843d2320a427d8c884..a4ea65f631bc338cb06487e874652b42fe4c3535 100644
+--- a/types/html/pre-element.d.ts
++++ b/types/html/pre-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLPreElement
+- */
+-export class HTMLPreElement extends HTMLElement implements globalThis.HTMLPreElement {
++export class HTMLPreElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/progress-element.d.ts b/types/html/progress-element.d.ts
+index 439f764224fafa72348ba9ac02d6097fbf2863d6..305c3e8a3a43459ba9e4579c32054b5fc4ee203c 100644
+--- a/types/html/progress-element.d.ts
++++ b/types/html/progress-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLProgressElement
+- */
+-export class HTMLProgressElement extends HTMLElement implements globalThis.HTMLProgressElement {
++export class HTMLProgressElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/quote-element.d.ts b/types/html/quote-element.d.ts
+index 414209d42a5e4daaf1f6dad92f2ac09d8b827dd6..76e4d3b6f6abba76709aff080c4806a4a814f8e8 100644
+--- a/types/html/quote-element.d.ts
++++ b/types/html/quote-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLQuoteElement
+- */
+-export class HTMLQuoteElement extends HTMLElement implements globalThis.HTMLQuoteElement {
++export class HTMLQuoteElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/script-element.d.ts b/types/html/script-element.d.ts
+index 0c723e355d48db8e0975a8f4c521f33ac3c4c98e..cec007c6f95f64aa48b18b7e471d2b5f063173cc 100644
+--- a/types/html/script-element.d.ts
++++ b/types/html/script-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLScriptElement
+- */
+-export class HTMLScriptElement extends TextElement implements globalThis.HTMLScriptElement {
++export class HTMLScriptElement extends TextElement {
+ }
+ import { TextElement } from "./text-element.js";
+diff --git a/types/html/select-element.d.ts b/types/html/select-element.d.ts
+index c390bb0625c8f8814bb4d670b4ea4c4043b1d557..4877543f112983143669be05971b66d16920ca6f 100644
+--- a/types/html/select-element.d.ts
++++ b/types/html/select-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLSelectElement
+- */
+-export class HTMLSelectElement extends HTMLElement implements globalThis.HTMLSelectElement {
++export class HTMLSelectElement extends HTMLElement {
+     get options(): NodeList;
+     set disabled(arg: any);
+     get disabled(): any;
+diff --git a/types/html/slot-element.d.ts b/types/html/slot-element.d.ts
+index fedeb97994b04fdb6e738cf1952c4be94115efa4..210e516985109ef2d9713e025efcfc4eecdfe70b 100644
+--- a/types/html/slot-element.d.ts
++++ b/types/html/slot-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLSlotElement
+- */
+-export class HTMLSlotElement extends HTMLElement implements globalThis.HTMLSlotElement {
++export class HTMLSlotElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/source-element.d.ts b/types/html/source-element.d.ts
+index a682c62fb142a438b61d8c7b2f93d6d76800a654..c99aa805b341083ffd5dab98bfe1b4e5cc45c2aa 100644
+--- a/types/html/source-element.d.ts
++++ b/types/html/source-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLSourceElement
+- */
+-export class HTMLSourceElement extends HTMLElement implements globalThis.HTMLSourceElement {
++export class HTMLSourceElement extends HTMLElement {
+     set src(arg: any);
+     get src(): any;
+     set srcset(arg: any);
+diff --git a/types/html/span-element.d.ts b/types/html/span-element.d.ts
+index bf9beab20323cdd54243048ac0e18069b6123719..c362091fba772f0628083deeb82d663dea386cda 100644
+--- a/types/html/span-element.d.ts
++++ b/types/html/span-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLSpanElement
+- */
+-export class HTMLSpanElement extends HTMLElement implements globalThis.HTMLSpanElement {
++export class HTMLSpanElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/style-element.d.ts b/types/html/style-element.d.ts
+index 690ca9cbe427b2564f5b8f55f4d7601c163b39f0..8fabb0866b4e77dcf3afef41e6eb166a33f7e678 100644
+--- a/types/html/style-element.d.ts
++++ b/types/html/style-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLStyleElement
+- */
+-export class HTMLStyleElement extends TextElement implements globalThis.HTMLStyleElement {
++export class HTMLStyleElement extends TextElement {
+     get sheet(): any;
+     [SHEET]: any;
+ }
+diff --git a/types/html/table-caption-element.d.ts b/types/html/table-caption-element.d.ts
+index ce3c009222a1900132152a7dc10b09a70e7d1152..3a5c6b0db2b2160c5a89891353a2189c8caeed37 100644
+--- a/types/html/table-caption-element.d.ts
++++ b/types/html/table-caption-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTableCaptionElement
+- */
+-export class HTMLTableCaptionElement extends HTMLElement implements globalThis.HTMLTableCaptionElement {
++export class HTMLTableCaptionElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/table-cell-element.d.ts b/types/html/table-cell-element.d.ts
+index 40cdcc988604f2ad32c1528e097b5f08c1df9b68..77cc1053910996846fdcef2ca3f97da1ab5ef124 100644
+--- a/types/html/table-cell-element.d.ts
++++ b/types/html/table-cell-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTableCellElement
+- */
+-export class HTMLTableCellElement extends HTMLElement implements globalThis.HTMLTableCellElement {
++export class HTMLTableCellElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/table-element.d.ts b/types/html/table-element.d.ts
+index 281ea9b80bb7fe721e591abfb1a7eb214aabfe10..fa89450e01e2cb6a6771c6b28a3d4227ebd6bb1a 100644
+--- a/types/html/table-element.d.ts
++++ b/types/html/table-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTableElement
+- */
+-export class HTMLTableElement extends HTMLElement implements globalThis.HTMLTableElement {
++export class HTMLTableElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/table-row-element.d.ts b/types/html/table-row-element.d.ts
+index 3ce9ec4b0374cd9d43a68ae3a900c9329411bd4c..2468b56af2ae8cf04434eb801f6e84716bb4db41 100644
+--- a/types/html/table-row-element.d.ts
++++ b/types/html/table-row-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTableRowElement
+- */
+-export class HTMLTableRowElement extends HTMLElement implements globalThis.HTMLTableRowElement {
++export class HTMLTableRowElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/template-element.d.ts b/types/html/template-element.d.ts
+index b376f6274557b5b90eeb3d8005f0dac9b3248cba..03ca1868dc71daa135d51311a87c72e6c19f4f46 100644
+--- a/types/html/template-element.d.ts
++++ b/types/html/template-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLTemplateElement
+- */
+-export class HTMLTemplateElement extends HTMLElement implements globalThis.HTMLTemplateElement {
++export class HTMLTemplateElement extends HTMLElement {
+     constructor(ownerDocument: any);
+     get content(): any;
+     [CONTENT]: any;
+diff --git a/types/html/text-area-element.d.ts b/types/html/text-area-element.d.ts
+index acf3fa2c4b15804a3b1f37c02f94d1ed19de5f67..66a109e4fcbbce9531d0bf702e16492a96796719 100644
+--- a/types/html/text-area-element.d.ts
++++ b/types/html/text-area-element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.HTMLTextAreaElement
+- */
+-export class HTMLTextAreaElement extends TextElement implements globalThis.HTMLTextAreaElement {
++export class HTMLTextAreaElement extends TextElement {
+     set disabled(arg: any);
+     get disabled(): any;
+     set name(arg: any);
+diff --git a/types/html/time-element.d.ts b/types/html/time-element.d.ts
+index 18c7cb80bc95fea32e9b2cae5490ab673ebd2d3e..0bc80c2be706b061f9123a8a83b39ae267226445 100644
+--- a/types/html/time-element.d.ts
++++ b/types/html/time-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTimeElement
+- */
+-export class HTMLTimeElement extends HTMLElement implements globalThis.HTMLTimeElement {
++export class HTMLTimeElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/title-element.d.ts b/types/html/title-element.d.ts
+index f72d9b99147c1a817bbe5b9dcf91db911b998e44..c40da3211864d9320742fbb1462ef309073c828d 100644
+--- a/types/html/title-element.d.ts
++++ b/types/html/title-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTitleElement
+- */
+-export class HTMLTitleElement extends TextElement implements globalThis.HTMLTitleElement {
++export class HTMLTitleElement extends TextElement {
+ }
+ import { TextElement } from "./text-element.js";
+diff --git a/types/html/track-element.d.ts b/types/html/track-element.d.ts
+index 630c1a11fb03fb82a82cce9321bc7da9207ac0be..b2d83ac769038349d9660ee2e8c34a3cee737f74 100644
+--- a/types/html/track-element.d.ts
++++ b/types/html/track-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLTrackElement
+- */
+-export class HTMLTrackElement extends HTMLElement implements globalThis.HTMLTrackElement {
++export class HTMLTrackElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/u-list-element.d.ts b/types/html/u-list-element.d.ts
+index a89e2d213b800792e94445b7066935b6fb14e9d2..c2180b942300ea193cc2241e5bddd8a13f7c6be1 100644
+--- a/types/html/u-list-element.d.ts
++++ b/types/html/u-list-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLUListElement
+- */
+-export class HTMLUListElement extends HTMLElement implements globalThis.HTMLUListElement {
++export class HTMLUListElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/unknown-element.d.ts b/types/html/unknown-element.d.ts
+index 0d994da1c0cbaf18f40b420b99a0019e7980b36e..4f57bdfb98d70f14ae6ee88ac1af4bba4b1ec622 100644
+--- a/types/html/unknown-element.d.ts
++++ b/types/html/unknown-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLUnknownElement
+- */
+-export class HTMLUnknownElement extends HTMLElement implements globalThis.HTMLUnknownElement {
++export class HTMLUnknownElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/html/video-element.d.ts b/types/html/video-element.d.ts
+index 2b81a46a4950f7c647f6e2417faabe9403d8e670..693d9ed501540c11376280ac062fee1a9cf22de6 100644
+--- a/types/html/video-element.d.ts
++++ b/types/html/video-element.d.ts
+@@ -1,6 +1,3 @@
+-/**
+- * @implements globalThis.HTMLVideoElement
+- */
+-export class HTMLVideoElement extends HTMLElement implements globalThis.HTMLVideoElement {
++export class HTMLVideoElement extends HTMLElement {
+ }
+ import { HTMLElement } from "./element.js";
+diff --git a/types/interface/attr.d.ts b/types/interface/attr.d.ts
+index 9c9ecd3c1f8a4c839a5f0950adbb87fbe1d56479..817f7fe392776476aae25552e996b91e4ab5e534 100644
+--- a/types/interface/attr.d.ts
++++ b/types/interface/attr.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Attr
+- */
+-export class Attr extends Node implements globalThis.Attr {
++export class Attr extends Node {
+     constructor(ownerDocument: any, name: any, value?: string);
+     ownerElement: any;
+     name: string;
+diff --git a/types/interface/character-data.d.ts b/types/interface/character-data.d.ts
+index 191037068342b8c928a3ebb12b681b90216ca46f..57db8e49d88c66f96c39589e8d46b87cba64063d 100644
+--- a/types/interface/character-data.d.ts
++++ b/types/interface/character-data.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.CharacterData
+- */
+-export class CharacterData extends Node implements globalThis.CharacterData {
++export class CharacterData extends Node {
+     constructor(ownerDocument: any, localName: any, nodeType: any, data: any);
+     before(...nodes: any[]): void;
+     after(...nodes: any[]): void;
+diff --git a/types/interface/comment.d.ts b/types/interface/comment.d.ts
+index 2903368b97e95bbe1bc9720123b7164cdf9ab459..89a856f3f6f8aa1fa1c514607061f6e6aa140a7b 100644
+--- a/types/interface/comment.d.ts
++++ b/types/interface/comment.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Comment
+- */
+-export class Comment extends CharacterData implements globalThis.Comment {
++export class Comment extends CharacterData {
+     constructor(ownerDocument: any, data?: string);
+ }
+ import { CharacterData } from "./character-data.js";
+diff --git a/types/interface/css-style-declaration.d.ts b/types/interface/css-style-declaration.d.ts
+index d6a78a85f75a9035441a3487d09bd9f88354bee7..0c418d246e4a2943b08c573fc407f9045f4324a0 100644
+--- a/types/interface/css-style-declaration.d.ts
++++ b/types/interface/css-style-declaration.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.CSSStyleDeclaration
+- */
+-export class CSSStyleDeclaration extends Map<any, any> implements globalThis.CSSStyleDeclaration {
++export class CSSStyleDeclaration extends Map<any, any> {
+     constructor(element: any);
+     set cssText(arg: string);
+     get cssText(): string;
+diff --git a/types/interface/custom-element-registry.d.ts b/types/interface/custom-element-registry.d.ts
+index f245bcf783d5ea8574e1c4bfd6c41359f55e48b0..b192de4e2a434c9c8b8a99fbecd0beef41d74bb1 100644
+--- a/types/interface/custom-element-registry.d.ts
++++ b/types/interface/custom-element-registry.d.ts
+@@ -3,10 +3,7 @@ export const customElements: WeakMap<object, any>;
+ export function attributeChangedCallback(element: any, attributeName: any, oldValue: any, newValue: any): void;
+ export function connectedCallback(element: any): void;
+ export function disconnectedCallback(element: any): void;
+-/**
+- * @implements globalThis.CustomElementRegistry
+- */
+-export class CustomElementRegistry implements globalThis.CustomElementRegistry {
++export class CustomElementRegistry {
+     /**
+      * @param {Document} ownerDocument
+      */
+diff --git a/types/interface/custom-event.d.ts b/types/interface/custom-event.d.ts
+index 5e12d94a7704ae720091e2128c198ad2869b55f5..156edd24f45983269ae28bdd16da9da6339a32f7 100644
+--- a/types/interface/custom-event.d.ts
++++ b/types/interface/custom-event.d.ts
+@@ -1,7 +1,4 @@
+ export { GlobalCustomEvent as CustomEvent };
+-/**
+- * @implements globalThis.CustomEvent
+- */
+ declare const GlobalCustomEvent: {
+     new <T>(type: string, eventInitDict?: CustomEventInit<T>): CustomEvent<T>;
+     prototype: CustomEvent<any>;
+diff --git a/types/interface/document-fragment.d.ts b/types/interface/document-fragment.d.ts
+index 8dfd3701760c95d897e8f01da1fff49deeaa5910..204fe9b42a74b0c3b51f7df4ef8cd7ee3622f654 100644
+--- a/types/interface/document-fragment.d.ts
++++ b/types/interface/document-fragment.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.DocumentFragment
+- */
+-export class DocumentFragment extends NonElementParentNode implements globalThis.DocumentFragment {
++export class DocumentFragment extends NonElementParentNode {
+     constructor(ownerDocument: any);
+ }
+ import { NonElementParentNode } from "../mixin/non-element-parent-node.js";
+diff --git a/types/interface/document-type.d.ts b/types/interface/document-type.d.ts
+index 71eeb954e9de11d134e38b370e4cd877f4795352..c3053f38c2763400bd629471e1bf07a7260bc395 100644
+--- a/types/interface/document-type.d.ts
++++ b/types/interface/document-type.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.DocumentType
+- */
+-export class DocumentType extends Node implements globalThis.DocumentType {
++export class DocumentType extends Node {
+     constructor(ownerDocument: any, name: any, publicId?: string, systemId?: string);
+     name: any;
+     publicId: string;
+diff --git a/types/interface/document.d.ts b/types/interface/document.d.ts
+index 2f10b9f0cd2924ba76bbd9064f643396fb82fda7..6f12619ad7eb7612d8f96b3a34c3446ce988cf61 100644
+--- a/types/interface/document.d.ts
++++ b/types/interface/document.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Document
+- */
+-export class Document extends NonElementParentNode implements globalThis.Document {
++export class Document extends NonElementParentNode {
+     constructor(type: any);
+     /**
+      * @type {globalThis.Document['defaultView']}
+diff --git a/types/interface/element.d.ts b/types/interface/element.d.ts
+index 7d31c19754eab39d242bb1578eeae98f4e97f294..e84c4f7188efa7a7f546c3f163ed9f6a419ce142 100644
+--- a/types/interface/element.d.ts
++++ b/types/interface/element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Element
+- */
+-export class Element extends ParentNode implements globalThis.Element {
++export class Element extends ParentNode {
+     constructor(ownerDocument: any, localName: any);
+     before(...nodes: any[]): void;
+     after(...nodes: any[]): void;
+diff --git a/types/interface/event-target.d.ts b/types/interface/event-target.d.ts
+index e34a1f03dac528434493fb60db100a5c9b655813..01da859a7a1ad20774c940112246c0e9a594ebbf 100644
+--- a/types/interface/event-target.d.ts
++++ b/types/interface/event-target.d.ts
+@@ -1,8 +1,5 @@
+ export { DOMEventTarget as EventTarget };
+-/**
+- * @implements globalThis.EventTarget
+- */
+-declare class DOMEventTarget implements globalThis.EventTarget {
++declare class DOMEventTarget {
+     /**
+      * @protected
+      */
+diff --git a/types/interface/event.d.ts b/types/interface/event.d.ts
+index 2e49eee5865527f72cb84827498371e3ef133a55..8bb535fcd8d3468ba916790f806806fac46fa4ec 100644
+--- a/types/interface/event.d.ts
++++ b/types/interface/event.d.ts
+@@ -1,8 +1,5 @@
+ export { GlobalEvent as Event };
+-/**
+- * @implements globalThis.Event
+- */
+-declare class GlobalEvent implements globalThis.Event {
++declare class GlobalEvent {
+     static get BUBBLING_PHASE(): number;
+     static get AT_TARGET(): number;
+     static get CAPTURING_PHASE(): number;
+diff --git a/types/interface/input-event.d.ts b/types/interface/input-event.d.ts
+index ae6ef89f32ab9d9244917dac05b1a5d197df5ec1..f0e5d00bb798a8b4be266985273df40321f26222 100644
+--- a/types/interface/input-event.d.ts
++++ b/types/interface/input-event.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.InputEvent
+- */
+-export class InputEvent extends Event implements globalThis.InputEvent {
++export class InputEvent extends Event {
+     inputType: any;
+     data: any;
+     dataTransfer: any;
+diff --git a/types/interface/mutation-observer.d.ts b/types/interface/mutation-observer.d.ts
+index f5d10ca29b984d004eae0842e462f57701f09973..10b491bef7b585e922bf024e2ae62e8bff98c095 100644
+--- a/types/interface/mutation-observer.d.ts
++++ b/types/interface/mutation-observer.d.ts
+@@ -4,9 +4,6 @@ export class MutationObserverClass {
+     constructor(ownerDocument: any);
+     observers: Set<any>;
+     active: boolean;
+-    /**
+-     * @implements globalThis.MutationObserver
+-     */
+     class: {
+         new (callback: any): {
+             /**
+diff --git a/types/interface/named-node-map.d.ts b/types/interface/named-node-map.d.ts
+index acbcee8dad930e592e5e38deebfa4f420516802b..5b7d571b5048c482a1f55fafbb2ca1a23b5a9d2d 100644
+--- a/types/interface/named-node-map.d.ts
++++ b/types/interface/named-node-map.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.NamedNodeMap
+- */
+-export class NamedNodeMap extends Array<any> implements globalThis.NamedNodeMap {
++export class NamedNodeMap extends Array<any> {
+     constructor(ownerElement: any);
+     ownerElement: any;
+     getNamedItem(name: any): any;
+diff --git a/types/interface/node-list.d.ts b/types/interface/node-list.d.ts
+index 1452e2d005372088327826f86414e8cf499cb195..29fb67a2c2aa6a976936ffb0b29ad9e52f18e8aa 100644
+--- a/types/interface/node-list.d.ts
++++ b/types/interface/node-list.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.NodeList
+- */
+-export class NodeList extends Array<any> implements globalThis.NodeList {
++export class NodeList extends Array<any> {
+     constructor(arrayLength?: number);
+     constructor(arrayLength: number);
+     constructor(...items: any[]);
+diff --git a/types/interface/node.d.ts b/types/interface/node.d.ts
+index 27d66e2ff1b65980aa80b27fd78fd70baf44afbb..c67e3c1c2339c1becda49779a2305f99375c9c4e 100644
+--- a/types/interface/node.d.ts
++++ b/types/interface/node.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Node
+- */
+-export class Node extends EventTarget implements globalThis.Node {
++export class Node extends EventTarget {
+     static get ELEMENT_NODE(): number;
+     static get ATTRIBUTE_NODE(): number;
+     static get TEXT_NODE(): number;
+@@ -37,7 +34,7 @@ export class Node extends EventTarget implements globalThis.Node {
+     get textContent(): any;
+     normalize(): void;
+     cloneNode(deep?: boolean): any;
+-    contains(): boolean;
++    contains(node?: Node | null): boolean;
+     /**
+      * Inserts a node before a reference node as a child of this parent node.
+      * @param {Node} newNode The node to be inserted.
+diff --git a/types/interface/range.d.ts b/types/interface/range.d.ts
+index f5484ec7f806b80bc83e8ca5c7d08cbb501da257..43601fffb9122e4c78437dd448e2079041b37bfe 100644
+--- a/types/interface/range.d.ts
++++ b/types/interface/range.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Range
+- */
+-export class Range implements globalThis.Range {
++export class Range {
+     commonAncestorContainer: any;
+     insertNode(newNode: any): void;
+     selectNode(node: any): void;
+diff --git a/types/interface/shadow-root.d.ts b/types/interface/shadow-root.d.ts
+index 54c7d2e1ad14ab0eb3a66b0fe8c45a3b843c0714..4296e0ee1d497418e5b4d0c4904bbb10cceb707d 100644
+--- a/types/interface/shadow-root.d.ts
++++ b/types/interface/shadow-root.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.ShadowRoot
+- */
+-export class ShadowRoot extends NonElementParentNode implements globalThis.ShadowRoot {
++export class ShadowRoot extends NonElementParentNode {
+     constructor(ownerDocument: any);
+     set innerHTML(arg: string);
+     get innerHTML(): string;
+diff --git a/types/interface/text.d.ts b/types/interface/text.d.ts
+index 4b27008feee19024bab19b6cb8f407316dee9112..64753e36b65f707dfc1cb6b3e94cf2cf9c9a0422 100644
+--- a/types/interface/text.d.ts
++++ b/types/interface/text.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Text
+- */
+-export class Text extends CharacterData implements globalThis.Text {
++export class Text extends CharacterData {
+     constructor(ownerDocument: any, data?: string);
+     get wholeText(): string;
+ }
+diff --git a/types/interface/tree-walker.d.ts b/types/interface/tree-walker.d.ts
+index e76706760afb15e29d7524af9361be11b549546f..22dfda2a94cfa19e39a4f05018c6ddf00d77f94d 100644
+--- a/types/interface/tree-walker.d.ts
++++ b/types/interface/tree-walker.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.TreeWalker
+- */
+-export class TreeWalker implements globalThis.TreeWalker {
++export class TreeWalker {
+     constructor(root: any, whatToShow?: number);
+     root: any;
+     currentNode: any;
+diff --git a/types/mixin/parent-node.d.ts b/types/mixin/parent-node.d.ts
+index 7dd51e9514c8dc21626e14ed00d9ad95bda37b48..42e6335e10d1dc52422683a218e0989845ebc86e 100644
+--- a/types/mixin/parent-node.d.ts
++++ b/types/mixin/parent-node.d.ts
+@@ -1,7 +1,7 @@
+ /** @typedef { import('../interface/element.js').Element & {
+-    [typeof NEXT]: NodeStruct,
+-    [typeof PREV]: NodeStruct,
+-    [typeof START]: NodeStruct,
++    [NEXT]: NodeStruct,
++    [PREV]: NodeStruct,
++    [START]: NodeStruct,
+     nodeType: typeof ATTRIBUTE_NODE | typeof DOCUMENT_FRAGMENT_NODE | typeof ELEMENT_NODE | typeof TEXT_NODE | typeof NODE_END | typeof COMMENT_NODE,
+     ownerDocument: Document,
+     parentNode: ParentNode,
+@@ -25,9 +25,9 @@ export class ParentNode extends Node {
+     [END]: NodeStruct;
+ }
+ export type NodeStruct = import('../interface/element.js').Element & {
+-    [typeof NEXT]: NodeStruct;
+-    [typeof PREV]: NodeStruct;
+-    [typeof START]: NodeStruct;
++    [NEXT]: NodeStruct;
++    [PREV]: NodeStruct;
++    [START]: NodeStruct;
+     nodeType: typeof ATTRIBUTE_NODE | typeof DOCUMENT_FRAGMENT_NODE | typeof ELEMENT_NODE | typeof TEXT_NODE | typeof NODE_END | typeof COMMENT_NODE;
+     ownerDocument: Document;
+     parentNode: ParentNode;
+diff --git a/types/svg/document.d.ts b/types/svg/document.d.ts
+index 5e246dc4a453417f0e9665cb0a0f9c834a4dac6c..6741c4ea4062dca56f78d620e1747bfe3078fba1 100644
+--- a/types/svg/document.d.ts
++++ b/types/svg/document.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.Document
+- */
+-export class SVGDocument extends Document implements globalThis.Document {
++export class SVGDocument extends Document {
+     constructor();
+ }
+ import { Document } from "../interface/document.js";
+diff --git a/types/svg/element.d.ts b/types/svg/element.d.ts
+index 847eb75376e6ed34befc93aeafec9b00d2c1164f..8fad727d5b33397784f661375c90f355ad6dbd00 100644
+--- a/types/svg/element.d.ts
++++ b/types/svg/element.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.SVGElement
+- */
+-export class SVGElement extends Element implements globalThis.SVGElement {
++export class SVGElement extends Element {
+     constructor(ownerDocument: any, localName: any, ownerSVGElement?: any);
+     ownerSVGElement: any;
+ }
+diff --git a/types/xml/document.d.ts b/types/xml/document.d.ts
+index a0902749a036258176d31f6809bf4a54c2e7098d..521abeaa57748fc8f2a841ef35446d26ea1cc2a2 100644
+--- a/types/xml/document.d.ts
++++ b/types/xml/document.d.ts
+@@ -1,7 +1,4 @@
+-/**
+- * @implements globalThis.XMLDocument
+- */
+-export class XMLDocument extends Document implements globalThis.XMLDocument {
++export class XMLDocument extends Document {
+     constructor();
+ }
+ import { Document } from "../interface/document.js";

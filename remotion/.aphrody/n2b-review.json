@@ -1,0 +1,5856 @@
+{
+  "retained": [
+    {
+      "path": "packages/.monorepo/builder.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/.monorepo/validate-exports.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/agent-plugin/build.mts",
+      "rule": "imports/node-prefix",
+      "line": 13
+    },
+    {
+      "path": "packages/agent-plugin/build.mts",
+      "rule": "imports/node-prefix",
+      "line": 12
+    },
+    {
+      "path": "packages/agent-plugin/build.mts",
+      "rule": "imports/node-prefix",
+      "line": 11
+    },
+    {
+      "path": "packages/astro-example/build.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/astro-example/test.cjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/astro-example/test.js",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/astro-example/test.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/brand/scripts/capture-doc-pages.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/brand/scripts/capture-doc-pages.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/brand/scripts/capture-doc-pages.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/browser-studio/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/browser-studio/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/browser-studio/src/dev/server.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/browser-studio/src/dev/server.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/bundler/src/case-sensitive-paths.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/bundler/src/test/warrant-underscore-a-hack.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/bundler/src/test/warrant-underscore-a-hack.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cli/remotion-cli.js",
+      "rule": "shebang/node",
+      "line": 1
+    },
+    {
+      "path": "packages/cli/src/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cli/src/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cli/src/get-github-repository.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/cli/src/get-github-repository.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cli/src/get-github-repository.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cli/src/initialize-cli.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cli/src/on-artifact.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cli/src/on-artifact.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cli/src/setup-cache.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cli/src/setup-cache.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cli/src/yes-or-no.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/container/submit.mjs",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cloudrun/container/submit.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/admin/bundle-installer.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/cloudrun/src/admin/bundle-installer.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cloudrun/src/admin/bundle-installer.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/admin/bundle-renderLogic.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cloudrun/src/admin/bundle-renderLogic.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/api/iam-validation/testPermissions.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cloudrun/src/api/iam-validation/testPermissions.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/api/render-media-on-cloudrun.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/api/render-still-on-cloudrun.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/api/upload-dir.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/cloudrun/src/api/upload-dir.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/cli/commands/sites/create.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/cli/helpers/yes-or-no.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/install.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/checkEnvFile.mts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/checkEnvFile.mts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/checkEnvFile.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/checkTerraformStateFile.mts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/checkTerraformStateFile.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/generateEnvPrompt.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/projectIdPrompt.mts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/projectIdPrompt.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/splashScreen.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/taskPrompt.mts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/taskPrompt.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/terraformApplyPrompt.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/components/tfSuccessScreen.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/tasks/generateEnv.mts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/tasks/generateEnv.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/gcpInstaller/installerScripts/tasks/setupGcpProject.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/shared/get-etag.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cloudrun/src/shared/get-etag.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/shared/make-storage-key.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/src/shared/read-dir.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/cloudrun/src/shared/read-dir.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/codemods/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-best-practices/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 18
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-best-practices/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 17
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-best-practices/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 16
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-best-practices/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 16
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-best-practices/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 15
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-best-practices/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 14
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-best-practices/remotion-markup/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 18
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-best-practices/remotion-markup/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 17
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-best-practices/remotion-markup/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 16
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-best-practices/remotion-markup/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 16
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-best-practices/remotion-markup/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 15
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-best-practices/remotion-markup/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 14
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 18
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 17
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 16
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 16
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 15
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 14
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-markup/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 18
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-markup/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 17
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-markup/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 16
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-markup/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 16
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-markup/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 15
+    },
+    {
+      "path": "packages/codex-plugin/skills/remotion-markup/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 14
+    },
+    {
+      "path": "packages/convert/build-service-worker.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/convert/vite-spa.config.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/convert/vite.config.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/create-video/bin.js",
+      "rule": "shebang/node",
+      "line": 1
+    },
+    {
+      "path": "packages/create-video/cli.js",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/create-video/cli.js",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/create-video/src/add-tailwind.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/create-video/src/add-tailwind.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/create-video/src/create-public-folder.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/create-video/src/create-public-folder.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/create-video/src/degit.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/design/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/dockerfiles/pack-cli.ts",
+      "rule": "imports/node-prefix",
+      "line": 6
+    },
+    {
+      "path": "packages/dockerfiles/pack-cli.ts",
+      "rule": "imports/node-prefix",
+      "line": 5
+    },
+    {
+      "path": "packages/docs/build-docs.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/build-docusaurus-low-memory.cjs",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/docs/build-docusaurus-low-memory.cjs",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/docs/build-docusaurus-low-memory.cjs",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/build-docusaurus-low-memory.cjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/copy-convert.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/copy-convert.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/copy-experimental-sdk.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/copy-experimental-sdk.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/copy-landing.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/copy-landing.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/copy-raw-docs.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/copy-raw-docs.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/count-pages.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/count-pages.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/docusaurus-theme-shiki-twoslash/index.js",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/fetch-prompt-submissions.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/fetch-prompt-submissions.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/generate-asset-manifest.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/generate-asset-manifest.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/generate-sfx-waveforms.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/docs/generate-sfx-waveforms.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/docs/generate-sfx-waveforms.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/generate-sfx-waveforms.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/get-pages.mjs",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/get-pages.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/new-doc.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/plugins/element-source-dependencies.js",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/plugins/element-source-dependency-loader.cjs",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/plugins/element-source-dependency-loader.cjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/plugins/element-source-utils.js",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/plugins/element-source-utils.js",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/plugins/remark-element-source.js",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/prewarm-twoslash.ts",
+      "rule": "imports/node-prefix",
+      "line": 7
+    },
+    {
+      "path": "packages/docs/prewarm-twoslash.ts",
+      "rule": "imports/node-prefix",
+      "line": 6
+    },
+    {
+      "path": "packages/docs/prewarm-twoslash.ts",
+      "rule": "imports/node-prefix",
+      "line": 5
+    },
+    {
+      "path": "packages/docs/prewarm-twoslash.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/docs/prewarm-twoslash.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/docs/prewarm-twoslash.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/remotion.config.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/render-cards.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/docs/render-cards.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/docs/render-cards.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/render-cards.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/render-element-previews.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/render-element-previews.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/route-plugin/index.js",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/route-plugin/index.js",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/src/raw-markdown/replace-components.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/src/test/elements.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 5
+    },
+    {
+      "path": "packages/docs/src/test/elements.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/docs/src/test/elements.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/docs/src/test/elements.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/src/test/replace-raw-markdown-components.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/docs/src/test/replace-raw-markdown-components.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/src/test/upload-element-preview.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 5
+    },
+    {
+      "path": "packages/docs/src/test/upload-element-preview.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/docs/src/test/upload-element-preview.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/docs/src/test/upload-element-preview.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/twoslash-worker.mjs",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/docs/twoslash-worker.mjs",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/twoslash-worker.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/upload-element-preview.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/docs/upload-element-preview.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docs/upload-element-preview.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docs/validate-built-javascript.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docusaurus-plugin/src/caching.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/docusaurus-plugin/src/caching.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docusaurus-plugin/src/index.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/docusaurus-plugin/src/twoslash-cache.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 6
+    },
+    {
+      "path": "packages/docusaurus-plugin/src/twoslash-cache.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 5
+    },
+    {
+      "path": "packages/docusaurus-plugin/src/twoslash-cache.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/docusaurus-plugin/src/twoslash-cache.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/docusaurus-plugin/src/twoslash-cache.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docusaurus-plugin/src/twoslash-cache.ts",
+      "rule": "imports/node-prefix",
+      "line": 12
+    },
+    {
+      "path": "packages/docusaurus-plugin/src/twoslash-cache.ts",
+      "rule": "imports/node-prefix",
+      "line": 11
+    },
+    {
+      "path": "packages/docusaurus-plugin/src/twoslash-cache.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/docusaurus-plugin/src/twoslash-cache.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/effects/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/eslint-config/src/patch-eslint.ts",
+      "rule": "imports/node-prefix",
+      "line": 13
+    },
+    {
+      "path": "packages/eslint-config/src/patch-eslint.ts",
+      "rule": "imports/node-prefix",
+      "line": 12
+    },
+    {
+      "path": "packages/eslint-plugin/src/tests/execute.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example-videos/src/cached-example-media.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/example-videos/src/cached-example-media.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/example-videos/src/remote-videos.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/example-videos/src/remote-videos.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/example/e2e/affine-frame-clock.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/example/e2e/affine-frame-clock.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/constants.mts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/example/e2e/constants.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/error-overlay.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/helpers.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/hook-order-change.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/example/e2e/input-dragger.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/json-editor.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/node-path-cache.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/sequence-playback-rate.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/example/e2e/sequence-playback-rate.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/suppress-rebuild.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/example/e2e/suppress-rebuild.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/e2e/visual-controls.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/fast-updates.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/example/fast-updates.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/remotion.config.js",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/example/still-memory-leak.mjs",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/example/testlambda.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/testlambdaintegrations.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/example/testlambdaperformance.mjs",
+      "rule": "imports/node-prefix",
+      "line": 6
+    },
+    {
+      "path": "packages/google-fonts/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 9
+    },
+    {
+      "path": "packages/google-fonts/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 8
+    },
+    {
+      "path": "packages/google-fonts/scripts/generate-index.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/google-fonts/scripts/generate.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/gsap/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/install-whisper-cpp/src/download-whisper-model.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/install-whisper-cpp/src/download-whisper-model.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/install-whisper-cpp/src/install-whisper-cpp.ts",
+      "rule": "imports/node-prefix",
+      "line": 5
+    },
+    {
+      "path": "packages/install-whisper-cpp/src/install-whisper-cpp.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/install-whisper-cpp/src/install-whisper-cpp.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/install-whisper-cpp/src/install-whisper-cpp.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/install-whisper-cpp/src/test/install-whisper-cpp.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 5
+    },
+    {
+      "path": "packages/install-whisper-cpp/src/test/install-whisper-cpp.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/install-whisper-cpp/src/test/install-whisper-cpp.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/install-whisper-cpp/src/test/install-whisper-cpp.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/download-whisper.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/it-tests/src/bundle/bundle-studio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/bundle/bundle-studio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/bundle/studio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 6
+    },
+    {
+      "path": "packages/it-tests/src/bundle/studio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 5
+    },
+    {
+      "path": "packages/it-tests/src/bundle/studio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/it-tests/src/bundle/studio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/bundle/studio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/cloudrun/cloudrun-browser-bundle.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/it-tests/src/cloudrun/cloudrun-browser-bundle.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/cloudrun/cloudrun-browser-bundle.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/codemods/codemods.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/codemods/codemods.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/lambda/lambda-browser-bundle.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/it-tests/src/lambda/lambda-browser-bundle.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/lambda/lambda-browser-bundle.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/lambda/lambda-integration.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/all-same-version.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/all-same-version.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/bun-version.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/bun-version.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/esm.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/exports-field.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/exports-field.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/extra-packages.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/extra-packages.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/get-all-packages.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/get-all-packages.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/go-package.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/go-package.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/go-package.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/no-dev-files.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/no-dev-files.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/package-metadata.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/package-metadata.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/php-package.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/php-package.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/php-package.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/python-package.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/python-package.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/python-package.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/ruby-package.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/ruby-package.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/ruby-package.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/statistics-file.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/statistics-file.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/studio-pixel-ratio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/studio-pixel-ratio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/rendering/base64-audio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/rendering/base64-audio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/rendering/call-ffmpeg-from-node-modules.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/rendering/call-ffmpeg-from-node-modules.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/rendering/cancel-render.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/rendering/cancel-render.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/rendering/frame-accuracy-gif.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/it-tests/src/rendering/frame-accuracy-gif.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/rendering/frame-accuracy-gif.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/rendering/no-caret.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/rendering/no-caret.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/rendering/render-scale.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/rendering/render-scale.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/rendering/test-utils.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/rendering/test-utils.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/rendering/test-utils.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/it-tests/src/size-benchmark/benchmark.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/it-tests/src/size-benchmark/persistance.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/it-tests/src/size-benchmark/run-benchmark.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/size-benchmark/run-benchmark.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/size-benchmark/run-benchmark.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/it-tests/src/ssr/cancel-after-success.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/ssr/cancel-after-success.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/ssr/cancel-renderframes.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/ssr/cancel-rendermedia.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/ssr/cancel-renderstill.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/ssr/fatal-error-correct-error.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-frames.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-frames.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-frames.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-media-sample-rate.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 11
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-media-sample-rate.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 10
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-media.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-media.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-media.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-still.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-still.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-still.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/it-tests/src/templates/publish.ts",
+      "rule": "imports/node-prefix",
+      "line": 10
+    },
+    {
+      "path": "packages/it-tests/src/webcodecs/bundle-sizes.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/lambda-client/src/is-likely-to-have-aws-profile.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/lambda-client/src/is-likely-to-have-aws-profile.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/lambda-client/src/is-likely-to-have-aws-profile.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda-client/src/read-file.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda-client/src/validate-webhook-signature.ts",
+      "rule": "imports/node-prefix",
+      "line": 30
+    },
+    {
+      "path": "packages/lambda-go-example/build.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda-go/build.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda-php-example/build.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda-php/build.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda-python/build.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda/src/cli/commands/render/render.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda/src/cli/commands/still.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda/src/cli/helpers/yes-or-no.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda/src/functions/helpers/get-folder-files.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/lambda/src/functions/helpers/get-folder-files.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda/src/functions/helpers/why-is-node-running.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/lambda/src/functions/helpers/why-is-node-running.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/lambda/src/functions/helpers/why-is-node-running.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda/src/test/integration/draw-wav.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda/src/test/integration/renders/muted-render.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/lambda/src/test/integration/renders/old-version.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/lambda/src/test/integration/renders/other-bucket.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/lambda/src/test/integration/renders/regular-audio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/lambda/src/test/integration/renders/regular-audio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/lambda/src/test/integration/renders/seamless-audio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/lambda/src/test/integration/renders/seamless-audio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/lambda/src/test/integration/renders/slow-seamless-audio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/lambda/src/test/integration/renders/slow-seamless-audio.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/lambda/src/test/integration/simulate-lambda-render.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda/src/test/integration/webhooks.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/lambda/src/test/mocks/mock-implementation.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/lambda/src/test/mocks/mock-implementation.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/lambda/src/test/mocks/mock-store.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/light-leaks/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/mac-cursors/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/maptiler/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/mcp/src/index.ts",
+      "rule": "shebang/node",
+      "line": 1
+    },
+    {
+      "path": "packages/media-parser/src/readers/from-node.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/media-parser/src/readers/from-node.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/media-parser/src/test/m3u8-multiple-audio-streams.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/media-parser/src/test/parse-local-m3u8.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/media-parser/src/test/transportstream.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 170
+    },
+    {
+      "path": "packages/media/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/execute.mjs",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/openai-whisper/src/test/get-and-convert.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/openai-whisper/src/test/get-and-convert.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/player-a11y/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/player/ensure-correct-version.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/remotion-media/build.ts",
+      "rule": "imports/node-prefix",
+      "line": 11
+    },
+    {
+      "path": "packages/remotion-media/build.ts",
+      "rule": "imports/node-prefix",
+      "line": 10
+    },
+    {
+      "path": "packages/remotion-media/build.ts",
+      "rule": "imports/node-prefix",
+      "line": 9
+    },
+    {
+      "path": "packages/remotion-media/generate.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/remotion-media/generate.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/remotion-media/src/seo-build.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/remotion-media/src/seo-build.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/remotion-media/src/seo-build.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/renderer/src/assets/read-file.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/src/call-ffmpeg.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/renderer/src/chalk/is-color-supported.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/src/combine-audio.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/renderer/src/combine-audio.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/src/combine-video-streams.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/renderer/src/combine-video-streams.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/src/compositor/get-executable-path.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/renderer/src/create-audio.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/src/ensure-browser.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/src/get-bundle-url-from-serve-url.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/src/get-port.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/src/port-config.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/src/probe-encoder.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/renderer/src/render-frame-with-option-to-reject.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/src/serve-static.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/src/symbolicate-stacktrace.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/renderer/src/symbolicate-stacktrace.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/src/test/get-bundle-url-from-serve-url.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/renderer/src/test/get-silent-parts.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/renderer/src/test/port-config.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/renderer/src/test/render-still.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/renderer/types/ws/index.d.ts",
+      "rule": "imports/node-prefix",
+      "line": 22
+    },
+    {
+      "path": "packages/renderer/types/ws/index.d.ts",
+      "rule": "imports/node-prefix",
+      "line": 21
+    },
+    {
+      "path": "packages/renderer/types/ws/index.d.ts",
+      "rule": "imports/node-prefix",
+      "line": 9
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/buffer-crc32.js",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/fd-slicer.js",
+      "rule": "imports/node-prefix",
+      "line": 9
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/fd-slicer.js",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/fd-slicer.js",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/fd-slicer.js",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/index.d.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/index.d.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/index.js",
+      "rule": "imports/node-prefix",
+      "line": 7
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/index.js",
+      "rule": "imports/node-prefix",
+      "line": 6
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/index.js",
+      "rule": "imports/node-prefix",
+      "line": 5
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/index.js",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/index.js",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/rough-notation/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/sdk/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/serverless-client/src/stream-to-string.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/serverless-client/src/test/dont-contain-forbidden.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/serverless/src/handlers/launch.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/serverless/src/handlers/launch.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/serverless/src/stream-renderer.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/serverless/src/stream-renderer.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/serverless/src/streaming/response-stream.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/sfx/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/skia/src/enable.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/skills/skills/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 18
+    },
+    {
+      "path": "packages/skills/skills/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 17
+    },
+    {
+      "path": "packages/skills/skills/remotion-maps/techniques/cesium/scripts/prep-cesium-path.mjs",
+      "rule": "imports/node-prefix",
+      "line": 16
+    },
+    {
+      "path": "packages/skills/skills/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 16
+    },
+    {
+      "path": "packages/skills/skills/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 15
+    },
+    {
+      "path": "packages/skills/skills/remotion-maps/techniques/maptiler/scripts/prep-geo.mjs",
+      "rule": "imports/node-prefix",
+      "line": 14
+    },
+    {
+      "path": "packages/starburst/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/studio-protocol/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/studio-server/src/better-opn/index.ts",
+      "rule": "imports/node-prefix",
+      "line": 120
+    },
+    {
+      "path": "packages/studio-server/src/detect-remotion-server.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/studio-server/src/get-latest-remotion-version.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/studio-server/src/preview-server/routes/delete-static-file.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/studio-server/src/preview-server/routes/delete-static-file.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/studio-server/src/preview-server/routes/rename-static-file.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/studio-server/src/preview-server/routes/rename-static-file.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/studio-server/src/test/unsupported-translate.test.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/studio/scripts/generate-google-font-info.ts",
+      "rule": "imports/node-prefix",
+      "line": 5
+    },
+    {
+      "path": "packages/studio/scripts/generate-google-font-info.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/studio/scripts/generate-google-font-info.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/template-audiogram/transcribe.ts",
+      "rule": "imports/node-prefix",
+      "line": 13
+    },
+    {
+      "path": "packages/template-audiogram/transcribe.ts",
+      "rule": "imports/node-prefix",
+      "line": 12
+    },
+    {
+      "path": "packages/template-audiogram/transcribe.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/template-audiogram/transcribe.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-audiogram/transcribe.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/template-next-app-tailwind/deploy.mjs",
+      "rule": "imports/node-prefix",
+      "line": 7
+    },
+    {
+      "path": "packages/template-prompt-to-motion-graphics/deploy.mjs",
+      "rule": "imports/node-prefix",
+      "line": 7
+    },
+    {
+      "path": "packages/template-prompt-to-video/cli/cli.ts",
+      "rule": "imports/node-prefix",
+      "line": 26
+    },
+    {
+      "path": "packages/template-prompt-to-video/cli/cli.ts",
+      "rule": "imports/node-prefix",
+      "line": 25
+    },
+    {
+      "path": "packages/template-prompt-to-video/cli/cli.ts",
+      "rule": "shebang/node",
+      "line": 1
+    },
+    {
+      "path": "packages/template-prompt-to-video/cli/service.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-react-router/deploy.mjs",
+      "rule": "imports/node-prefix",
+      "line": 7
+    },
+    {
+      "path": "packages/template-recorder/config/whisper.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-recorder/convert.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-recorder/copy.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/template-recorder/scripts/captions/caption-file.ts",
+      "rule": "imports/node-prefix",
+      "line": 5
+    },
+    {
+      "path": "packages/template-recorder/scripts/captions/caption-file.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/template-recorder/scripts/captions/caption-file.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/template-recorder/scripts/captions/caption-file.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-recorder/scripts/convert-video.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/template-recorder/scripts/convert-video.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/template-recorder/scripts/get-downloads-folder.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/template-recorder/scripts/get-downloads-folder.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-recorder/scripts/get-downloads-folder.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/create-project.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/create-project.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/create-project.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/index-html.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/index.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/projects.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/projects.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/projects.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/register-composition.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/register-composition.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/transcribe-video.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/transcribe-video.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/upload-video.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/upload-video.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/upload-video.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/template-recorder/sub.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-recorder/vite.config.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-still/src/server/cache.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/template-still/src/server/cache.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/template-still/src/server/cache.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-still/src/server/cache.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/template-still/src/server/index.ts",
+      "rule": "imports/node-prefix",
+      "line": 12
+    },
+    {
+      "path": "packages/template-still/src/server/index.ts",
+      "rule": "imports/node-prefix",
+      "line": 11
+    },
+    {
+      "path": "packages/template-still/src/server/index.ts",
+      "rule": "imports/node-prefix",
+      "line": 10
+    },
+    {
+      "path": "packages/template-still/src/server/make-hash.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/template-still/src/server/s3.ts",
+      "rule": "imports/node-prefix",
+      "line": 7
+    },
+    {
+      "path": "packages/template-still/src/server/send-file.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/template-tiktok/sub.mjs",
+      "rule": "imports/node-prefix",
+      "line": 10
+    },
+    {
+      "path": "packages/template-vercel/src/app/api/render/helpers.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/transitions/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/vercel/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/vercel/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/vercel/src/add-bundle-to-sandbox.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/vercel/src/add-bundle-to-sandbox.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/vercel/src/scripts/render-still.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/vercel/src/scripts/render-video.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "packages/vercel/src/scripts/render-video.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/vercel/src/scripts/upload-blob.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/video-matting/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/webcodecs/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/webcodecs/src/it-tests/extract-frames-accuracy.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/webcodecs/src/it-tests/extract-frames.test.mts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/whisper-web/build-wasm.ts",
+      "rule": "imports/node-prefix",
+      "line": 5
+    },
+    {
+      "path": "packages/whisper-web/build-wasm.ts",
+      "rule": "imports/node-prefix",
+      "line": 4
+    },
+    {
+      "path": "packages/whisper-web/build-wasm.ts",
+      "rule": "imports/node-prefix",
+      "line": 3
+    },
+    {
+      "path": "packages/whisper-webgpu/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "packages/zod-types-v3/bundle.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "pre-commit.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    },
+    {
+      "path": "pre-commit.ts",
+      "rule": "imports/node-prefix",
+      "line": 1
+    },
+    {
+      "path": "set-version.ts",
+      "rule": "imports/node-prefix",
+      "line": 11
+    },
+    {
+      "path": "set-version.ts",
+      "rule": "imports/node-prefix",
+      "line": 10
+    },
+    {
+      "path": "set-version.ts",
+      "rule": "imports/node-prefix",
+      "line": 2
+    }
+  ],
+  "rolledBack": [
+    {
+      "path": ".github/workflows/copilot-setup-steps.yml",
+      "rule": "ci/setup-node",
+      "line": 20
+    },
+    {
+      "path": ".github/workflows/copilot-setup-steps.yml",
+      "rule": "ci/node-version",
+      "line": 22
+    },
+    {
+      "path": ".github/workflows/pullfrog.yml",
+      "rule": "ci/setup-node",
+      "line": 30
+    },
+    {
+      "path": ".github/workflows/pullfrog.yml",
+      "rule": "ci/node-version",
+      "line": 32
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/setup-node",
+      "line": 56
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/setup-node",
+      "line": 85
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/setup-node",
+      "line": 107
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/setup-node",
+      "line": 138
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/setup-node",
+      "line": 164
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/setup-node",
+      "line": 187
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/setup-node",
+      "line": 238
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/setup-node",
+      "line": 274
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/setup-node",
+      "line": 314
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/node-version",
+      "line": 58
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/node-version",
+      "line": 87
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/node-version",
+      "line": 109
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/node-version",
+      "line": 140
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/node-version",
+      "line": 166
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/node-version",
+      "line": 189
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/node-version",
+      "line": 240
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/node-version",
+      "line": 276
+    },
+    {
+      "path": ".github/workflows/push.yml",
+      "rule": "ci/node-version",
+      "line": 316
+    },
+    {
+      "path": "packages/bundler/src/bundle.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 481
+    },
+    {
+      "path": "packages/bundler/src/bundle.ts",
+      "rule": "api/fs-existsSync",
+      "line": 236
+    },
+    {
+      "path": "packages/bundler/src/bundle.ts",
+      "rule": "api/fs-existsSync",
+      "line": 371
+    },
+    {
+      "path": "packages/bundler/src/bundle.ts",
+      "rule": "api/fs-existsSync",
+      "line": 404
+    },
+    {
+      "path": "packages/bundler/src/read-recursively.ts",
+      "rule": "api/fs-existsSync",
+      "line": 41
+    },
+    {
+      "path": "packages/bundler/src/validate-public-dir.ts",
+      "rule": "api/fs-existsSync",
+      "line": 24
+    },
+    {
+      "path": "packages/bundler/src/webpack-cache.ts",
+      "rule": "api/fs-existsSync",
+      "line": 115
+    },
+    {
+      "path": "packages/bundler/src/webpack-cache.ts",
+      "rule": "api/fs-existsSync",
+      "line": 119
+    },
+    {
+      "path": "packages/cli/remotion-cli.js",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/cli/src/add.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 17
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 37
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 72
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 99
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 117
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 126
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 171
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 202
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 188
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 238
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/json-parse-readFileSync",
+      "line": 72
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/json-parse-readFileSync",
+      "line": 117
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-existsSync",
+      "line": 34
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-existsSync",
+      "line": 46
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-existsSync",
+      "line": 70
+    },
+    {
+      "path": "packages/cli/src/catalog-utils.ts",
+      "rule": "api/fs-existsSync",
+      "line": 98
+    },
+    {
+      "path": "packages/cli/src/get-cli-options.ts",
+      "rule": "api/fs-existsSync",
+      "line": 50
+    },
+    {
+      "path": "packages/cli/src/get-env.ts",
+      "rule": "imports/bun-native",
+      "line": 7
+    },
+    {
+      "path": "packages/cli/src/get-env.ts",
+      "rule": "api/fs-existsSync",
+      "line": 125
+    },
+    {
+      "path": "packages/cli/src/get-env.ts",
+      "rule": "api/fs-existsSync",
+      "line": 149
+    },
+    {
+      "path": "packages/cli/src/get-input-props.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 23
+    },
+    {
+      "path": "packages/cli/src/get-input-props.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 28
+    },
+    {
+      "path": "packages/cli/src/get-input-props.ts",
+      "rule": "api/json-parse-readFileSync",
+      "line": 28
+    },
+    {
+      "path": "packages/cli/src/get-input-props.ts",
+      "rule": "api/fs-existsSync",
+      "line": 22
+    },
+    {
+      "path": "packages/cli/src/load-config.ts",
+      "rule": "api/fs-existsSync",
+      "line": 23
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 215
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 227
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 264
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 296
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 308
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 319
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 339
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 95
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 111
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 132
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 151
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 172
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 187
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 243
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 271
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 344
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/json-parse-readFileSync",
+      "line": 215
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/json-parse-readFileSync",
+      "line": 227
+    },
+    {
+      "path": "packages/cli/src/test/catalog-utils.test.ts",
+      "rule": "api/json-parse-readFileSync",
+      "line": 264
+    },
+    {
+      "path": "packages/cli/src/test/upgrade-protocols.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 172
+    },
+    {
+      "path": "packages/cli/src/test/upgrade-protocols.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 193
+    },
+    {
+      "path": "packages/cli/src/test/upgrade-protocols.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 237
+    },
+    {
+      "path": "packages/cli/src/test/upgrade-protocols.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 241
+    },
+    {
+      "path": "packages/cloudrun/container/Dockerfile",
+      "rule": "docker/node-base",
+      "line": 1
+    },
+    {
+      "path": "packages/cloudrun/container/Dockerfile",
+      "rule": "cli/npm-i",
+      "line": 30
+    },
+    {
+      "path": "packages/cloudrun/src/functions/helpers/write-cloudrun-error.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 26
+    },
+    {
+      "path": "packages/core/ensure-correct-version.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 24
+    },
+    {
+      "path": "packages/core/ensure-correct-version.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 31
+    },
+    {
+      "path": "packages/core/ensure-correct-version.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 19
+    },
+    {
+      "path": "packages/core/ensure-correct-version.ts",
+      "rule": "api/fs-existsSync",
+      "line": 40
+    },
+    {
+      "path": "packages/core/ensure-correct-version.ts",
+      "rule": "api/fs-existsSync",
+      "line": 45
+    },
+    {
+      "path": "packages/core/src/test/not-all-props-in-media-tags.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 14
+    },
+    {
+      "path": "packages/core/src/test/not-all-props-in-media-tags.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 27
+    },
+    {
+      "path": "packages/core/src/test/not-all-props-in-media-tags.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 40
+    },
+    {
+      "path": "packages/core/src/test/not-all-props-in-media-tags.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 53
+    },
+    {
+      "path": "packages/create-video/cli.js",
+      "rule": "api/fs-readFileSync",
+      "line": 9
+    },
+    {
+      "path": "packages/create-video/cli.js",
+      "rule": "api/fs-writeFileSync",
+      "line": 12
+    },
+    {
+      "path": "packages/create-video/src/add-tailwind.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 15
+    },
+    {
+      "path": "packages/create-video/src/add-tailwind.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 34
+    },
+    {
+      "path": "packages/create-video/src/add-tailwind.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 18
+    },
+    {
+      "path": "packages/create-video/src/add-tailwind.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 21
+    },
+    {
+      "path": "packages/create-video/src/add-tailwind.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 56
+    },
+    {
+      "path": "packages/create-video/src/add-tailwind.ts",
+      "rule": "api/fs-existsSync",
+      "line": 9
+    },
+    {
+      "path": "packages/create-video/src/add-tailwind.ts",
+      "rule": "api/fs-existsSync",
+      "line": 11
+    },
+    {
+      "path": "packages/create-video/src/add-tailwind.ts",
+      "rule": "api/fs-existsSync",
+      "line": 28
+    },
+    {
+      "path": "packages/create-video/src/add-tailwind.ts",
+      "rule": "api/fs-existsSync",
+      "line": 30
+    },
+    {
+      "path": "packages/create-video/src/init.ts",
+      "rule": "imports/bun-native",
+      "line": 3
+    },
+    {
+      "path": "packages/create-video/src/init.ts",
+      "rule": "imports/bun-native",
+      "line": 4
+    },
+    {
+      "path": "packages/create-video/src/init.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 207
+    },
+    {
+      "path": "packages/create-video/src/init.ts",
+      "rule": "api/fs-existsSync",
+      "line": 205
+    },
+    {
+      "path": "packages/create-video/src/open-in-editor.ts",
+      "rule": "api/fs-existsSync",
+      "line": 512
+    },
+    {
+      "path": "packages/create-video/src/patch-package-json.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 21
+    },
+    {
+      "path": "packages/create-video/src/patch-package-json.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 23
+    },
+    {
+      "path": "packages/create-video/src/patch-readme.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 32
+    },
+    {
+      "path": "packages/create-video/src/patch-readme.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 60
+    },
+    {
+      "path": "packages/create-video/src/test/add-tailwind.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 22
+    },
+    {
+      "path": "packages/create-video/src/test/add-tailwind.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 15
+    },
+    {
+      "path": "packages/create-video/src/test/patch-readme.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 19
+    },
+    {
+      "path": "packages/create-video/src/test/patch-readme.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 41
+    },
+    {
+      "path": "packages/dockerfiles/Dockerfile.debian",
+      "rule": "docker/node-base",
+      "line": 1
+    },
+    {
+      "path": "packages/dockerfiles/Dockerfile.nix",
+      "rule": "cli/npm-i",
+      "line": 16
+    },
+    {
+      "path": "packages/dockerfiles/Dockerfile.nix",
+      "rule": "cli/npx",
+      "line": 24
+    },
+    {
+      "path": "packages/docs/copy-convert.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 150
+    },
+    {
+      "path": "packages/docs/copy-convert.ts",
+      "rule": "api/fs-existsSync",
+      "line": 14
+    },
+    {
+      "path": "packages/docs/copy-experimental-sdk.ts",
+      "rule": "api/fs-existsSync",
+      "line": 18
+    },
+    {
+      "path": "packages/docs/copy-raw-docs.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 26
+    },
+    {
+      "path": "packages/docs/copy-raw-docs.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 139
+    },
+    {
+      "path": "packages/docs/copy-raw-docs.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 29
+    },
+    {
+      "path": "packages/docs/copy-raw-docs.ts",
+      "rule": "api/fs-existsSync",
+      "line": 60
+    },
+    {
+      "path": "packages/docs/copy-raw-docs.ts",
+      "rule": "api/fs-existsSync",
+      "line": 167
+    },
+    {
+      "path": "packages/docs/fetch-prompt-submissions.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 30
+    },
+    {
+      "path": "packages/docs/generate-asset-manifest.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 43
+    },
+    {
+      "path": "packages/docs/generate-asset-manifest.ts",
+      "rule": "api/fs-existsSync",
+      "line": 11
+    },
+    {
+      "path": "packages/docs/generate-option-docs.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 211
+    },
+    {
+      "path": "packages/docs/generate-option-docs.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 218
+    },
+    {
+      "path": "packages/docs/generate-option-docs.ts",
+      "rule": "api/fs-existsSync",
+      "line": 210
+    },
+    {
+      "path": "packages/docs/plugins/element-source-utils.js",
+      "rule": "api/fs-readFileSync",
+      "line": 96
+    },
+    {
+      "path": "packages/docs/plugins/element-source-utils.js",
+      "rule": "api/fs-readFileSync",
+      "line": 145
+    },
+    {
+      "path": "packages/docs/render-cards.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 91
+    },
+    {
+      "path": "packages/docs/render-cards.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 231
+    },
+    {
+      "path": "packages/docs/render-cards.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 169
+    },
+    {
+      "path": "packages/docs/render-cards.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 246
+    },
+    {
+      "path": "packages/docs/render-cards.ts",
+      "rule": "api/fs-existsSync",
+      "line": 190
+    },
+    {
+      "path": "packages/docs/render-cards.ts",
+      "rule": "api/fs-existsSync",
+      "line": 212
+    },
+    {
+      "path": "packages/docs/route-plugin/index.js",
+      "rule": "api/fs-readFileSync",
+      "line": 38
+    },
+    {
+      "path": "packages/docs/route-plugin/index.js",
+      "rule": "api/json-parse-readFileSync",
+      "line": 38
+    },
+    {
+      "path": "packages/docs/route-plugin/index.js",
+      "rule": "api/fs-existsSync",
+      "line": 37
+    },
+    {
+      "path": "packages/effects/src/visual-test/effects-visual.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/effects/src/visual-test/visual-utils.ts",
+      "rule": "imports/bun-native",
+      "line": 6
+    },
+    {
+      "path": "packages/eslint-plugin/src/tests/setup.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/example-videos/src/cached-example-media.ts",
+      "rule": "api/fs-existsSync",
+      "line": 30
+    },
+    {
+      "path": "packages/example-videos/src/remote-videos.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/example-videos/src/remote-videos.ts",
+      "rule": "api/fs-existsSync",
+      "line": 45
+    },
+    {
+      "path": "packages/example-videos/src/remote-videos.ts",
+      "rule": "api/fs-existsSync",
+      "line": 68
+    },
+    {
+      "path": "packages/example/Dockerfile",
+      "rule": "docker/node-base",
+      "line": 1
+    },
+    {
+      "path": "packages/example/Dockerfile",
+      "rule": "cli/npm-i",
+      "line": 25
+    },
+    {
+      "path": "packages/example/Dockerfile",
+      "rule": "cli/npx",
+      "line": 27
+    },
+    {
+      "path": "packages/example/e2e/affine-frame-clock.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 17
+    },
+    {
+      "path": "packages/example/e2e/affine-frame-clock.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 32
+    },
+    {
+      "path": "packages/example/e2e/affine-frame-clock.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 54
+    },
+    {
+      "path": "packages/example/e2e/affine-frame-clock.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 60
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 39
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 40
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 41
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 148
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 176
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 178
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 181
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 190
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 194
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 243
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 51
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 52
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 53
+    },
+    {
+      "path": "packages/example/e2e/captions-inspector.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 54
+    },
+    {
+      "path": "packages/example/e2e/client-render-inspector-edits.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 27
+    },
+    {
+      "path": "packages/example/e2e/client-render-inspector-edits.test.mts",
+      "rule": "api/fs-existsSync",
+      "line": 69
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 54
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 158
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 168
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 185
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 199
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 209
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 231
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 249
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 261
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 283
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 358
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 390
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 426
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 461
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 476
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 547
+    },
+    {
+      "path": "packages/example/e2e/effect-keyframes.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 55
+    },
+    {
+      "path": "packages/example/e2e/error-overlay.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 34
+    },
+    {
+      "path": "packages/example/e2e/error-overlay.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 97
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 18
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 21
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 25
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 29
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 33
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 37
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 18
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 19
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 23
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 27
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 31
+    },
+    {
+      "path": "packages/example/e2e/global-setup.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 35
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 19
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 26
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 34
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 42
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 50
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 58
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 19
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 24
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 32
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 40
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 48
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 56
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-existsSync",
+      "line": 18
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-existsSync",
+      "line": 23
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-existsSync",
+      "line": 31
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-existsSync",
+      "line": 39
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-existsSync",
+      "line": 47
+    },
+    {
+      "path": "packages/example/e2e/global-teardown.mts",
+      "rule": "api/fs-existsSync",
+      "line": 55
+    },
+    {
+      "path": "packages/example/e2e/helpers.mts",
+      "rule": "api/fs-existsSync",
+      "line": 44
+    },
+    {
+      "path": "packages/example/e2e/hook-order-change.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 19
+    },
+    {
+      "path": "packages/example/e2e/hook-order-change.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 34
+    },
+    {
+      "path": "packages/example/e2e/input-dragger.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 35
+    },
+    {
+      "path": "packages/example/e2e/input-dragger.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 84
+    },
+    {
+      "path": "packages/example/e2e/json-editor.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 35
+    },
+    {
+      "path": "packages/example/e2e/json-editor.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 45
+    },
+    {
+      "path": "packages/example/e2e/json-editor.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 55
+    },
+    {
+      "path": "packages/example/e2e/json-editor.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 64
+    },
+    {
+      "path": "packages/example/e2e/json-editor.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 98
+    },
+    {
+      "path": "packages/example/e2e/json-editor.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 76
+    },
+    {
+      "path": "packages/example/e2e/json-editor.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 83
+    },
+    {
+      "path": "packages/example/e2e/node-path-cache.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 29
+    },
+    {
+      "path": "packages/example/e2e/node-path-cache.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 64
+    },
+    {
+      "path": "packages/example/e2e/node-path-cache.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 129
+    },
+    {
+      "path": "packages/example/e2e/node-path-cache.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 34
+    },
+    {
+      "path": "packages/example/e2e/node-path-cache.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 95
+    },
+    {
+      "path": "packages/example/e2e/node-path-cache.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 127
+    },
+    {
+      "path": "packages/example/e2e/node-path-cache.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 164
+    },
+    {
+      "path": "packages/example/e2e/render-output-drag.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 30
+    },
+    {
+      "path": "packages/example/e2e/render-output-drag.test.mts",
+      "rule": "api/fs-existsSync",
+      "line": 181
+    },
+    {
+      "path": "packages/example/e2e/sequence-playback-rate.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 14
+    },
+    {
+      "path": "packages/example/e2e/sequence-playback-rate.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 48
+    },
+    {
+      "path": "packages/example/e2e/sequence-playback-rate.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 71
+    },
+    {
+      "path": "packages/example/e2e/sequence-playback-rate.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 93
+    },
+    {
+      "path": "packages/example/e2e/sequence-playback-rate.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 97
+    },
+    {
+      "path": "packages/example/e2e/sequence-playback-rate.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 109
+    },
+    {
+      "path": "packages/example/e2e/sequence-playback-rate.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 113
+    },
+    {
+      "path": "packages/example/e2e/source-subscription-churn.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 17
+    },
+    {
+      "path": "packages/example/e2e/source-subscription-churn.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 84
+    },
+    {
+      "path": "packages/example/e2e/source-subscription-churn.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 95
+    },
+    {
+      "path": "packages/example/e2e/source-subscription-churn.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 66
+    },
+    {
+      "path": "packages/example/e2e/source-subscription-churn.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 118
+    },
+    {
+      "path": "packages/example/e2e/source-subscription-churn.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 132
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 474
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 486
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 687
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 688
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 690
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 711
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 719
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 720
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 784
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 786
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 787
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 847
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 850
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 880
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 905
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 912
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 945
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 65
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 105
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 488
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 494
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 704
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-existsSync",
+      "line": 36
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-existsSync",
+      "line": 409
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-existsSync",
+      "line": 830
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-existsSync",
+      "line": 831
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-existsSync",
+      "line": 842
+    },
+    {
+      "path": "packages/example/e2e/studio-protocol.test.mts",
+      "rule": "api/fs-existsSync",
+      "line": 843
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 52
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 58
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 65
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 72
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 79
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 86
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 91
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 94
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 98
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 102
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 106
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 110
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 227
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 233
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 240
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 247
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 254
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 261
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 52
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 56
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 63
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 70
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 77
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 84
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 91
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 92
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 96
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 100
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 104
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 108
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 113
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 114
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 227
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 231
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 238
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 245
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 252
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 259
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-existsSync",
+      "line": 51
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-existsSync",
+      "line": 55
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-existsSync",
+      "line": 62
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-existsSync",
+      "line": 69
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-existsSync",
+      "line": 76
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-existsSync",
+      "line": 83
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-existsSync",
+      "line": 226
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-existsSync",
+      "line": 230
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-existsSync",
+      "line": 237
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-existsSync",
+      "line": 244
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-existsSync",
+      "line": 251
+    },
+    {
+      "path": "packages/example/e2e/studio-server.mts",
+      "rule": "api/fs-existsSync",
+      "line": 258
+    },
+    {
+      "path": "packages/example/e2e/suppress-rebuild.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 21
+    },
+    {
+      "path": "packages/example/e2e/suppress-rebuild.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 50
+    },
+    {
+      "path": "packages/example/e2e/suppress-rebuild.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 92
+    },
+    {
+      "path": "packages/example/e2e/suppress-rebuild.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 118
+    },
+    {
+      "path": "packages/example/e2e/suppress-rebuild.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 97
+    },
+    {
+      "path": "packages/example/e2e/suppress-rebuild.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 122
+    },
+    {
+      "path": "packages/example/e2e/suppress-rebuild.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 150
+    },
+    {
+      "path": "packages/example/e2e/vibe-code-source-expressions.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 19
+    },
+    {
+      "path": "packages/example/e2e/vibe-code-source-expressions.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 21
+    },
+    {
+      "path": "packages/example/e2e/vibe-code-source-expressions.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 153
+    },
+    {
+      "path": "packages/example/e2e/vibe-code-source-expressions.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 25
+    },
+    {
+      "path": "packages/example/e2e/vibe-code-source-expressions.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 37
+    },
+    {
+      "path": "packages/example/e2e/vibe-code-source-expressions.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 170
+    },
+    {
+      "path": "packages/example/e2e/vibe-code-source-expressions.test.mts",
+      "rule": "api/fs-writeFileSync",
+      "line": 172
+    },
+    {
+      "path": "packages/example/e2e/vibe-code-source-expressions.test.mts",
+      "rule": "api/fs-existsSync",
+      "line": 20
+    },
+    {
+      "path": "packages/example/e2e/visual-controls.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 45
+    },
+    {
+      "path": "packages/example/e2e/visual-controls.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 65
+    },
+    {
+      "path": "packages/example/e2e/visual-controls.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 87
+    },
+    {
+      "path": "packages/example/e2e/visual-controls.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 106
+    },
+    {
+      "path": "packages/example/e2e/visual-controls.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 143
+    },
+    {
+      "path": "packages/example/e2e/visual-controls.test.mts",
+      "rule": "api/fs-readFileSync",
+      "line": 160
+    },
+    {
+      "path": "packages/example/renderall.sh",
+      "rule": "cli/npx",
+      "line": 1
+    },
+    {
+      "path": "packages/example/renderall.sh",
+      "rule": "cli/npx",
+      "line": 7
+    },
+    {
+      "path": "packages/example/testlambdaintegrations.mjs",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/example/testlambdaperformance.mjs",
+      "rule": "imports/bun-native",
+      "line": 7
+    },
+    {
+      "path": "packages/gif/build.mjs",
+      "rule": "api/fs-readFileSync",
+      "line": 15
+    },
+    {
+      "path": "packages/gif/build.mjs",
+      "rule": "api/fs-writeFileSync",
+      "line": 17
+    },
+    {
+      "path": "packages/google-fonts/scripts/generate-index.ts",
+      "rule": "imports/bun-native",
+      "line": 3
+    },
+    {
+      "path": "packages/google-fonts/scripts/generate.ts",
+      "rule": "api/fs-existsSync",
+      "line": 147
+    },
+    {
+      "path": "packages/google-fonts/scripts/generate.ts",
+      "rule": "api/fs-existsSync",
+      "line": 161
+    },
+    {
+      "path": "packages/install-whisper-cpp/src/transcribe.ts",
+      "rule": "api/fs-existsSync",
+      "line": 157
+    },
+    {
+      "path": "packages/it-tests/src/cloudrun/cloudrun-browser-bundle.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 34
+    },
+    {
+      "path": "packages/it-tests/src/lambda/lambda-browser-bundle.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 38
+    },
+    {
+      "path": "packages/it-tests/src/lambda/lambda-browser-bundle.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 74
+    },
+    {
+      "path": "packages/it-tests/src/lambda/lambda-integration.test.ts",
+      "rule": "imports/bun-native",
+      "line": 3
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/ruby-package.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 17
+    },
+    {
+      "path": "packages/it-tests/src/monorepo/ruby-package.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 41
+    },
+    {
+      "path": "packages/it-tests/src/rendering/base64-audio.test.ts",
+      "rule": "imports/bun-native",
+      "line": 5
+    },
+    {
+      "path": "packages/it-tests/src/rendering/base64-audio.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 10
+    },
+    {
+      "path": "packages/it-tests/src/rendering/base64-audio.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 15
+    },
+    {
+      "path": "packages/it-tests/src/rendering/base64-audio.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 32
+    },
+    {
+      "path": "packages/it-tests/src/rendering/cancel-render.test.ts",
+      "rule": "imports/bun-native",
+      "line": 4
+    },
+    {
+      "path": "packages/it-tests/src/rendering/cancel-render.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 9
+    },
+    {
+      "path": "packages/it-tests/src/rendering/cancel-render.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 14
+    },
+    {
+      "path": "packages/it-tests/src/rendering/frame-accuracy-gif.test.ts",
+      "rule": "imports/bun-native",
+      "line": 6
+    },
+    {
+      "path": "packages/it-tests/src/rendering/no-caret.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 22
+    },
+    {
+      "path": "packages/it-tests/src/rendering/no-caret.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 18
+    },
+    {
+      "path": "packages/it-tests/src/rendering/render-scale.test.ts",
+      "rule": "imports/bun-native",
+      "line": 5
+    },
+    {
+      "path": "packages/it-tests/src/rendering/render-scale.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 11
+    },
+    {
+      "path": "packages/it-tests/src/rendering/render-scale.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 16
+    },
+    {
+      "path": "packages/it-tests/src/rendering/render-scale.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 47
+    },
+    {
+      "path": "packages/it-tests/src/rendering/render-scale.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 103
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "imports/bun-native",
+      "line": 5
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 23
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 29
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 58
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 213
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 257
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 442
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 479
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 514
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 563
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 624
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 738
+    },
+    {
+      "path": "packages/it-tests/src/rendering/rendering.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 869
+    },
+    {
+      "path": "packages/it-tests/src/rendering/test-utils.ts",
+      "rule": "imports/bun-native",
+      "line": 5
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-frames.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 57
+    },
+    {
+      "path": "packages/it-tests/src/ssr/render-media-sample-rate.test.ts",
+      "rule": "api/buffer-alloc",
+      "line": 207
+    },
+    {
+      "path": "packages/lambda-client/src/call-lambda-async.ts",
+      "rule": "api/buffer-byteLength",
+      "line": 22
+    },
+    {
+      "path": "packages/lambda-client/src/read-file.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/lambda-client/src/validate-webhook-signature.ts",
+      "rule": "api/buffer-byteLength",
+      "line": 40
+    },
+    {
+      "path": "packages/lambda-client/src/validate-webhook-signature.ts",
+      "rule": "api/buffer-byteLength",
+      "line": 40
+    },
+    {
+      "path": "packages/lambda/ensure-version-match.js",
+      "rule": "api/fs-readFileSync",
+      "line": 9
+    },
+    {
+      "path": "packages/lambda/ensure-version-match.js",
+      "rule": "api/fs-readFileSync",
+      "line": 11
+    },
+    {
+      "path": "packages/lambda/src/cli/helpers/get-webhook-custom-data.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 22
+    },
+    {
+      "path": "packages/lambda/src/cli/helpers/get-webhook-custom-data.ts",
+      "rule": "api/fs-existsSync",
+      "line": 21
+    },
+    {
+      "path": "packages/lambda/src/shared/validate-bundle-dir.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 83
+    },
+    {
+      "path": "packages/lambda/src/shared/validate-bundle-dir.ts",
+      "rule": "api/fs-existsSync",
+      "line": 54
+    },
+    {
+      "path": "packages/lambda/src/shared/validate-bundle-dir.ts",
+      "rule": "api/fs-existsSync",
+      "line": 67
+    },
+    {
+      "path": "packages/lambda/src/shared/validate-bundle-dir.ts",
+      "rule": "api/fs-existsSync",
+      "line": 75
+    },
+    {
+      "path": "packages/layout-utils/src/test/fit-text-on-n-lines.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media-parser/ensure-correct-version.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 13
+    },
+    {
+      "path": "packages/media-parser/src/test/transportstream.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 173
+    },
+    {
+      "path": "packages/media-parser/src/writers/node.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 18
+    },
+    {
+      "path": "packages/media-parser/src/writers/node.ts",
+      "rule": "api/fs-existsSync",
+      "line": 16
+    },
+    {
+      "path": "packages/media/src/test/audio-anchor-reschedule.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 5
+    },
+    {
+      "path": "packages/media/src/test/audio-cache-size.test.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/media/src/test/audio-cleanup-on-seek.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/audio-encoding.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/audio-iterator.test.ts",
+      "rule": "imports/bun-native",
+      "line": 3
+    },
+    {
+      "path": "packages/media/src/test/audio-seek-tolerance.test.ts",
+      "rule": "imports/bun-native",
+      "line": 3
+    },
+    {
+      "path": "packages/media/src/test/border-schema.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/browser.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/canvas-ahead-of-time.test.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/media/src/test/editlist-offset.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/extract-accuracy-uneven.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/extract-accuracy.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/extract-audio-resampling.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/get-allocation-size.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/get-time-in-seconds.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/get-video-sequence-duration.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/html5-playback-rate.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 11
+    },
+    {
+      "path": "packages/media/src/test/keyframe-bank.test.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/media/src/test/loop-trim-time-calculation.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/looping-audio-timestamps.test.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/media/src/test/looping.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/max-source-cache-size.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/media-player.test.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/media/src/test/multi-playhead-clearing.test.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/media/src/test/pitch-shift-preview.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 5
+    },
+    {
+      "path": "packages/media/src/test/pitch-shift.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/player-frame-accuracy-utils.ts",
+      "rule": "imports/bun-native",
+      "line": 3
+    },
+    {
+      "path": "packages/media/src/test/player-loop-frame-accuracy.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 4
+    },
+    {
+      "path": "packages/media/src/test/player-muted-video.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 6
+    },
+    {
+      "path": "packages/media/src/test/player-seek-intent.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 5
+    },
+    {
+      "path": "packages/media/src/test/premount-arm-kicks-scheduler.test.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/media/src/test/premount-aware-delay-playback.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/premounting.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 4
+    },
+    {
+      "path": "packages/media/src/test/request-init.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/resample.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/sequence-playback-rate.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 5
+    },
+    {
+      "path": "packages/media/src/test/serialized-queue.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/shared-input.test.ts",
+      "rule": "imports/bun-native",
+      "line": 3
+    },
+    {
+      "path": "packages/media/src/test/sort-by-priority.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/trim-change-seek.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/variable-fps-issue-8303.test.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/media/src/test/video-after-end.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/video-crop.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 4
+    },
+    {
+      "path": "packages/media/src/test/video-iterator-manager.test.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/media/src/test/video-non-zero-start.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/media/src/test/video-onerror-stable.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 4
+    },
+    {
+      "path": "packages/media/src/test/video-preview-iterator.test.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/media/src/test/video-with-no-frames-in-beginning.test.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/player/ensure-correct-version.ts",
+      "rule": "api/fs-existsSync",
+      "line": 3
+    },
+    {
+      "path": "packages/player/ensure-correct-version.ts",
+      "rule": "api/fs-existsSync",
+      "line": 8
+    },
+    {
+      "path": "packages/react18-tests/src/test/web-renderer.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 3
+    },
+    {
+      "path": "packages/renderer/src/assets/download-and-map-assets-to-file.ts",
+      "rule": "api/fs-existsSync",
+      "line": 179
+    },
+    {
+      "path": "packages/renderer/src/browser/BrowserFetcher.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 119
+    },
+    {
+      "path": "packages/renderer/src/browser/BrowserFetcher.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 127
+    },
+    {
+      "path": "packages/renderer/src/browser/BrowserFetcher.ts",
+      "rule": "api/fs-existsSync",
+      "line": 230
+    },
+    {
+      "path": "packages/renderer/src/browser/BrowserFetcher.ts",
+      "rule": "api/fs-existsSync",
+      "line": 239
+    },
+    {
+      "path": "packages/renderer/src/browser/BrowserFetcher.ts",
+      "rule": "api/fs-existsSync",
+      "line": 303
+    },
+    {
+      "path": "packages/renderer/src/browser/BrowserFetcher.ts",
+      "rule": "api/fs-existsSync",
+      "line": 327
+    },
+    {
+      "path": "packages/renderer/src/browser/get-chrome-download-url.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 22
+    },
+    {
+      "path": "packages/renderer/src/call-ffmpeg.ts",
+      "rule": "imports/bun-native",
+      "line": 4
+    },
+    {
+      "path": "packages/renderer/src/ensure-browser.ts",
+      "rule": "api/fs-existsSync",
+      "line": 116
+    },
+    {
+      "path": "packages/renderer/src/ensure-browser.ts",
+      "rule": "api/fs-existsSync",
+      "line": 126
+    },
+    {
+      "path": "packages/renderer/src/find-closest-package-json.ts",
+      "rule": "api/fs-existsSync",
+      "line": 11
+    },
+    {
+      "path": "packages/renderer/src/get-local-browser-executable.ts",
+      "rule": "api/fs-existsSync",
+      "line": 21
+    },
+    {
+      "path": "packages/renderer/src/get-local-browser-executable.ts",
+      "rule": "api/fs-existsSync",
+      "line": 32
+    },
+    {
+      "path": "packages/renderer/src/render-media.ts",
+      "rule": "imports/bun-native",
+      "line": 5
+    },
+    {
+      "path": "packages/renderer/src/render-media.ts",
+      "rule": "api/fs-existsSync",
+      "line": 1053
+    },
+    {
+      "path": "packages/renderer/src/render-media.ts",
+      "rule": "api/fs-existsSync",
+      "line": 1059
+    },
+    {
+      "path": "packages/renderer/src/render-still.ts",
+      "rule": "api/fs-existsSync",
+      "line": 213
+    },
+    {
+      "path": "packages/renderer/src/repro.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 126
+    },
+    {
+      "path": "packages/renderer/src/repro.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 132
+    },
+    {
+      "path": "packages/renderer/src/test/browser-download-lock.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 56
+    },
+    {
+      "path": "packages/renderer/src/test/browser-download-lock.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 97
+    },
+    {
+      "path": "packages/renderer/src/test/browser-download-lock.test.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 104
+    },
+    {
+      "path": "packages/renderer/src/test/browser-download-lock.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 101
+    },
+    {
+      "path": "packages/renderer/src/test/browser-download-lock.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 55
+    },
+    {
+      "path": "packages/renderer/src/test/browser-download-lock.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 105
+    },
+    {
+      "path": "packages/renderer/src/test/fixtures/browser-download-lock-worker.ts",
+      "rule": "api/fs-existsSync",
+      "line": 26
+    },
+    {
+      "path": "packages/renderer/src/test/stitch-frames-to-video.test.ts",
+      "rule": "api/fs-existsSync",
+      "line": 167
+    },
+    {
+      "path": "packages/renderer/src/tmp-dir.ts",
+      "rule": "api/fs-existsSync",
+      "line": 19
+    },
+    {
+      "path": "packages/renderer/vendor/yauzl-patched/buffer-crc32.js",
+      "rule": "api/buffer-alloc",
+      "line": 72
+    },
+    {
+      "path": "packages/serverless/src/handlers/launch.ts",
+      "rule": "api/buffer-byteLength",
+      "line": 337
+    },
+    {
+      "path": "packages/serverless/src/handlers/launch.ts",
+      "rule": "api/buffer-byteLength",
+      "line": 906
+    },
+    {
+      "path": "packages/serverless/src/handlers/launch.ts",
+      "rule": "api/buffer-byteLength",
+      "line": 912
+    },
+    {
+      "path": "packages/serverless/src/invoke-webhook.ts",
+      "rule": "api/buffer-byteLength",
+      "line": 29
+    },
+    {
+      "path": "packages/studio-server/src/figma/figma-clipboard.ts",
+      "rule": "api/buffer-byteLength",
+      "line": 369
+    },
+    {
+      "path": "packages/studio-server/src/file-watcher.ts",
+      "rule": "api/fs-existsSync",
+      "line": 87
+    },
+    {
+      "path": "packages/studio-server/src/file-watcher.ts",
+      "rule": "api/fs-existsSync",
+      "line": 99
+    },
+    {
+      "path": "packages/studio-server/src/helpers/get-installed-dependencies.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 15
+    },
+    {
+      "path": "packages/studio-server/src/helpers/get-installed-dependencies.ts",
+      "rule": "api/json-parse-readFileSync",
+      "line": 15
+    },
+    {
+      "path": "packages/studio-server/src/helpers/get-local-package-override.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 19
+    },
+    {
+      "path": "packages/studio-server/src/helpers/get-local-package-override.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 41
+    },
+    {
+      "path": "packages/studio-server/src/helpers/get-local-package-override.ts",
+      "rule": "api/json-parse-readFileSync",
+      "line": 19
+    },
+    {
+      "path": "packages/studio-server/src/helpers/get-local-package-override.ts",
+      "rule": "api/fs-existsSync",
+      "line": 15
+    },
+    {
+      "path": "packages/studio-server/src/helpers/get-local-package-override.ts",
+      "rule": "api/fs-existsSync",
+      "line": 26
+    },
+    {
+      "path": "packages/studio-server/src/helpers/get-local-package-override.ts",
+      "rule": "api/fs-existsSync",
+      "line": 36
+    },
+    {
+      "path": "packages/studio-server/src/helpers/open-in-editor.ts",
+      "rule": "api/fs-existsSync",
+      "line": 280
+    },
+    {
+      "path": "packages/studio-server/src/helpers/open-in-editor.ts",
+      "rule": "api/fs-existsSync",
+      "line": 457
+    },
+    {
+      "path": "packages/studio-server/src/helpers/open-in-editor.ts",
+      "rule": "api/fs-existsSync",
+      "line": 569
+    },
+    {
+      "path": "packages/studio-server/src/helpers/resolve-composition-component.ts",
+      "rule": "api/fs-existsSync",
+      "line": 36
+    },
+    {
+      "path": "packages/studio-server/src/preview-server/dev-middleware/middleware.ts",
+      "rule": "api/buffer-byteLength",
+      "line": 252
+    },
+    {
+      "path": "packages/studio-server/src/preview-server/dev-middleware/middleware.ts",
+      "rule": "api/buffer-byteLength",
+      "line": 257
+    },
+    {
+      "path": "packages/studio-server/src/preview-server/get-package-manager.ts",
+      "rule": "api/fs-existsSync",
+      "line": 81
+    },
+    {
+      "path": "packages/studio-server/src/test/get-installed-installable-packages.test.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 18
+    },
+    {
+      "path": "packages/template-audiogram/transcribe.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 105
+    },
+    {
+      "path": "packages/template-next-app-tailwind/deploy.mjs",
+      "rule": "imports/bun-native",
+      "line": 6
+    },
+    {
+      "path": "packages/template-prompt-to-motion-graphics/deploy.mjs",
+      "rule": "imports/bun-native",
+      "line": 6
+    },
+    {
+      "path": "packages/template-prompt-to-video/cli/cli.ts",
+      "rule": "imports/bun-native",
+      "line": 7
+    },
+    {
+      "path": "packages/template-prompt-to-video/cli/cli.ts",
+      "rule": "imports/bun-native",
+      "line": 8
+    },
+    {
+      "path": "packages/template-prompt-to-video/cli/cli.ts",
+      "rule": "imports/bun-native",
+      "line": 24
+    },
+    {
+      "path": "packages/template-prompt-to-video/cli/cli.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 50
+    },
+    {
+      "path": "packages/template-prompt-to-video/cli/cli.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 56
+    },
+    {
+      "path": "packages/template-prompt-to-video/cli/service.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 59
+    },
+    {
+      "path": "packages/template-prompt-to-video/cli/service.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 150
+    },
+    {
+      "path": "packages/template-react-router/deploy.mjs",
+      "rule": "imports/bun-native",
+      "line": 6
+    },
+    {
+      "path": "packages/template-recorder/scripts/server/express-server.ts",
+      "rule": "api/dirname-esm",
+      "line": 24
+    },
+    {
+      "path": "packages/template-render-server/Dockerfile",
+      "rule": "docker/node-base",
+      "line": 1
+    },
+    {
+      "path": "packages/template-render-server/Dockerfile",
+      "rule": "cli/npm-install",
+      "line": 24
+    },
+    {
+      "path": "packages/template-render-server/Dockerfile",
+      "rule": "cli/npx",
+      "line": 31
+    },
+    {
+      "path": "packages/template-render-server/Dockerfile",
+      "rule": "cli/npx",
+      "line": 34
+    },
+    {
+      "path": "packages/template-stargazer/.github/workflows/render-video.yml",
+      "rule": "ci/setup-node",
+      "line": 29
+    },
+    {
+      "path": "packages/template-stargazer/.github/workflows/render-video.yml",
+      "rule": "ci/node-version",
+      "line": 31
+    },
+    {
+      "path": "packages/template-stargazer/.github/workflows/render-video.yml",
+      "rule": "cli/npm-i",
+      "line": 38
+    },
+    {
+      "path": "packages/template-stargazer/.github/workflows/render-video.yml",
+      "rule": "cli/npx",
+      "line": 44
+    },
+    {
+      "path": "packages/template-still/Dockerfile",
+      "rule": "docker/node-base",
+      "line": 3
+    },
+    {
+      "path": "packages/template-still/Dockerfile",
+      "rule": "cli/npm-i",
+      "line": 24
+    },
+    {
+      "path": "packages/template-still/src/server/cache.ts",
+      "rule": "api/fs-existsSync",
+      "line": 29
+    },
+    {
+      "path": "packages/template-still/src/server/index.ts",
+      "rule": "imports/bun-native",
+      "line": 7
+    },
+    {
+      "path": "packages/template-still/src/server/s3.ts",
+      "rule": "imports/bun-native",
+      "line": 6
+    },
+    {
+      "path": "packages/web-renderer/src/test/3d-flattening.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/abort-render.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 5
+    },
+    {
+      "path": "packages/web-renderer/src/test/artifact.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/web-renderer/src/test/audio.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 4
+    },
+    {
+      "path": "packages/web-renderer/src/test/backface-visibility-mask.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/background-clip-text-3d-transform.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/background-clip.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/background-color.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/background-image-rect.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/border-radius.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/border.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/box-shadow.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/can-render-media-on-web.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/cancel-render.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 3
+    },
+    {
+      "path": "packages/web-renderer/src/test/clip-path.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/deeply-nested-transform.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/delay-render.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 4
+    },
+    {
+      "path": "packages/web-renderer/src/test/display-none.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/error-propagation.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 3
+    },
+    {
+      "path": "packages/web-renderer/src/test/filter-image.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/filter-line-height-clip.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/filter-text.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/filter.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/flex-container.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/frame-range.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/web-renderer/src/test/get-canvas-font-stretch.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/gradient-transparent-keyword.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/html-in-canvas.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 4
+    },
+    {
+      "path": "packages/web-renderer/src/test/huge-image-transform.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/images.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/web-renderer/src/test/inline-scale.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/input-props.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/web-renderer/src/test/issue-10676-svg-gradient-stroke.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/issue-6211-mask-wheel.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/issue-7050-minimal.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/issue-7050-repro.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/issue-7199-scale-and-drop-shadow.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/issue-7243-svg-japanese-text.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/issue-7489-minimal.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/issue-8650-lottie-control-chars.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/issue-9736-background-position.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/issue-9901-rotated-drop-shadow.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/line-height.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/linear-gradient.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/make-dom-matrix.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/many-layers.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/margins.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/mask-image-url.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/web-renderer/src/test/mask-image.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/object-fit.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/on-frame.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/web-renderer/src/test/opacity-inherited.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/opacity-reset.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/opacity.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/opaque-layer-over-fading-layer.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/outline.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/overflow-hidden.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/page-responsiveness.test.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/parse-border-radius.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/parse-linear-gradient.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/pitch-shift-audio.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 7
+    },
+    {
+      "path": "packages/web-renderer/src/test/pixel-density.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/player-false-positive.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 5
+    },
+    {
+      "path": "packages/web-renderer/src/test/positioned-svg.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/pr-11215-svg-font-repro.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/render-media.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 9
+    },
+    {
+      "path": "packages/web-renderer/src/test/render-still.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 3
+    },
+    {
+      "path": "packages/web-renderer/src/test/scale-precompose.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/scale.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/svg-data-uri.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/svg-preserve-aspect-ratio-none.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/svg-registered-font-selection.test.ts",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/web-renderer/src/test/tainted-image.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/web-renderer/src/test/text-decoration.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/text-shadow-scale.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/text-shadow.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/text.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/three-d-transform-out-of-bounds.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/three-d-transform-overflow.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/three-duplicate-frames.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 6
+    },
+    {
+      "path": "packages/web-renderer/src/test/transform-shorthands.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/transforms.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/transitions.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/unsupported-components.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 2
+    },
+    {
+      "path": "packages/web-renderer/src/test/utils.ts",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/video.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 4
+    },
+    {
+      "path": "packages/web-renderer/src/test/webkit-text-fill-color.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/webkit-text-stroke.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/web-renderer/src/test/whitespace-collapsing.test.tsx",
+      "rule": "imports/bun-native",
+      "line": 1
+    },
+    {
+      "path": "packages/whisper-web/build-wasm.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 32
+    },
+    {
+      "path": "packages/whisper-web/build-wasm.ts",
+      "rule": "api/fs-readFileSync",
+      "line": 64
+    },
+    {
+      "path": "packages/whisper-web/build-wasm.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 48
+    },
+    {
+      "path": "packages/whisper-web/build-wasm.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 65
+    },
+    {
+      "path": "packages/whisper-web/build-wasm.ts",
+      "rule": "api/fs-writeFileSync",
+      "line": 78
+    }
+  ],
+  "reasons": {
+    "api/fs-*": "Sync return/callback contracts and directory existence semantics must be preserved. Nested argument rewrites include malformed expressions.",
+    "api/json-parse-readFileSync": "Overlaps fs-readFileSync edits and introduces asynchronous return contracts.",
+    "imports/bun-native": "Custom dotenv paths, execa streaming/cancellation, browser-only Vitest, Prettier and AWS clients have non-equivalent APIs.",
+    "api/buffer-*": "Buffer consumers require encoding and Buffer methods; Uint8Array is not equivalent.",
+    "ci/*": "Upstream hosted CI is provenance; no hosted build deployment requested.",
+    "docker/node-base": "Image native dependencies and multi-stage copy paths require separate qualification.",
+    "cli/*": "Package manager examples/protocol helpers remain public upstream semantics.",
+    "api/dirname-esm": "Retain upstream template behavior until generated CJS/ESM consumers are qualified."
+  }
+}

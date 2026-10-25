@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#101622" />
+    <title>Crunchyroll shortcut</title>
+    <link rel="manifest" href="/pwa/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/pwa/icons/icon192.png" />
+    <link rel="stylesheet" href="/pwa/styles.css" />
+  </head>
+  <body>
+    <main>
+      <img class="icon" src="/pwa/icons/icon192.png" alt="" />
+      <p class="eyebrow">Bun · Chrome</p>
+      <h1 data-message="title">The God Who Destroys</h1>
+      <p data-message="description">Open the official episode in your own Chrome session.</p>
+      <label for="language" data-message="language">App language</label
+      ><select id="language"></select>
+      <a
+        class="primary"
+        href="https://www.crunchyroll.com/fr/watch/GE00389313JAJP/the-god-who-destroys"
+        target="_blank"
+        rel="noopener noreferrer"
+        data-message="open"
+        >Watch on Crunchyroll</a
+      >
+      <button id="install" type="button" data-message="install" disabled>Install this shortcut</button>
+      <p id="installation" role="status" data-message="installUnavailable">
+        Installation is available when Chrome offers it. You can also use the browser menu.
+      </p>
+      <p id="connectivity" role="status"></p>
+      <p data-message="note">
+        This changes the shortcut language. Crunchyroll controls audio, subtitles, account access and playback.
+      </p>
+      <p data-message="offline">
+        The shortcut works offline; watching the episode requires an internet connection and authorized Crunchyroll
+        access.
+      </p>
+    </main>
+    <script type="module" src="/pwa/app.js"></script>
+  </body>
+</html>

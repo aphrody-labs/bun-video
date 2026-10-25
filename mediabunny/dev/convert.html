@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+
+<script src="../dist/bundles/mediabunny.cjs"></script>
+<script src="../packages/mp3-encoder/dist/bundles/mediabunny-mp3-encoder.js"></script>
+
+<script type="module">
+	MediabunnyMp3Encoder.registerMp3Encoder();
+
+	const fileInput = document.createElement('input');
+	fileInput.type = 'file';
+	document.body.append(fileInput);
+
+	const progressElement = document.createElement('progress');	
+	progressElement.max = 1;
+	document.body.append(progressElement);
+
+	fileInput.addEventListener('change', async () => {
+		const file = fileInput.files[0];
+
+		const source = new Mediabunny.BlobSource(file);
+		const target = new Mediabunny.BufferTarget() ?? new Mediabunny.StreamTarget(new WritableStream({
+			write: console.log
+		}), {
+			chunked: true,
+			chunkSize: 2**20
+		});
+		const outputFormat = new Mediabunny.Mp4OutputFormat({});
+
+		const button = document.createElement('button');
+		button.textContent = 'Cancel';
+		button.onclick = () => conversion.cancel();
+		document.body.append(button);
+
+		const conversion = await Mediabunny.Conversion.init({
+			input: new Mediabunny.Input({
+				formats: Mediabunny.ALL_FORMATS,	
+				source
+			}),
+			output: new Mediabunny.Output({
+				format: outputFormat,
+				target
+			}),
+			audio: {
+				//discard: true,
+				//codec: 'opus',
+				//bitrate: 128000,
+				//numberOfChannels: 1,
+				//sampleRate: 4000
+				//discard: true
+				//forceTranscode: true,
+			},
+			/*
+			video: {
+				discard: true,
+				bitrate: Mediabunny.QUALITY_VERY_HIGH,
+				//bitrate: Mediabunny.QUALITY_VERY_HIGH
+				codec: 'av1',
+				//width: 800,
+				//fit: 'fill',
+				//rotate: 90,
+			},
+			audio: {
+				bitrate: Mediabunny.QUALITY_HIGH,
+				codec: 'aac',
+			},
+			*/
+			/*
+			video: {
+				codec: 'avc',
+			},
+			audio: {
+				codec: 'mp3',
+				bitrate: 320000
+			},
+			*/
+			video: () => ({
+				//frameRate: 27.123,
+				//width: 320,
+				//forceTranscode: true,
+				//codec: 'av1',
+				//discard: true,
+				//width: 1280,
+				//discard: true,
+				//width: 640
+				//forceTranscode: true,
+				//rotate: 90
+				//width: 720 ?? 2160,
+				//height: 1280 ?? 3840,
+				//fit: 'contain',
+				//rotate: 90,
+				//width: 512,
+				//height: 512,
+				//width: 200,
+				//height: 100,
+			}),
+			trim: {
+				//start: 0,
+				//end: 20
+			},
+		});
+		console.log(conversion);
+
+		let progress = 0;
+		conversion.onProgress = newProgress => progress = newProgress;
+
+		function updateProgress() {
+			progressElement.value = progress;
+
+			if (progress === 1) {
+				return;
+			}
+
+			setTimeout(updateProgress, 1000/60);
+		}
+		updateProgress();
+
+		console.time();
+		await conversion.execute();
+		console.timeEnd()
+
+		console.log("Done", target.buffer);
+
+		const video = document.createElement('video');
+		video.src = URL.createObjectURL(new Blob([target.buffer], { type: outputFormat.mimeType }));	
+		video.controls = true;	
+		document.body.append(video);
+		video.play();
+
+		//download(new Blob([target.buffer]), 'converted' + outputFormat.fileExtension);
+
+		function download(blob, filename) {
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = filename;
+			a.click();
+			URL.revokeObjectURL(url);
+		}
+	});
+</script>

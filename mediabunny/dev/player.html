@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+
+<input type="file">
+
+<div id="player"
+	 style="display: none; flex-direction: column; align-items: center;
+			max-width: 1000px; max-height: calc(100svh - 10px);
+			margin: 0 auto;">
+	<canvas style="background: magenta; flex: 1 1 0%; min-height: 0;"></canvas>
+	<div style="display: flex; width: 100%; align-items: center; gap: 8px;">
+		<button style="width: 100px;"></button>
+		<p id="currentTime" style="font-variant-numeric: tabular-nums;">-</p>
+		<input type="range" style="flex: 1 1 0; outline: none;" value="0" min="0" max="1" step="0.000001">
+		<p id="duration" style="font-variant-numeric: tabular-nums;">-</p>
+	</div>
+</div>
+
+<script src="../dist/bundles/mediabunny.cjs"></script>
+
+<script type="module">
+const fileInput = document.querySelector('input[type="file"]');
+const currentTimeElement = document.querySelector('#currentTime');
+const durationElement = document.querySelector('#duration');
+const playerDiv = document.querySelector('#player');
+const playButton = playerDiv.querySelector('button');
+const rangeInput = playerDiv.querySelector('input[type="range"]');
+
+const file = await new Promise(resolve => {
+	fileInput.addEventListener('change', () => {
+		resolve(fileInput.files[0]);
+	});
+});
+
+fileInput.style.display = 'none';
+const audioContext = new AudioContext();
+
+const source = new Mediabunny.BlobSource(file);
+
+const input = new Mediabunny.Input({
+	formats: Mediabunny.ALL_FORMATS,
+	source
+});
+
+console.log(await input.getMimeType());
+
+let videoTrack = await input.getPrimaryVideoTrack(); 
+let audioTrack = await input.getPrimaryAudioTrack();
+
+if (!(await videoTrack?.canDecode())) {
+	videoTrack = null;
+}
+if (!(await audioTrack?.canDecode())) {
+	audioTrack = null;
+}
+
+const canvas = document.querySelector('canvas');
+const context = canvas.getContext('2d');
+let videoRotation = 0;
+
+if (!videoTrack) {
+	canvas.style.display = 'none';
+} else {
+	canvas.width = videoTrack.displayWidth;
+	canvas.height = videoTrack.displayHeight;
+}
+
+const totalDuration = await input.computeDuration();
+durationElement.textContent = formatSeconds(totalDuration);
+
+playerDiv.style.display = 'flex';
+
+const videoSink = videoTrack && new Mediabunny.CanvasSink(videoTrack, { poolSize: 2 });
+const audioSink = audioTrack && new Mediabunny.AudioBufferSink(audioTrack);
+
+let startTime = null;
+let playing = false;
+let playbackTimeAtStart = 0;
+let videoFrameIterator = null;
+let audioBufferIterator = null;
+let currentFrame = null;
+let nextFrame = null;
+let seeking = false;
+let seekId = 0;
+const queuedAudioNodes = new Set();
+
+function getPlaybackTime() {
+	if (playing) {
+		return audioContext.currentTime - startTime + playbackTimeAtStart;
+	} else {
+		return playbackTimeAtStart;
+	}
+}
+
+function play() {
+	audioBufferIterator?.return();
+	audioBufferIterator = audioSink?.buffers(getPlaybackTime());
+	startTime = audioContext.currentTime;
+	playing = true;
+	runAudioIterator();
+
+	playButton.textContent = 'Pause';
+}
+
+function pause() {
+	playbackTimeAtStart = getPlaybackTime();
+	playing = false;
+	audioBufferIterator?.return();
+	audioBufferIterator = null;
+
+	for (const node of queuedAudioNodes) {
+		node.stop();
+	}
+
+	playButton.textContent = 'Play';
+}
+
+function togglePlay() {
+	if (seeking) {
+		return;
+	}
+
+	if (playing) {
+		pause();
+	} else {
+		play();
+	}
+}
+
+async function seek() {
+	if (!videoTrack) {
+		return;
+	}
+
+	seeking = true;
+	seekId++;
+
+	await videoFrameIterator?.return();
+
+	videoFrameIterator = videoSink.canvases(getPlaybackTime());
+	
+	const newCurrentFrame = (await videoFrameIterator.next()).value;
+	const newNextFrame = (await videoFrameIterator.next()).value;
+
+	currentFrame = newCurrentFrame;
+	nextFrame = newNextFrame;
+
+	if (currentFrame) {
+		context.drawImage(currentFrame.canvas, 0, 0);
+	}
+	
+	seeking = false;
+}
+await seek();
+
+async function render() {
+	const playbackTime = getPlaybackTime();
+	if (playbackTime >= totalDuration) {
+		pause();
+		playbackTimeAtStart = totalDuration;
+	}
+
+	if (currentFrame) {
+		while (nextFrame && nextFrame.timestamp <= playbackTime && !seeking) {
+			currentFrame = nextFrame;
+			context.drawImage(currentFrame.canvas, 0, 0);
+
+			const currentSeekId = seekId;
+			const newNextFrame = (await videoFrameIterator.next()).value;
+
+			if (currentSeekId === seekId) {
+				nextFrame = newNextFrame;
+			}
+		}
+	}
+
+	if (!movingRangeInput) {
+		rangeInput.value = playbackTime / totalDuration;
+		currentTimeElement.textContent = formatSeconds(playbackTime);
+	}
+
+	requestAnimationFrame(render);
+}
+
+async function runAudioIterator() {
+	if (!audioTrack) {
+		return;
+	}
+
+	for await (let { buffer, timestamp } of audioBufferIterator) {
+		const node = audioContext.createBufferSource();
+		node.buffer = buffer;
+		node.connect(audioContext.destination);
+
+		const startTimestamp = startTime + timestamp - playbackTimeAtStart;
+		if (startTimestamp >= audioContext.currentTime) {
+			node.start(startTimestamp);
+		} else {
+			node.start(audioContext.currentTime, audioContext.currentTime - startTimestamp);
+		}
+
+		queuedAudioNodes.add(node);
+		node.onended = () => {
+			queuedAudioNodes.delete(node);
+		};
+
+		if (timestamp - getPlaybackTime() >= 1) {
+			await new Promise(resolve => {
+				const id = setInterval(() => {
+					if (timestamp - getPlaybackTime() < 1) {
+						clearInterval(id);
+						resolve();
+					}
+				}, 100);
+			});
+		}
+	}
+}
+
+function formatSeconds(seconds) {
+	seconds = Math.round(seconds * 1000) / 1000; // Round to milliseconds
+
+	const minutes = Math.floor(seconds / 60);
+	const remainingSeconds = Math.floor(seconds % 60);
+	return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}.${Math.floor(1000 * seconds % 1000).toString().padStart(3, '0')}`;
+}
+
+playButton.addEventListener('click', togglePlay);
+window.addEventListener('keydown', (e) => {
+	if (e.code === 'Space') {
+		togglePlay();
+		e.preventDefault();
+	}
+});
+
+let movingRangeInput = false;
+rangeInput.addEventListener('input', () => {
+	movingRangeInput = true;
+	const time = Number(rangeInput.value) * totalDuration;
+	currentTimeElement.textContent = formatSeconds(time);
+});
+rangeInput.addEventListener('change', async () => {
+	movingRangeInput = false;
+
+	if (seeking) {
+		return;
+	}
+
+	const wasPlaying = playing;
+
+	if (wasPlaying) {
+		pause();
+	}
+
+	const newTime = Number(rangeInput.value) * totalDuration;
+	playbackTimeAtStart = newTime;
+
+	await seek();
+
+	if (wasPlaying) {
+		play();
+	}
+});
+addEventListener('pointerup', () => movingRangeInput = false);
+
+render();
+play();
+</script>

@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.check.json",
+  "include": [],
+  "files": [
+    "src/apps/hls-live.ts",
+    "src/apps/filmcraft/server.ts",
+    "src/apps/site/app.tsx",
+    "src/apps/site/artwork.tsx",
+    "src/apps/site/collection.ts",
+    "src/encode.ts",
+    "src/image.ts",
+    "src/m3-video.ts",
+    "src/photocraft.ts",
+    "scripts/build-showcase.ts",
+    "scripts/publish-showcase.ts",
+    "test/filmcraft-host.test.ts",
+    "test/m3-video.test.ts",
+    "test/m3-video-native.test.ts",
+    "test/photocraft.test.ts",
+    "test/showcase-worker.test.ts"
+  ]
+}

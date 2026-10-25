@@ -1,0 +1,321 @@
+import {expect, test} from 'bun:test';
+import type {
+	CanUpdateSequencePropStatus,
+	PropStatuses,
+	SequenceNodePath,
+	SequencePropsSubscriptionKey,
+	TSequence,
+} from 'remotion';
+import {Internals} from 'remotion';
+import {
+	getTimelineSequenceSplitEligibility,
+	splitSelectedTimelineItems,
+} from '../components/Timeline/split-selected-timeline-item';
+import type {SequenceNodePathInfo} from '../helpers/get-timeline-sequence-sort-key';
+import {makeRuntimeValueStore} from './make-runtime-value-store';
+
+const makeKey = (nodePath: SequenceNodePath): SequencePropsSubscriptionKey => ({
+	absolutePath: '/tmp/Comp.tsx',
+	nodePath,
+	sequenceKeys: ['from', 'durationInFrames', 'trimBefore'],
+	effectKeys: [],
+	videoConfigValues: null,
+});
+
+const makeNodePathInfo = (
+	nodePath: SequenceNodePath,
+	numberOfSequencesWithThisNodePath = 1,
+): SequenceNodePathInfo => ({
+	sequenceSubscriptionKey: makeKey(nodePath),
+	auxiliaryKeys: [],
+	index: 0,
+	numberOfSequencesWithThisNodePath,
+	supportsEffects: true,
+});
+
+const makeSequence = (
+	overrides: Partial<TSequence> = {},
+	overrideId = 'override',
+): TSequence =>
+	({
+		from: 10,
+		trimBefore: null,
+		duration: 50,
+		id: 'sequence',
+		displayName: 'Sequence',
+		documentationLink: null,
+		parent: null,
+		showInTimeline: true,
+		loopDisplay: undefined,
+		getStack: () => null,
+		premountDisplay: null,
+		postmountDisplay: null,
+		controls: {
+			schema: {},
+			runtimeValues: makeRuntimeValueStore({}),
+			overrideId,
+			supportsEffects: true,
+			componentIdentity: null,
+			componentName: 'Sequence',
+		},
+		refForOutline: null,
+		effects: [],
+		effectRuntimeValues: null,
+		isInsideSeries: false,
+		sequencePlaybackRate: 1,
+		frozenFrame: null,
+		type: 'sequence',
+		...overrides,
+	}) as unknown as TSequence;
+
+const staticNumber = (value: number): CanUpdateSequencePropStatus => ({
+	status: 'static',
+	keyframeDisplayOffsetAdjustment: null,
+	codeValue: value,
+});
+
+test('getTimelineSequenceSplitEligibility accepts an editable sequence in range', () => {
+	const nodePathInfo = makeNodePathInfo(['body', 0]);
+
+	expect(
+		getTimelineSequenceSplitEligibility({
+			selection: {type: 'sequence', nodePathInfo},
+			sequence: makeSequence(),
+			splitFrame: 30,
+			propStatuses: {
+				from: staticNumber(10),
+				durationInFrames: staticNumber(50),
+				trimBefore: staticNumber(0),
+			},
+		}),
+	).toEqual({
+		canSplit: true,
+		nodePathInfo,
+	});
+});
+
+test('getTimelineSequenceSplitEligibility rejects unsupported split positions', () => {
+	const nodePathInfo = makeNodePathInfo(['body', 0]);
+	const selection = {type: 'sequence' as const, nodePathInfo};
+
+	expect(
+		getTimelineSequenceSplitEligibility({
+			selection,
+			sequence: makeSequence(),
+			splitFrame: 10,
+		}).canSplit,
+	).toBe(false);
+	expect(
+		getTimelineSequenceSplitEligibility({
+			selection,
+			sequence: makeSequence(),
+			splitFrame: 60,
+		}).canSplit,
+	).toBe(false);
+	expect(
+		getTimelineSequenceSplitEligibility({
+			selection,
+			sequence: makeSequence(),
+			splitFrame: 9,
+		}).canSplit,
+	).toBe(false);
+	expect(
+		getTimelineSequenceSplitEligibility({
+			selection,
+			sequence: makeSequence(),
+			splitFrame: 10.5,
+		}).canSplit,
+	).toBe(false);
+});
+
+test('getTimelineSequenceSplitEligibility rejects non-editable sequence shapes', () => {
+	const nodePathInfo = makeNodePathInfo(['body', 0], 2);
+	const selection = {type: 'sequence' as const, nodePathInfo};
+
+	expect(
+		getTimelineSequenceSplitEligibility({
+			selection,
+			sequence: makeSequence(),
+			splitFrame: 30,
+		}).canSplit,
+	).toBe(false);
+	expect(
+		getTimelineSequenceSplitEligibility({
+			selection: {
+				type: 'sequence',
+				nodePathInfo: makeNodePathInfo(['body', 1]),
+			},
+			sequence: makeSequence({isInsideSeries: true}),
+			splitFrame: 30,
+		}).canSplit,
+	).toBe(false);
+	expect(
+		getTimelineSequenceSplitEligibility({
+			selection: {
+				type: 'sequence',
+				nodePathInfo: makeNodePathInfo(['body', 2]),
+			},
+			sequence: makeSequence({
+				controls: {
+					schema: {},
+					runtimeValues: makeRuntimeValueStore({}),
+					videoConfigValues: null,
+					overrideId: 'override',
+					supportsEffects: true,
+					componentIdentity: 'dev.remotion.remotion.Solid',
+					componentName: '<Solid>',
+				},
+			}),
+			splitFrame: 30,
+		}),
+	).toEqual({
+		canSplit: true,
+		nodePathInfo: makeNodePathInfo(['body', 2]),
+	});
+});
+
+test('getTimelineSequenceSplitEligibility derives timing support from schema keys', () => {
+	const nodePathInfo = makeNodePathInfo(['body', 0]);
+	const withoutFrom = {
+		...nodePathInfo,
+		sequenceSubscriptionKey: {
+			...nodePathInfo.sequenceSubscriptionKey,
+			sequenceKeys: ['durationInFrames', 'trimBefore'],
+		},
+	};
+
+	expect(
+		getTimelineSequenceSplitEligibility({
+			selection: {type: 'sequence', nodePathInfo: withoutFrom},
+			sequence: makeSequence(),
+			splitFrame: 30,
+		}),
+	).toEqual({
+		canSplit: false,
+		reason: 'Sequence does not expose timing traits that can be split',
+	});
+});
+
+test('getTimelineSequenceSplitEligibility rejects dynamic timing props', () => {
+	const nodePathInfo = makeNodePathInfo(['body', 0]);
+
+	expect(
+		getTimelineSequenceSplitEligibility({
+			selection: {type: 'sequence', nodePathInfo},
+			sequence: makeSequence(),
+			splitFrame: 30,
+			propStatuses: {
+				from: {status: 'computed'},
+			},
+		}).canSplit,
+	).toBe(false);
+});
+
+test('splitSelectedTimelineItems splits the selected sequence at the playhead', async () => {
+	const nodePathInfo = makeNodePathInfo(['body', 0]);
+	const propStatuses = {
+		[Internals.makeSequencePropsSubscriptionKey(
+			nodePathInfo.sequenceSubscriptionKey,
+		)]: {
+			canUpdate: true,
+			props: {
+				from: staticNumber(10),
+				durationInFrames: staticNumber(50),
+				trimBefore: staticNumber(0),
+			},
+			effects: [],
+		},
+	} satisfies PropStatuses;
+	const splitCalls: {nodePathInfo: SequenceNodePathInfo; splitFrame: number}[] =
+		[];
+
+	const result = await splitSelectedTimelineItems({
+		selections: [{type: 'sequence', nodePathInfo}],
+		sequences: [makeSequence()],
+		overrideIdsToNodePaths: {
+			override: nodePathInfo.sequenceSubscriptionKey,
+		},
+		propStatuses,
+		splitFrame: 30,
+		splitSequences: ({sequences: splitSequences}) => {
+			splitCalls.push(...splitSequences);
+			return Promise.resolve(true);
+		},
+	});
+
+	expect(result).toBe(true);
+	expect(splitCalls).toEqual([{nodePathInfo, splitFrame: 30}]);
+});
+
+test('splitSelectedTimelineItems batches multiple selected clips', async () => {
+	const first = makeNodePathInfo(['body', 0]);
+	const second = makeNodePathInfo(['body', 1]);
+	const firstSequence = makeSequence();
+	const secondSequence = makeSequence(
+		{id: 'second-sequence'},
+		'second-override',
+	);
+	const splitCalls: {nodePathInfo: SequenceNodePathInfo; splitFrame: number}[] =
+		[];
+
+	const result = await splitSelectedTimelineItems({
+		selections: [
+			{type: 'sequence', nodePathInfo: first},
+			{type: 'sequence', nodePathInfo: second},
+		],
+		sequences: [firstSequence, secondSequence],
+		overrideIdsToNodePaths: {
+			override: first.sequenceSubscriptionKey,
+			'second-override': second.sequenceSubscriptionKey,
+		},
+		propStatuses: undefined,
+		splitFrame: 30,
+		splitSequences: ({sequences}) => {
+			splitCalls.push(...sequences);
+			return Promise.resolve(true);
+		},
+	});
+
+	expect(result).toBe(true);
+	expect(splitCalls).toEqual([
+		{nodePathInfo: first, splitFrame: 30},
+		{nodePathInfo: second, splitFrame: 30},
+	]);
+});
+
+test('splitSelectedTimelineItems skips ineligible clips and reports the partial split', async () => {
+	const eligible = makeNodePathInfo(['body', 0]);
+	const ineligible = makeNodePathInfo(['body', 1]);
+	const ineligibleSequence = makeSequence(
+		{from: 40, id: 'ineligible-sequence'},
+		'ineligible-override',
+	);
+	const splitCalls: {nodePathInfo: SequenceNodePathInfo; splitFrame: number}[] =
+		[];
+	const notifications: string[] = [];
+
+	const result = await splitSelectedTimelineItems({
+		selections: [
+			{type: 'sequence', nodePathInfo: eligible},
+			{type: 'sequence', nodePathInfo: ineligible},
+		],
+		sequences: [makeSequence(), ineligibleSequence],
+		overrideIdsToNodePaths: {
+			override: eligible.sequenceSubscriptionKey,
+			'ineligible-override': ineligible.sequenceSubscriptionKey,
+		},
+		propStatuses: undefined,
+		splitFrame: 30,
+		splitSequences: ({sequences}) => {
+			splitCalls.push(...sequences);
+			return Promise.resolve(true);
+		},
+		notify: (message) => notifications.push(message),
+	});
+
+	expect(result).toBe(true);
+	expect(splitCalls).toEqual([{nodePathInfo: eligible, splitFrame: 30}]);
+	expect(notifications).toEqual([
+		'Split 1 clip. Skipped 1 clip that could not be split.',
+	]);
+});

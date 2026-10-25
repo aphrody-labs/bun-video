@@ -1,0 +1,191 @@
+import type {Size} from '@remotion/player';
+import React, {
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+} from 'react';
+import {Internals} from 'remotion';
+import {BACKGROUND, SHADOW_BLACK} from '../../helpers/colors';
+import {getRulerGuideHighlight} from '../../helpers/editor-guide-selection';
+import {drawMarkingOnRulerCanvas} from '../../helpers/editor-ruler';
+import {getRulerCanvasSize} from '../../helpers/ruler-canvas-size';
+import {getStudioPixelRatio} from '../../helpers/studio-pixel-ratio';
+import {EditorShowGuidesContext} from '../../state/editor-guides';
+import {forceSpecificCursor} from '../ForceSpecificCursor';
+import {PREVENT_CLEAR_SELECTION_ON_POINTER_DOWN_ATTR} from '../Timeline/should-clear-selection-on-pointer-down';
+import {useTimelineSelection} from '../Timeline/TimelineSelection';
+
+interface Point {
+	value: number;
+	position: number;
+}
+
+interface RulerProps {
+	readonly scale: number;
+	readonly points: Point[];
+	readonly originOffset: number;
+	readonly startMarking: number;
+	readonly markingGaps: number;
+	readonly orientation: 'horizontal' | 'vertical';
+	readonly size: Size;
+	readonly canCreateGuides: boolean;
+	readonly onPointerSessionStart: (
+		event: React.PointerEvent<HTMLCanvasElement>,
+		guideId: string,
+	) => void;
+}
+
+const makeGuideId = (): string => {
+	return Math.random().toString(36).substring(7);
+};
+
+const Ruler: React.FC<RulerProps> = ({
+	scale,
+	points,
+	originOffset,
+	startMarking,
+	size,
+	markingGaps,
+	orientation,
+	canCreateGuides,
+	onPointerSessionStart,
+}) => {
+	const rulerCanvasRef = useRef<HTMLCanvasElement | null>(null);
+	const isVerticalRuler = orientation === 'vertical';
+	const {
+		shouldCreateGuideRef,
+		setGuidesList,
+		draggingGuideId,
+		hoveredGuideId,
+		setDraggingGuideId,
+		guidesList,
+		setEditorShowGuides,
+	} = useContext(EditorShowGuidesContext);
+	const {selectedItems} = useTimelineSelection();
+	const unsafeVideoConfig = Internals.useUnsafeVideoConfig();
+
+	if (!unsafeVideoConfig) {
+		throw new Error('Video config not set');
+	}
+
+	const guideCursor = isVerticalRuler ? 'ew-resize' : 'ns-resize';
+	const cursor = canCreateGuides ? guideCursor : 'default';
+
+	const guideHighlight = useMemo(
+		() =>
+			getRulerGuideHighlight({
+				guidesList,
+				selectedItems,
+				hoveredGuideId,
+				draggingGuideId,
+			}),
+		[draggingGuideId, guidesList, hoveredGuideId, selectedItems],
+	);
+
+	const {width: rulerWidth, height: rulerHeight} = getRulerCanvasSize({
+		orientation,
+		size,
+	});
+	const pixelRatio = getStudioPixelRatio();
+
+	useEffect(() => {
+		drawMarkingOnRulerCanvas({
+			scale,
+			points,
+			startMarking,
+			originOffset,
+			markingGaps,
+			orientation,
+			rulerCanvasRef,
+			guideHighlight,
+			canvasHeight: rulerHeight * pixelRatio,
+			canvasWidth: rulerWidth * pixelRatio,
+		});
+	}, [
+		scale,
+		points,
+		startMarking,
+		originOffset,
+		markingGaps,
+		orientation,
+		guideHighlight,
+		size,
+		rulerHeight,
+		rulerWidth,
+		pixelRatio,
+	]);
+
+	const rulerStyle: React.CSSProperties = useMemo(
+		() => ({
+			position: 'absolute',
+			background: BACKGROUND,
+			width: rulerWidth,
+			height: rulerHeight,
+			left: isVerticalRuler ? 0 : 'unset',
+			top: isVerticalRuler ? 'unset' : 0,
+			boxShadow: SHADOW_BLACK,
+			cursor,
+		}),
+		[rulerWidth, rulerHeight, cursor, isVerticalRuler],
+	);
+
+	const onPointerDown: React.PointerEventHandler<HTMLCanvasElement> =
+		useCallback(
+			(e: React.PointerEvent<HTMLCanvasElement>) => {
+				if (!canCreateGuides || e.button !== 0) {
+					return;
+				}
+
+				e.preventDefault();
+				// Prevent deselection of currently selected items
+				e.stopPropagation();
+				shouldCreateGuideRef.current = true;
+				forceSpecificCursor(guideCursor);
+				const guideId = makeGuideId();
+				setEditorShowGuides(() => true);
+				setDraggingGuideId(() => guideId);
+				setGuidesList((prevState) => {
+					return [
+						...prevState,
+						{
+							orientation,
+							position: -originOffset,
+							show: false,
+							id: guideId,
+							compositionId: unsafeVideoConfig.id,
+						},
+					];
+				});
+				onPointerSessionStart(e, guideId);
+			},
+			[
+				shouldCreateGuideRef,
+				setEditorShowGuides,
+				setDraggingGuideId,
+				setGuidesList,
+				orientation,
+				originOffset,
+				unsafeVideoConfig.id,
+				guideCursor,
+				onPointerSessionStart,
+				canCreateGuides,
+			],
+		);
+
+	return (
+		<canvas
+			ref={rulerCanvasRef}
+			width={rulerWidth * pixelRatio}
+			height={rulerHeight * pixelRatio}
+			style={rulerStyle}
+			aria-label={`${isVerticalRuler ? 'Vertical' : 'Horizontal'} ruler`}
+			aria-readonly={!canCreateGuides}
+			{...{[PREVENT_CLEAR_SELECTION_ON_POINTER_DOWN_ATTR]: 'true'}}
+			onPointerDown={onPointerDown}
+		/>
+	);
+};
+
+export default Ruler;

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" translate="no">
+	<head>
+		<meta charset="UTF-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Thumbnail generation example | Mediabunny</title>
+		<script type="module" src="./../base.ts"></script>
+		<script type="module" src="./thumbnail-generation.ts"></script>
+		<link rel="stylesheet" href="../base.css">
+		<link rel="icon" href="../../docs/public/mediabunny-logo.svg">
+	</head>
+
+	<body class="flex flex-col items-center py-10 bg-gray-50 text-gray-800 dark:bg-zinc-900 dark:text-zinc-200 px-2">
+		<h1 class="text-3xl font-bold text-green-500 text-center">Thumbnail generation example</h1>
+		<p class="max-w-lg text-center">Select or drop a media file, and Mediabunny will extract video thumbnails for it.</p>
+
+		<div class="flex gap-2 mt-4">
+			<button class="rounded-lg bg-gray-200 dark:bg-zinc-750 hover:bg-gray-300 dark:hover:bg-zinc-700 px-5 py-2">
+				Select media file
+			</button>
+
+			<a id="sample-file-download" download="big-buck-bunny-trimmed.mp4" class="rounded-lg bg-gray-200 dark:bg-zinc-750 hover:bg-gray-300 dark:hover:bg-zinc-700 px-5 group grid place-items-center" title="Download sample file">
+				<img src="../../docs/assets/download-icon.svg" class="opacity-30 group-hover:opacity-80 dark:invert">
+			</a>
+		</div>
+		<p class="text-xs opacity-60 mt-2" id="file-name"></p>
+
+		<hr class="w-full max-w-96 my-4 border-gray-300 dark:border-zinc-700" style="display: none;">
+
+		<p id="error-element" class="text-red-500"></p>
+		<div id="thumbnail-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+
+		<a href="/" class="fixed top-0 left-0 flex gap-2 py-2 px-5 items-center">
+			<img src="../../docs/public/mediabunny-logo.svg" class="size-6">
+			<p class="text-sm font-medium">Mediabunny</p>
+		</a>
+
+		<a
+			href="https://github.com/Vanilagy/mediabunny/tree/main/examples/thumbnail-generation"
+			target="_blank"
+			class="flex items-center gap-2 fixed top-0 right-0 py-2 px-5 bg-gray-200 dark:bg-zinc-750 hover:bg-gray-300 dark:hover:bg-zinc-700 rounded-bl-xl"
+		>
+			<img src="../../docs/assets/github-mark.svg" class="size-6 dark:invert">
+			<p>View source code</p>
+		</a>
+	</body>
+</html>

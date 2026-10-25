@@ -1,0 +1,34 @@
+import type {AnyRemotionOption} from './option';
+
+const cliFlag = 'version' as const;
+
+export const versionFlagOption = {
+	name: 'Version',
+	addedIn: '4.0.15',
+	cliFlag,
+	description: () => (
+		<>
+			Install a specific version. Also enables downgrading to an older version.
+		</>
+	),
+	ssrName: null,
+	docLink: 'https://www.remotion.dev/docs/options/version',
+	getValue: ({commandLine}) => {
+		if (commandLine[cliFlag] !== undefined) {
+			return {
+				source: 'cli',
+				value: String(commandLine[cliFlag]),
+			};
+		}
+
+		return {
+			source: 'default',
+			value: null,
+		};
+	},
+	setConfig: () => {
+		throw new Error('Cannot set version via config file');
+	},
+	type: '' as string | null,
+	id: cliFlag,
+} satisfies AnyRemotionOption<string | null>;

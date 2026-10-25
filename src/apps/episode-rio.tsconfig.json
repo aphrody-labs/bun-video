@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "include": ["episode-rio.ts", "../test/rio-video.test.ts"],
+  "exclude": []
+}

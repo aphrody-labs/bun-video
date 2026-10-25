@@ -1,0 +1,13 @@
+{
+  "name": "video-fork-qualification",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "benchmark": "bun run runner.ts",
+    "typecheck": "bun check -p tsconfig.json",
+    "test": "bun test benchmark.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0"
+  }
+}

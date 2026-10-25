@@ -1,0 +1,41 @@
+{
+  "appName": {
+    "message": "Crunchyroll ショートカット"
+  },
+  "description": {
+    "message": "Chrome のセッションで公式エピソードを開きます。"
+  },
+  "title": {
+    "message": "破壊神"
+  },
+  "open": {
+    "message": "Crunchyroll で視聴"
+  },
+  "language": {
+    "message": "アプリの言語"
+  },
+  "note": {
+    "message": "この設定はショートカットの表示言語を変更します。音声、字幕、アカウントへのアクセス、再生は Crunchyroll が管理します。"
+  },
+  "install": {
+    "message": "ショートカットをインストール"
+  },
+  "installUnavailable": {
+    "message": "Chrome がインストールを提案すると利用できます。ブラウザのメニューからも操作できます。"
+  },
+  "offline": {
+    "message": "ショートカットはオフラインで使えます。視聴にはインターネット接続と正規の Crunchyroll アクセスが必要です。"
+  },
+  "online": {
+    "message": "準備完了。再生は公式サイトで行われます。"
+  },
+  "installed": {
+    "message": "インストールを要求しました。Chrome が結果を確認します。"
+  },
+  "installDismissed": {
+    "message": "インストールをキャンセルしました。再試行できます。"
+  },
+  "shellError": {
+    "message": "オフライン用のローカルショートカットを準備できませんでした。"
+  }
+}

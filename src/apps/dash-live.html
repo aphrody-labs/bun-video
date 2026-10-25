@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bun · diagnostic DASH local</title>
+  <style>
+    body {
+      background: #101725;
+      color: #e8eef7;
+      font: 16px system-ui;
+      max-width: 1000px;
+      margin: 40px auto;
+      padding: 24px;
+    }
+    video {
+      width: 100%;
+      background: #000;
+      border-radius: 12px;
+    }
+    button {
+      padding: 12px 20px;
+      margin: 16px 0;
+      border: 0;
+      border-radius: 8px;
+      background: #a5d6ff;
+      color: #122035;
+      font: inherit;
+    }
+    pre {
+      white-space: pre-wrap;
+      color: #adbdcf;
+    }
+    p {
+      line-height: 1.6;
+    }
+  </style>
+  <h1>Bun · test DASH</h1>
+  <p>
+    dash.js et son adaptateur sont chargés localement avec Bun. <span id="mode">Analyse du mode de test…</span> La
+    licence DRM reste au lecteur officiel.
+  </p>
+  <video controls playsinline></video>
+  <button type="button">Tester la lecture DASH</button>
+  <p id="status" role="status">Analyse de la capture…</p>
+  <pre id="result"></pre>
+  <script src="./dash.all.min.js"></script>
+  <script type="module" src="./dashboard.js"></script>
+</html>
