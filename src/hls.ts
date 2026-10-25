@@ -13,8 +13,24 @@ export async function getHlsPublicAssets() {
   const directory = browser.replace(/[\\/][^\\/]+$/, "");
   const root = directory.replace(/[\\/][^\\/]+$/, "");
   const metadata = await Bun.file(`${root}/package.json`).json();
-  const owner = await Bun.file(new URL("../package.json", import.meta.url)).json();
-  if (metadata.name !== "hls.js" || metadata.version !== owner.dependencies["hls.js"])
+  // Bundled entrypoints share dist/chunks, while source entrypoints live in src.
+  let location = new URL("./", import.meta.url);
+  let owner: { name?: string; dependencies?: Record<string, string> } | undefined;
+  for (let depth = 0; depth < 8; depth++) {
+    const manifest = Bun.file(new URL("package.json", location));
+    if (await manifest.exists()) {
+      const candidate = await manifest.json();
+      if (candidate.name === "@aphrody/bun-video") {
+        owner = candidate;
+        break;
+      }
+    }
+    const parent = new URL("../", location);
+    if (parent.href === location.href) break;
+    location = parent;
+  }
+  if (!owner) throw new Error("Bun Video's package manifest was not found");
+  if (metadata.name !== "hls.js" || metadata.version !== owner.dependencies?.["hls.js"])
     throw new Error("Bun Video's HLS decoder differs from its pinned dependency");
   return { version: metadata.version as string, worker: `${directory}/hls.worker.js`, license: `${root}/LICENSE` };
 }

@@ -295,6 +295,11 @@ try {
   checks.engineAlias=(await import('@aphrody/bun-video/engine'))===main;
   const hls=await import('@aphrody/bun-video/hls');
   checks.hlsAsset=await Bun.file(hls.getHlsBrowserAssetPath()).exists();
+  const hlsAssets=await hls.getHlsPublicAssets();
+  const owner=await Bun.file(import.meta.dir+'/node_modules/@aphrody/bun-video/package.json').json();
+  checks.hlsPublicAssets=hlsAssets.version===owner.dependencies['hls.js']&&
+    (await Bun.file(hlsAssets.worker).text()).includes('Hls')&&
+    (await Bun.file(hlsAssets.license).text()).includes('2017 Dailymotion');
   const dash=await import('@aphrody/bun-video/dash');
   const parsed=dash.inspectDashManifest('<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period><AdaptationSet><Representation width="320" height="180" bandwidth="1234"/></AdaptationSet></Period></MPD>');
   checks.dashMetadata=parsed.periodCount===1&&parsed.representations[0].width===320&&parsed.representations[0].height===180;
