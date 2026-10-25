@@ -1,6 +1,6 @@
 {
   "name": "@aphrody/bun-video",
-  "version": "1.4.4-video.5",
+  "version": "1.4.4-video.6",
   "description": "Bun video protocols, native capture adapters, and official Remotion and HyperFrames integrations",
   "license": "SEE LICENSE IN LICENSE",
   "bin": {
