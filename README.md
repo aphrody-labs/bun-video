@@ -174,3 +174,26 @@ the package or CI logs. Tags `bun-video-v*` and manual dispatch run the checks,
 publish the `next` npm tag with `NPM_TOKEN`, and optionally upload the packed
 artifact to Cloudflare R2 with `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
 and `BUN_VIDEO_R2_BUCKET`.
+
+## Repository and install
+
+This package is [aphrody-labs/bun-video](https://github.com/aphrody-labs/bun-video), imported
+from `packages/bun-video` of [aphrody-labs/bun](https://github.com/aphrody-labs/bun) (which keeps
+the earlier history). Bun OS ([aphrody-labs/bun-os](https://github.com/aphrody-labs/bun-os.git))
+mounts it as `vendor/bun-video`; the Bun fork mounts it as the optional submodule
+`packages/bun-video` (`update = none`), which its media release scripts read:
+
+```sh
+git -C <bun checkout> submodule update --init --checkout --recursive packages/bun-video
+cd <bun checkout>/packages/bun-video && bun install --frozen-lockfile
+bun run check
+```
+
+The `bun` runtime no longer links native video: `Bun.Video` extensions run the `bun-video`
+executable built here (`scripts/build.ts`). `native/` (`bun-video-native`) is its own Cargo
+workspace; FilmCraft is the submodule `vendor/filmcraft` (aphrody-labs/filmcraft
+`bun-runtime-0.9.0`). Build it mounted in the Bun checkout, which supplies `src/zlib_rs`:
+
+```sh
+cargo build --locked --release -p bun-video-native --features filmcraft
+```

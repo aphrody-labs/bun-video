@@ -1,0 +1,5 @@
+[submodule "vendor/filmcraft"]
+	path = vendor/filmcraft
+	url = https://github.com/aphrody-labs/filmcraft.git
+	branch = bun-runtime-0.9.0
+	shallow = true

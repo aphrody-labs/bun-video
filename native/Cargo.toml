@@ -15,12 +15,12 @@ mpv = ["dep:libloading"]
 
 [dependencies]
 gif = { version = "=0.14.2", optional = true }
-filmcraft-codecs = { path = "../../../src/media/filmcraft/crates/codecs", optional = true }
-filmcraft-frame = { path = "../../../src/media/filmcraft/crates/frame", optional = true }
-filmcraft-media = { path = "../../../src/media/filmcraft/crates/media", optional = true }
-filmcraft-time = { path = "../../../src/media/filmcraft/crates/time", optional = true }
-filmcraft-isobmff = { path = "../../../src/media/filmcraft/crates/isobmff", optional = true }
-filmcraft-lib = { path = "../../../src/media/filmcraft/crates/lib", default-features = false, features = ["container"], optional = true }
+filmcraft-codecs = { path = "../vendor/filmcraft/crates/codecs", optional = true }
+filmcraft-frame = { path = "../vendor/filmcraft/crates/frame", optional = true }
+filmcraft-media = { path = "../vendor/filmcraft/crates/media", optional = true }
+filmcraft-time = { path = "../vendor/filmcraft/crates/time", optional = true }
+filmcraft-isobmff = { path = "../vendor/filmcraft/crates/isobmff", optional = true }
+filmcraft-lib = { path = "../vendor/filmcraft/crates/lib", default-features = false, features = ["container"], optional = true }
 ffmpeg-sys-next = { version = "=9.0.1", optional = true, default-features = false, features = ["avcodec", "avformat", "swscale"] }
 gpu-video = { git = "https://github.com/software-mansion/smelter.git", rev = "6637f3df71282c816140cd3bb9821d69b30be2ba", package = "gpu-video", default-features = true, optional = true }
 png = "=0.17.16"
