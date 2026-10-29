@@ -10,6 +10,7 @@
 
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
+import { settleOnBrowserSafePort } from "@hyperframes/engine";
 import type { IncomingMessage } from "node:http";
 import {
   existsSync,
@@ -28,6 +29,7 @@ import { Readable } from "node:stream";
 import { join, extname, resolve, sep } from "node:path";
 import { injectScriptsAtHeadStart, injectScriptsIntoHtml } from "@hyperframes/core/compiler";
 import { fpsToNumber, type Fps } from "@hyperframes/core";
+import { stripSdrPngColourTags } from "@hyperframes/core/compiler/png-colour-tags";
 import { getVerifiedHyperframeRuntimeSource } from "./hyperframeRuntimeLoader.js";
 import { getHfEarlyStub } from "../generated/hf-early-stub-inline.js";
 import { defaultLogger, type ProducerLogger } from "../logger.js";
@@ -241,7 +243,7 @@ export function buildVirtualTimeShim(options: VirtualTimeShimOptions): string {
   const seededRandomBlock = seedRandomFromFrame
     ? String.raw`
   // Seeded Math.random / crypto.getRandomValues, keyed by virtual time.
-  // Mulberry32 — single uint32 state, deterministic, fast.
+  // Mulberry32: single uint32 state, deterministic, fast.
   var rngState = 0;
   function mulberry32() {
     rngState |= 0; rngState = (rngState + 0x6D2B79F5) | 0;
@@ -252,7 +254,7 @@ export function buildVirtualTimeShim(options: VirtualTimeShimOptions): string {
   }
   function reseedRngFromTime(ms) {
     var ms32 = Math.max(0, Math.floor(Number(ms) || 0)) | 0;
-    // Knuth's multiplicative hash + golden-ratio offset — gives a well-
+    // Knuth's multiplicative hash + golden-ratio offset gives a well-
     // distributed seed even for frame 0 (otherwise rngState=0 degenerates
     // the PRNG's first few outputs).
     rngState = (Math.imul(ms32, -1640531527) + 0x9E3779B9) | 0;
@@ -518,7 +520,7 @@ function buildRenderModeScript(fps: Fps | undefined): string {
     };
     window.__playerReady = true;
     // Media-fallback player has no timeline to bind, so render-ready is immediate.
-    // init.ts defers __renderReady until the timeline is bound — different runtime.
+    // init.ts defers __renderReady until the timeline is bound (a different runtime).
     window.__renderReady = true;
     return true;
   }
@@ -836,6 +838,19 @@ export function createFileServer(options: FileServerOptions): Promise<FileServer
         return c.text(html, 200, { "Content-Type": contentType });
       }
 
+      if (ext === ".png") {
+        const untagged = stripSdrPngColourTags(await readFileAsync(fd));
+        if (untagged) {
+          const headers = {
+            "Content-Type": contentType,
+            "Content-Length": String(untagged.length),
+          };
+          return new Response(c.req.method === "HEAD" ? null : new Uint8Array(untagged), {
+            headers,
+          });
+        }
+      }
+
       // Stream binary file content rather than buffering it with readFileSync.
       // On video-heavy compositions Chrome requests several 32MB video files
       // back-to-back through this server; each readFileSync(32MB) blocked the
@@ -882,7 +897,8 @@ export function createFileServer(options: FileServerOptions): Promise<FileServer
       const stream = createReadStream(filePath, {
         fd,
         autoClose: true,
-        ...(range ? { start: range.start, end: range.end } : {}),
+        start: range?.start ?? 0,
+        ...(range ? { end: range.end } : {}),
       });
       streamOwnsFd = true;
       try {
@@ -899,7 +915,7 @@ export function createFileServer(options: FileServerOptions): Promise<FileServer
     }
   });
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     // Track open connections so we can force-destroy them on close.
     // Without this, server.close() waits for keep-alive connections to
     // drain, holding the Node.js event loop open indefinitely.
@@ -914,24 +930,30 @@ export function createFileServer(options: FileServerOptions): Promise<FileServer
     // it must not listen on 0.0.0.0 where an IDE's port auto-forward surfaces
     // it as a transient, breakage-prone "preview".
     const server = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, (info) => {
-      resolve({
-        url: `http://localhost:${info.port}`,
-        port: info.port,
-        addPreHeadScript: (script: string) => {
-          preHeadScripts.push(script);
-        },
-        close: () => {
-          for (const socket of connections) socket.destroy();
-          connections.clear();
-          server.close();
-        },
-      });
+      // An OS-picked port (0) must be one Chromium will load from; a caller-chosen one is theirs.
+      const bound =
+        port === 0 ? settleOnBrowserSafePort(server, "127.0.0.1") : Promise.resolve(info.port);
+      bound.then((boundPort) => {
+        resolve({
+          url: `http://localhost:${boundPort}`,
+          port: boundPort,
+          addPreHeadScript: (script: string) => {
+            preHeadScripts.push(script);
+          },
+          close: () => {
+            for (const socket of connections) socket.destroy();
+            connections.clear();
+            server.close();
+          },
+        });
+      }, reject);
     });
 
     server.on("connection", (socket: IncomingMessage["socket"]) => {
       connections.add(socket);
       socket.on("close", () => connections.delete(socket));
     });
+    server.on("error", reject);
   });
 }
 

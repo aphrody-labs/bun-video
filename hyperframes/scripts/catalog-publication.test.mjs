@@ -124,9 +124,9 @@ if (endpoint === "graphql") console.log("c".repeat(40));
 else if (endpoint.includes("/runs?")) console.log(JSON.stringify({ workflow_runs: JSON.parse(process.env.WORKFLOW_RUNS || "[]") }));
 else if (endpoint.endsWith("/dispatches") && process.env.DISPATCH_FAIL) process.exit(1);
 else if (endpoint.endsWith("/ref/heads/main")) console.log(process.env.BASE);
-else if (endpoint.includes("/matching-refs/")) console.log("refs/heads/bot/catalog-publish");
+else if (endpoint.includes("/matching-refs/")) console.log(process.env.NO_BRANCH ? "" : "refs/heads/bot/catalog-publish");
 else if (endpoint.includes("/ref/heads/bot/catalog-publish")) console.log("a".repeat(40));
-else if (endpoint.includes("/pulls?")) console.log("42");
+else if (endpoint.includes("/pulls?")) console.log(process.env.NO_OPEN_PR ? "" : "42");
 `,
     { mode: 0o755 },
   );
@@ -370,8 +370,8 @@ const rewrites = (fixture) =>
     .calls()
     .some((call) => call.endpoint === "graphql" || call.endpoint.includes("/refs/heads/bot/"));
 
-function vectorFixture(t) {
-  const fixture = publicationFixture(t, true, { PUBLISH_SUCCESS: "1" });
+function vectorFixture(t, changed = true, apiEnv = {}) {
+  const fixture = publicationFixture(t, changed, { PUBLISH_SUCCESS: "1", ...apiEnv });
   writeFileSync(join(fixture.root, VECTOR_META), JSON.stringify({ dimensions: 2 }));
   writeFileSync(join(fixture.root, VECTOR_BIN), vectors(1, 0, 0, 1));
   return fixture;
@@ -397,6 +397,40 @@ test("regenerated vectors replace the publication only when they point elsewhere
     fixture.run();
     assert.equal(rewrites(fixture), rewritten);
   }
+});
+
+function regenerateOverMain(t, regenerated, apiEnv, onMain) {
+  const fixture = vectorFixture(t, false, { NO_OPEN_PR: "1", ...apiEnv });
+  commitPaths(fixture.git, "main carries the catalog", [VECTOR_META, VECTOR_BIN]);
+  onMain(fixture);
+  writeFileSync(join(fixture.root, VECTOR_BIN), regenerated);
+  fixture.run();
+  return { fixture, writes: fixture.calls().filter((call) => call.method !== "GET") };
+}
+
+const noise = vectors(1, 0.001, 0.001, 1);
+
+test("vector noise over a standing branch already in main opens no empty PR", (t) => {
+  const { fixture, writes } = regenerateOverMain(t, noise, {}, (main) => {
+    main.git("push", "-q", "-f", "origin", "HEAD:bot/catalog-publish");
+    commitToMain(main, "notes.txt", "unrelated");
+  });
+  assert.deepEqual(writes, [
+    {
+      endpoint: "repos/test/catalog/git/refs/heads/bot/catalog-publish",
+      method: "PATCH",
+      body: { sha: fixture.git("rev-parse", "HEAD"), force: true },
+    },
+  ]);
+});
+
+test("vector noise after the publish branch was deleted opens no PR", (t) => {
+  assert.deepEqual(regenerateOverMain(t, noise, { NO_BRANCH: "1" }, () => {}).writes, []);
+});
+
+test("vectors that point elsewhere than main's still publish", (t) => {
+  const { writes } = regenerateOverMain(t, vectors(1, 0, 1, 0), { NO_BRANCH: "1" }, () => {});
+  assert.ok(writes.some((call) => call.endpoint === "graphql"));
 });
 
 test("vectors the publication lacks replace it", (t) => {

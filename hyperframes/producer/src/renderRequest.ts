@@ -1,11 +1,19 @@
 import {
+  PRORES_PROFILE_NAMES,
   isVideoFrameFormat,
   resolveConfig,
   validateEngineConfigSnapshot,
   type EngineConfig,
+  type ProresProfile,
   type VideoFrameFormat,
 } from "@hyperframes/engine";
-import { VALID_CANVAS_RESOLUTIONS, type CanvasResolution, type Fps } from "@hyperframes/core";
+import {
+  VALID_CANVAS_RESOLUTIONS,
+  type CanvasResolution,
+  type DistributedFps,
+  type Fps,
+  isDistributedFps,
+} from "@hyperframes/core";
 import type { ProducerLogger } from "./logger.js";
 import type { RenderConfig } from "./services/renderOrchestrator.js";
 import type { DistributedRenderConfig } from "./services/distributed/plan.js";
@@ -39,6 +47,7 @@ export interface RenderRequestOptions {
   gifLoop?: number;
   hlsSegmentSeconds?: number;
   workers?: number;
+  maxRenderMs?: number;
   useGpu?: boolean;
   debug?: boolean;
   /** Segmented capture: reuse segments recorded in a matching manifest. */
@@ -49,8 +58,13 @@ export interface RenderRequestOptions {
   entryFile?: string;
   crf?: number;
   videoBitrate?: string;
+  keyframeIntervalSeconds?: number;
+  proresProfile?: ProresProfile;
+  maxBitrate?: string;
+  bufferSize?: string;
   videoFrameFormat?: VideoFrameFormat;
   hdrMode?: RenderConfig["hdrMode"];
+  pageMotionBlur?: RenderConfig["pageMotionBlur"];
   variables?: Record<string, unknown>;
   outputResolution?: CanvasResolution;
   outputResolutionAspectAgnostic?: boolean;
@@ -110,6 +124,13 @@ function assertOptionalInteger(options: Record<string, unknown>, field: string, 
   }
 }
 
+function assertOptionalPositiveNumber(options: Record<string, unknown>, field: string): void {
+  const value = options[field];
+  if (value !== undefined && !(typeof value === "number" && value > 0)) {
+    throw new Error(`Render request ${field} must be a positive number`);
+  }
+}
+
 function assertOptionalString(options: Record<string, unknown>, field: string): void {
   if (options[field] !== undefined && typeof options[field] !== "string") {
     throw new Error(`Render request ${field} must be a string`);
@@ -165,15 +186,19 @@ function assertRequestOptionScalars(options: Record<string, unknown>): void {
   assertOptionalInteger(options, "gifLoop");
   assertOptionalInteger(options, "hlsSegmentSeconds", 1);
   assertOptionalInteger(options, "workers", 1);
+  assertOptionalInteger(options, "maxRenderMs");
   assertOptionalInteger(options, "crf");
+  assertOptionalPositiveNumber(options, "keyframeIntervalSeconds");
   for (const field of ["useGpu", "debug", "outputResolutionAspectAgnostic"] as const) {
     assertOptionalBoolean(options, field);
   }
-  for (const field of ["entryFile", "videoBitrate"] as const) {
+  for (const field of ["entryFile", "videoBitrate", "maxBitrate", "bufferSize"] as const) {
     assertOptionalString(options, field);
   }
+  assertOptionalEnum(options, "proresProfile", PRORES_PROFILE_NAMES);
   assertOptionalEnum(options, "strictness", ["strict", "best-effort"]);
   assertOptionalEnum(options, "hdrMode", ["auto", "force-hdr", "force-sdr"]);
+  assertOptionalEnum(options, "pageMotionBlur", ["off"]);
   if (options.videoFrameFormat !== undefined && !isVideoFrameFormat(options.videoFrameFormat)) {
     throw new Error("Render request videoFrameFormat is invalid");
   }
@@ -262,8 +287,8 @@ export function renderConfigFromRequest(
   };
 }
 
-function distributedFps(fps: Fps): 24 | 30 | 60 {
-  if (fps.den === 1 && (fps.num === 24 || fps.num === 30 || fps.num === 60)) return fps.num;
+function distributedFps(fps: Fps): DistributedFps {
+  if (fps.den === 1 && isDistributedFps(fps.num)) return fps.num;
   throw new Error(`Distributed render does not support fps ${fps.num}/${fps.den}`);
 }
 
@@ -291,7 +316,12 @@ export function distributedConfigFromRequest(
     codec: distributed.codec,
     quality: options.quality,
     crf: options.crf,
+    pageMotionBlur: options.pageMotionBlur,
     bitrate: options.videoBitrate,
+    keyframeIntervalSeconds: options.keyframeIntervalSeconds,
+    proresProfile: options.proresProfile,
+    maxBitrate: options.maxBitrate,
+    bufferSize: options.bufferSize,
     videoFrameFormat: options.videoFrameFormat,
     outputResolution: options.outputResolution,
     outputResolutionAspectAgnostic: options.outputResolutionAspectAgnostic,
@@ -346,7 +376,12 @@ export function renderRequestFromDistributedConfig(input: {
     format: config.format,
     distributed,
     ...optionalProperty("crf", config.crf),
+    ...optionalProperty("pageMotionBlur", config.pageMotionBlur),
     ...optionalProperty("videoBitrate", config.bitrate),
+    ...optionalProperty("keyframeIntervalSeconds", config.keyframeIntervalSeconds),
+    ...optionalProperty("proresProfile", config.proresProfile),
+    ...optionalProperty("maxBitrate", config.maxBitrate),
+    ...optionalProperty("bufferSize", config.bufferSize),
     ...optionalProperty("videoFrameFormat", config.videoFrameFormat),
     ...optionalProperty("outputResolution", config.outputResolution),
     ...optionalProperty("outputResolutionAspectAgnostic", config.outputResolutionAspectAgnostic),

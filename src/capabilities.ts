@@ -1,3 +1,4 @@
+import { Video } from "./native-video";
 import { remotion, hyperframes } from "./upstream-provenance";
 
 export async function capabilities() {
@@ -67,9 +68,9 @@ export async function productCapabilities(options: { youtubeSearchEnabled?: bool
     surfaces: { http: true, cli: true, mcp: true },
     integrations: {
       filmcraft: {
-        providerAvailable: Bun.Video.available,
-        decoder: Bun.Video.decoder,
-        backend: Bun.Video.backend,
+        providerAvailable: Video.available,
+        decoder: Video.decoder,
+        backend: Video.backend,
       },
       remotion: {
         version: runtime.upstream.remotion.version,

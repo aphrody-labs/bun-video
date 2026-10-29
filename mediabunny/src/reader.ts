@@ -1,205 +1,391 @@
 /*!
- * Copyright (c) 2025-present, Vanilagy and contributors
+ * Copyright (c) 2026-present, Vanilagy and contributors
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import { assert, binarySearchLessOrEqual, removeItem } from './misc';
-import { Source } from './source';
-
-type ReadSegment = {
-	start: number;
-	end: number;
-	bytes: Uint8Array;
-	view: DataView;
-	age: number;
-};
-
-type LoadingSegment = {
-	start: number;
-	end: number;
-	promise: Promise<Uint8Array>;
-};
+import { InputDisposedError } from './input';
+import { assert, clamp, getUint24, isThenable, MaybePromise, textDecoder, toDataView } from './misc';
+import { DEFAULT_MAX_READ_POSITION, DEFAULT_MIN_READ_POSITION, Source } from './source';
 
 export class Reader {
-	loadedSegments: ReadSegment[] = [];
-	loadingSegments: LoadingSegment[] = [];
-	sourceSizePromise: Promise<number> | null = null;
-	nextAge = 0;
-	totalStoredBytes = 0;
+	constructor(public source: Source) {}
 
-	constructor(public source: Source, public maxStorableBytes = Infinity) {}
-
-	async loadRange(start: number, end: number) {
-		end = Math.min(end, await this.source.getSize());
-
-		if (start >= end) {
-			return;
+	get fileSize(): number | null {
+		const size = this.source._getFileSize();
+		if (size === undefined) {
+			throw new Error('Reading file size too early; read required first.');
 		}
 
-		const matchingLoadingSegment = this.loadingSegments.find(x => x.start <= start && x.end >= end);
-		if (matchingLoadingSegment) {
-			// Simply wait for the existing promise to finish to avoid loading the same range twice
-			await matchingLoadingSegment.promise;
-			return;
+		return size;
+	}
+
+	get fileSizeNonStrict() {
+		return this.source._getFileSize() ?? null;
+	}
+
+	requestSlice(start: number, length: number): MaybePromise<FileSlice | null> {
+		if (this.source._disposed) {
+			throw new InputDisposedError();
 		}
 
-		const index = binarySearchLessOrEqual(
-			this.loadedSegments,
-			start,
-			x => x.start,
-		);
-		if (index !== -1) {
-			for (let i = index; i < this.loadedSegments.length; i++) {
-				const segment = this.loadedSegments[i]!;
-				if (segment.start > start) {
+		if (start < 0) {
+			return null;
+		}
+
+		if (this.fileSizeNonStrict !== null && start + length > this.fileSizeNonStrict) {
+			return null;
+		}
+
+		if (length === 0) {
+			const buffer = new Uint8Array(0);
+			return new FileSlice(buffer, toDataView(buffer), 0, start, start);
+		}
+
+		const end = start + length;
+		const result = this.source._read(start, end, DEFAULT_MIN_READ_POSITION, DEFAULT_MAX_READ_POSITION);
+
+		if (isThenable(result)) {
+			return result.then((x) => {
+				if (!x) {
+					return null;
+				}
+
+				return new FileSlice(x.bytes, x.view, x.offset, start, end);
+			});
+		} else {
+			if (!result) {
+				return null;
+			}
+
+			return new FileSlice(result.bytes, result.view, result.offset, start, end);
+		}
+	}
+
+	requestSliceRange(start: number, minLength: number, maxLength: number): MaybePromise<FileSlice | null> {
+		if (this.source._disposed) {
+			throw new InputDisposedError();
+		}
+
+		if (start < 0) {
+			return null;
+		}
+
+		if (this.fileSizeNonStrict !== null) {
+			return this.requestSlice(
+				start,
+				clamp(this.fileSizeNonStrict - start, minLength, maxLength),
+			);
+		} else {
+			const promisedAttempt = this.requestSlice(start, maxLength);
+
+			const handleAttempt = (attempt: FileSlice | null) => {
+				if (attempt) {
+					return attempt;
+				}
+
+				// The slice couldn't fit, meaning we must know the file size now
+				assert(this.fileSizeNonStrict !== null);
+
+				return this.requestSlice(
+					start,
+					clamp(this.fileSizeNonStrict - start, minLength, maxLength),
+				);
+			};
+
+			if (isThenable(promisedAttempt)) {
+				return promisedAttempt.then(handleAttempt);
+			} else {
+				return handleAttempt(promisedAttempt);
+			}
+		}
+	}
+
+	requestEntireFile(): MaybePromise<FileSlice | null> {
+		if (this.fileSizeNonStrict !== null) {
+			return this.requestSlice(0, this.fileSizeNonStrict);
+		}
+
+		const CHUNK_SIZE = 1024;
+
+		return (async () => {
+			const chunks: Uint8Array[] = [];
+			let currentSize = 0;
+
+			while (true) {
+				if (chunks.length === 1 && this.fileSizeNonStrict !== null) {
+					// It only took one read to get to know the whole file size
+					return this.requestSlice(0, this.fileSizeNonStrict);
+				}
+
+				let slice = this.requestSliceRange(currentSize, 0, CHUNK_SIZE);
+				if (isThenable(slice)) slice = await slice;
+
+				if (!slice || slice.length === 0) {
 					break;
 				}
 
-				const segmentEncasesRequestedRange = segment.end >= end;
-				if (segmentEncasesRequestedRange) {
-					// Nothing to load
-					return;
-				}
-			}
-		}
+				const chunk = readBytes(slice, slice.length);
+				chunks.push(chunk);
 
-		this.source.onread?.(start, end);
-		const bytesPromise = this.source._read(start, end);
-		const loadingSegment: LoadingSegment = { start, end, promise: bytesPromise };
-		this.loadingSegments.push(loadingSegment);
-
-		const bytes = await bytesPromise;
-		removeItem(this.loadingSegments, loadingSegment);
-
-		this.insertIntoLoadedSegments(start, bytes);
-	}
-
-	rangeIsLoaded(start: number, end: number) {
-		if (end <= start) {
-			return true;
-		}
-
-		const index = binarySearchLessOrEqual(this.loadedSegments, start, x => x.start);
-		if (index === -1) {
-			return false;
-		}
-
-		for (let i = index; i < this.loadedSegments.length; i++) {
-			const segment = this.loadedSegments[i]!;
-			if (segment.start > start) {
-				break;
+				currentSize += slice.length;
 			}
 
-			const segmentEncasesRequestedRange = segment.end >= end;
-			if (segmentEncasesRequestedRange) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	private insertIntoLoadedSegments(start: number, bytes: Uint8Array) {
-		const segment: ReadSegment = {
-			start,
-			end: start + bytes.byteLength,
-			bytes,
-			view: new DataView(bytes.buffer),
-			age: this.nextAge++,
-		};
-
-		let index = binarySearchLessOrEqual(this.loadedSegments, start, x => x.start);
-		if (index === -1 || this.loadedSegments[index]!.start < segment.start) {
-			index++;
-		}
-
-		// Insert the segment at the right place so that the array remains sorted by start offset
-		this.loadedSegments.splice(index, 0, segment);
-		this.totalStoredBytes += bytes.byteLength;
-
-		// Remove all other segments from the array that are completely covered by the newly-inserted segment
-		for (let i = index + 1; i < this.loadedSegments.length; i++) {
-			const otherSegment = this.loadedSegments[i]!;
-			if (otherSegment.start >= segment.end) {
-				break;
+			const joined = new Uint8Array(currentSize);
+			let offset = 0;
+			for (const chunk of chunks) {
+				joined.set(chunk, offset);
+				offset += chunk.length;
 			}
 
-			if (segment.start <= otherSegment.start && otherSegment.end <= segment.end) {
-				this.loadedSegments.splice(i, 1);
-				i--;
-			}
-		}
-
-		// If we overshoot the max amount of permitted bytes, let's start evicting the oldest segments
-		while (this.totalStoredBytes > this.maxStorableBytes && this.loadedSegments.length > 1) {
-			let oldestSegment: ReadSegment | null = null;
-			let oldestSegmentIndex = -1;
-
-			for (let i = 0; i < this.loadedSegments.length; i++) {
-				const candidate = this.loadedSegments[i]!;
-				if (!oldestSegment || candidate.age < oldestSegment.age) {
-					oldestSegment = candidate;
-					oldestSegmentIndex = i;
-				}
-			}
-
-			assert(oldestSegment);
-
-			this.totalStoredBytes -= oldestSegment.bytes.byteLength;
-			this.loadedSegments.splice(oldestSegmentIndex, 1);
-		}
-	}
-
-	getViewAndOffset(start: number, end: number) {
-		const startIndex = binarySearchLessOrEqual(this.loadedSegments, start, x => x.start);
-		let segment: ReadSegment | null = null;
-
-		if (startIndex !== -1) {
-			for (let i = startIndex; i < this.loadedSegments.length; i++) {
-				const candidate = this.loadedSegments[i]!;
-
-				if (candidate.start > start) {
-					break;
-				}
-
-				if (end <= candidate.end) {
-					segment = candidate;
-					break;
-				}
-			}
-		}
-
-		if (!segment) {
-			throw new Error(`No segment loaded for range [${start}, ${end}).`);
-		}
-
-		segment.age = this.nextAge++;
-
-		return {
-			view: segment.view,
-			offset: segment.bytes.byteOffset + start - segment.start,
-		};
-	}
-
-	forgetRange(start: number, end: number) {
-		if (end <= start) {
-			return;
-		}
-
-		const startIndex = binarySearchLessOrEqual(this.loadedSegments, start, x => x.start);
-		if (startIndex === -1) {
-			return;
-		}
-
-		const segment = this.loadedSegments[startIndex]!;
-		if (segment.start !== start || segment.end !== end) {
-			return;
-		}
-
-		this.loadedSegments.splice(startIndex, 1);
-		this.totalStoredBytes -= segment.bytes.byteLength;
+			return new FileSlice(joined, toDataView(joined), 0, 0, currentSize);
+		})();
 	}
 }
+
+export class FileSlice {
+	/** The current position in the backing buffer. Do not modify directly, prefer `.skip()` instead. */
+	bufferPos: number;
+
+	constructor(
+		/** The underlying bytes backing this slice. Avoid using this directly and prefer reader functions instead. */
+		public readonly bytes: Uint8Array,
+		/** A view into the bytes backing this slice. Avoid using this directly and prefer reader functions instead. */
+		public readonly view: DataView,
+		/** The offset in "file bytes" at which `bytes` begins in the file. */
+		private readonly offset: number,
+		/** The offset in "file bytes" where this slice begins. */
+		public readonly start: number,
+		/** The offset in "file bytes" where this slice ends (exclusive). */
+		public readonly end: number,
+	) {
+		this.bufferPos = start - offset;
+	}
+
+	static tempFromBytes(bytes: Uint8Array) {
+		return new FileSlice(
+			bytes,
+			toDataView(bytes),
+			0,
+			0,
+			bytes.length,
+		);
+	}
+
+	get length() {
+		return this.end - this.start;
+	}
+
+	get filePos() {
+		return this.offset + this.bufferPos;
+	}
+
+	set filePos(value: number) {
+		this.bufferPos = value - this.offset;
+	}
+
+	/** The number of bytes left from the current pos to the end of the slice. */
+	get remainingLength() {
+		return Math.max(this.end - this.filePos, 0);
+	}
+
+	skip(byteCount: number) {
+		this.bufferPos += byteCount;
+	}
+
+	/** Creates a new subslice of this slice whose byte range must be contained within this slice. */
+	slice(filePos: number, length = this.end - filePos) {
+		if (filePos < this.start || filePos + length > this.end) {
+			throw new RangeError('Slicing outside of original slice.');
+		}
+
+		return new FileSlice(
+			this.bytes,
+			this.view,
+			this.offset,
+			filePos,
+			filePos + length,
+		);
+	}
+}
+
+const checkIsInRange = (slice: FileSlice, bytesToRead: number) => {
+	if (bytesToRead < 0 || slice.filePos < slice.start || slice.filePos + bytesToRead > slice.end) {
+		throw new RangeError(
+			`Tried reading [${slice.filePos}, ${slice.filePos + bytesToRead}), but slice is`
+			+ ` [${slice.start}, ${slice.end}). This is likely an internal error, please report it alongside the file`
+			+ ` that caused it.`,
+		);
+	}
+};
+
+export const readBytes = (slice: FileSlice, length: number) => {
+	checkIsInRange(slice, length);
+
+	const bytes = slice.bytes.subarray(slice.bufferPos, slice.bufferPos + length);
+	slice.bufferPos += length;
+
+	return bytes;
+};
+
+export const readU8 = (slice: FileSlice) => {
+	checkIsInRange(slice, 1);
+	return slice.view.getUint8(slice.bufferPos++);
+};
+
+export const readU16 = (slice: FileSlice, littleEndian: boolean) => {
+	checkIsInRange(slice, 2);
+
+	const value = slice.view.getUint16(slice.bufferPos, littleEndian);
+	slice.bufferPos += 2;
+
+	return value;
+};
+
+export const readU16Be = (slice: FileSlice) => {
+	checkIsInRange(slice, 2);
+
+	const value = slice.view.getUint16(slice.bufferPos, false);
+	slice.bufferPos += 2;
+
+	return value;
+};
+
+export const readU24Be = (slice: FileSlice) => {
+	checkIsInRange(slice, 3);
+
+	const value = getUint24(slice.view, slice.bufferPos, false);
+	slice.bufferPos += 3;
+
+	return value;
+};
+
+export const readI16Be = (slice: FileSlice) => {
+	checkIsInRange(slice, 2);
+
+	const value = slice.view.getInt16(slice.bufferPos, false);
+	slice.bufferPos += 2;
+
+	return value;
+};
+
+export const readU32 = (slice: FileSlice, littleEndian: boolean) => {
+	checkIsInRange(slice, 4);
+
+	const value = slice.view.getUint32(slice.bufferPos, littleEndian);
+	slice.bufferPos += 4;
+
+	return value;
+};
+
+export const readU32Be = (slice: FileSlice) => {
+	checkIsInRange(slice, 4);
+
+	const value = slice.view.getUint32(slice.bufferPos, false);
+	slice.bufferPos += 4;
+
+	return value;
+};
+
+export const readU32Le = (slice: FileSlice) => {
+	checkIsInRange(slice, 4);
+
+	const value = slice.view.getUint32(slice.bufferPos, true);
+	slice.bufferPos += 4;
+
+	return value;
+};
+
+export const readI32Be = (slice: FileSlice) => {
+	checkIsInRange(slice, 4);
+
+	const value = slice.view.getInt32(slice.bufferPos, false);
+	slice.bufferPos += 4;
+
+	return value;
+};
+
+export const readI32Le = (slice: FileSlice) => {
+	checkIsInRange(slice, 4);
+
+	const value = slice.view.getInt32(slice.bufferPos, true);
+	slice.bufferPos += 4;
+
+	return value;
+};
+
+export const readU64 = (slice: FileSlice, littleEndian: boolean) => {
+	let low: number;
+	let high: number;
+
+	if (littleEndian) {
+		low = readU32(slice, true);
+		high = readU32(slice, true);
+	} else {
+		high = readU32(slice, false);
+		low = readU32(slice, false);
+	}
+
+	return high * 0x100000000 + low;
+};
+
+export const readU64Be = (slice: FileSlice) => {
+	const high = readU32Be(slice);
+	const low = readU32Be(slice);
+	return high * 0x100000000 + low;
+};
+
+export const readI64Be = (slice: FileSlice) => {
+	const high = readI32Be(slice);
+	const low = readU32Be(slice);
+	return high * 0x100000000 + low;
+};
+
+export const readI64Le = (slice: FileSlice) => {
+	const low = readU32Le(slice);
+	const high = readI32Le(slice);
+	return high * 0x100000000 + low;
+};
+
+export const readF32Be = (slice: FileSlice) => {
+	checkIsInRange(slice, 4);
+
+	const value = slice.view.getFloat32(slice.bufferPos, false);
+	slice.bufferPos += 4;
+
+	return value;
+};
+
+export const readF64Be = (slice: FileSlice) => {
+	checkIsInRange(slice, 8);
+
+	const value = slice.view.getFloat64(slice.bufferPos, false);
+	slice.bufferPos += 8;
+
+	return value;
+};
+
+export const readAscii = (slice: FileSlice, length: number) => {
+	checkIsInRange(slice, length);
+
+	let str = '';
+
+	for (let i = 0; i < length; i++) {
+		str += String.fromCharCode(slice.bytes[slice.bufferPos++]!);
+	}
+
+	return str;
+};
+
+export const readAllLines = (slice: FileSlice, length: number, options?: {
+	ignore?: (line: string) => boolean;
+}) => {
+	const text = textDecoder.decode(readBytes(slice, length));
+	const lines = text.split('\n')
+		.map(x => x.trim())
+		.filter(x => x.length > 0 && !options?.ignore?.(x));
+
+	return lines;
+};

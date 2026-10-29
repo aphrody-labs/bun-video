@@ -1,0 +1,762 @@
+/*!
+ * Copyright (c) 2026-present, Vanilagy and contributors
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+import {
+	CustomVideoEncoder,
+	type MaybePromise,
+	Quality,
+	VideoCodec,
+	VideoSample,
+	EncodedPacket,
+	EncodedPacketSideData,
+} from 'mediabunny';
+import * as NodeAv from 'node-av';
+import {
+	CODEC_TO_CODEC_ID,
+	getHardwareEncoderCodec,
+	isRgbPixelFormat,
+	unmapColorPrimaries,
+	unmapMatrixCoefficients,
+	unmapTransferCharacteristics,
+} from './misc';
+import { copyVideoSampleToAvFrame, AvFrameVideoSampleResource } from './video-sample';
+import {
+	AvcNalUnitType,
+	extractAv1CodecInfoFromPacket,
+	extractAvcDecoderConfigurationRecord,
+	extractHevcDecoderConfigurationRecord,
+	extractNalUnitTypeForAvc,
+	extractNalUnitTypeForHevc,
+	extractVp9CodecInfoFromPacket,
+	HevcNalUnitType,
+	iterateNalUnitsInAnnexB,
+	NalUnitLocation,
+	serializeAvcDecoderConfigurationRecord,
+	serializeHevcDecoderConfigurationRecord,
+} from '../../../src/codec-data';
+import { extractVideoCodecString, ProresFourCc } from '../../../src/codec';
+import { assert, binarySearchLessOrEqual, simplifyRational, toUint8Array } from '../../../src/misc';
+
+const PRORES_FOURCC_TO_PROFILE: Record<ProresFourCc, NodeAv.AVProfile> = {
+	apco: NodeAv.AV_PROFILE_PRORES_PROXY,
+	apcs: NodeAv.AV_PROFILE_PRORES_LT,
+	apcn: NodeAv.AV_PROFILE_PRORES_STANDARD,
+	apch: NodeAv.AV_PROFILE_PRORES_HQ,
+	ap4h: NodeAv.AV_PROFILE_PRORES_4444,
+	ap4x: NodeAv.AV_PROFILE_PRORES_XQ,
+};
+
+export class NodeAvVideoEncoder extends CustomVideoEncoder {
+	frame!: NodeAv.Frame;
+	packet!: NodeAv.Packet;
+	codecContext: NodeAv.CodecContext | null = null;
+	scaler: NodeAv.SoftwareScaleContext | null = null;
+	dstFrame: NodeAv.Frame | null = null;
+	avCodec!: NodeAv.Codec;
+	lastBuffer: Buffer | null = null;
+	packetEmitted = false;
+	quantizer: number | null = null;
+
+	// Bookkeeping to restore the original timing information
+	preciseTimings: {
+		microsecondTimestamp: number;
+		timestamp: number;
+		duration: number;
+		timestampIsValid: boolean;
+		durationIsValid: boolean;
+	}[] = [];
+
+	static override supports(codec: VideoCodec, config: VideoEncoderConfig): boolean {
+		if (config.bitrateMode === 'quantizer') {
+			return codec === 'avc' || codec === 'hevc' || codec === 'vp9' || codec === 'av1';
+		}
+
+		return (
+			codec === 'avc' || codec === 'hevc' || codec === 'vp8' || codec === 'vp9' || codec === 'av1'
+			|| codec === 'prores'
+		);
+	}
+
+	async init(): Promise<void> {
+		this.frame = new NodeAv.Frame();
+		this.frame.alloc();
+		this.frame.timeBase = new NodeAv.Rational(1, 1e6);
+
+		this.packet = new NodeAv.Packet();
+		this.packet.alloc();
+
+		const codecId = CODEC_TO_CODEC_ID[this.codec];
+		assert(codecId !== undefined);
+
+		const getSoftwareCodec = () => {
+			if (this.codec === 'prores') {
+				// Prefer prores_ks for ProRes
+				const proresKs = NodeAv.Codec.findEncoderByName(NodeAv.FF_ENCODER_PRORES_KS);
+				if (proresKs) {
+					return proresKs;
+				}
+			}
+
+			return NodeAv.Codec.findEncoder(codecId);
+		};
+
+		let codec: NodeAv.Codec | null = null;
+		if (this.codec === 'vp9' && this.config.alpha === 'keep') {
+			codec = NodeAv.Codec.findEncoderByName(NodeAv.FF_ENCODER_LIBVPX_VP9) ?? NodeAv.Codec.findEncoder(codecId);
+		} else if (this.config.hardwareAcceleration === 'prefer-software') {
+			codec = getSoftwareCodec();
+		} else {
+			let hardwareCodec = await getHardwareEncoderCodec(codecId);
+			if (hardwareCodec && this.config.bitrateMode === 'quantizer' && !hardwareCodec.name?.endsWith('_nvenc')) {
+				// NVENC is the only hardware encoder we know how to drive in constant-quantizer mode
+				hardwareCodec = null;
+			}
+
+			codec = hardwareCodec ?? getSoftwareCodec();
+		}
+
+		if (!codec) {
+			throw new Error(`Unable to obtain libav codec for '${this.codec}'.`);
+		}
+
+		this.avCodec = codec;
+	}
+
+	async createCodecContext() {
+		assert(this.codecContext === null);
+
+		const codecContext = new NodeAv.CodecContext();
+		codecContext.allocContext3(this.avCodec);
+
+		let pixelFormat = NodeAv.AV_PIX_FMT_YUV420P;
+
+		if (this.avCodec.pixelFormats) {
+			if (!this.avCodec.pixelFormats.includes(NodeAv.AV_PIX_FMT_YUV420P)) {
+				pixelFormat = this.avCodec.pixelFormats[0]!;
+			}
+
+			if (this.config.alpha === 'keep') {
+				if (this.avCodec.pixelFormats.includes(NodeAv.AV_PIX_FMT_YUVA420P)) {
+					pixelFormat = NodeAv.AV_PIX_FMT_YUVA420P;
+				} else {
+					// Let FFmpeg pick the best alpha-capable format it supports, minimizing data loss versus a
+					// high-quality YUVA source
+					pixelFormat = NodeAv.avcodecFindBestPixFmtOfList(
+						this.avCodec.pixelFormats,
+						NodeAv.AV_PIX_FMT_YUVA444P12LE,
+					);
+				}
+			}
+		}
+
+		const pixelAspectRatio = simplifyRational({
+			num: (this.config.displayWidth ?? this.config.width) * this.config.height,
+			den: (this.config.displayHeight ?? this.config.height) * this.config.width,
+		});
+
+		codecContext.width = this.config.width;
+		codecContext.height = this.config.height;
+		codecContext.pixelFormat = pixelFormat;
+		codecContext.timeBase = new NodeAv.Rational(1, 1e6);
+		codecContext.gopSize = 60;
+		codecContext.framerate = new NodeAv.Rational(Math.round(this.config.framerate ?? 0) || 30, 1);
+		// In quantizer mode, the quantizer dictates the rate; a target bitrate would put encoders in the wrong rate
+		// control mode
+		codecContext.bitRate = this.config.bitrateMode === 'quantizer'
+			? 0n
+			: BigInt(
+					this.config.bitrate ?? new Quality('medium')
+						._toVideoBitrate(this.codec, this.config.width, this.config.height),
+				);
+		codecContext.sampleAspectRatio = new NodeAv.Rational(pixelAspectRatio.num, pixelAspectRatio.den);
+
+		if (this.config.bitrateMode === 'constant') {
+			codecContext.rcMinRate = codecContext.bitRate;
+			codecContext.rcMaxRate = codecContext.bitRate;
+		}
+
+		const isRealtime = this.config.latencyMode === 'realtime';
+
+		if (this.avCodec.name === 'libx264') {
+			if (isRealtime) {
+				codecContext.setOption('tune', 'zerolatency');
+				codecContext.setOption('preset', 'ultrafast');
+			}
+		} else if (this.avCodec.name === 'libx265') {
+			codecContext.setOption('x265-params', 'log-level=error');
+
+			if (isRealtime) {
+				codecContext.setOption('tune', 'zerolatency');
+				codecContext.setOption('preset', 'ultrafast');
+			}
+		} else if (this.avCodec.name === 'libvpx') {
+			if (isRealtime) {
+				codecContext.setOption('deadline', 'realtime');
+				codecContext.setOption('cpu-used', '8');
+			} else {
+				codecContext.setOption('cpu-used', '8');
+			}
+		} else if (this.avCodec.name === 'libvpx-vp9') {
+			codecContext.setOption('deadline', 'realtime');
+
+			if (isRealtime) {
+				codecContext.setOption('cpu-used', '8');
+			} else {
+				codecContext.setOption('cpu-used', '5');
+			}
+		} else if (this.avCodec.name === 'libsvtav1') {
+			// SVTAV1 can be silenced by setting an environment variable:
+			// https://superuser.com/questions/1775236/how-to-remove-svt-av1-information-from-ffmpeg-output
+			process.env['SVT_LOG'] = '1';
+
+			if (isRealtime) {
+				codecContext.setOption('preset', '12');
+			}
+		} else if (this.avCodec.name === 'h264_nvenc') {
+			// When we force a key frame, we want a true IDR frame, not just an I frame
+			codecContext.setOption('forced-idr', '1');
+		} else if (this.avCodec.name === 'hevc_nvenc') {
+			codecContext.setOption('forced-idr', '1');
+		}
+
+		if (this.config.bitrateMode === 'quantizer') {
+			assert(this.quantizer !== null);
+
+			// Map the quantizer from the scale used by Mediabunny to the scale expected by the specific FFmpeg encoder
+			let mapped: number;
+			if (
+				this.avCodec.name === 'libaom-av1'
+				|| this.avCodec.name === 'libsvtav1'
+				|| this.avCodec.name === 'libvpx-vp9'
+			) {
+				// Mediabunny uses the quantizer index (0-255), while these encoders expect the 0-63 quantizer scale
+				mapped = Math.round(this.quantizer / 4);
+			} else {
+				// Everything else lines up with Mediabunny directly
+				mapped = this.quantizer;
+			}
+
+			// Put the encoder into its constant-quantizer mode
+			if (this.avCodec.name === 'libx264' || this.avCodec.name === 'libx265') {
+				codecContext.setOption('qp', String(mapped));
+			} else if (this.avCodec.name === 'libvpx-vp9' || this.avCodec.name === 'libaom-av1') {
+				codecContext.setOption('crf', String(mapped));
+			} else if (this.avCodec.name === 'libsvtav1') {
+				// qp (unlike crf) selects true constant-quantizer mode
+				codecContext.setOption('qp', String(mapped));
+			} else if (this.avCodec.name === 'librav1e') {
+				codecContext.setOption('qp', String(mapped));
+			} else if (this.avCodec.name?.endsWith('_nvenc')) {
+				codecContext.setOption('rc', 'constqp');
+				codecContext.setOption('qp', String(mapped));
+			} else {
+				throw new Error(`Encoder '${this.avCodec.name}' cannot be used for quantizer-based encoding.`);
+			}
+
+			// Also pin the quantizer range so crf-based encoders (libvpx, libaom) hold the quantizer truly constant
+			codecContext.qMin = mapped;
+			codecContext.qMax = mapped;
+		}
+
+		if (this.codec === 'prores') {
+			// Pick the encoder profile from the requested ProRes four-character code
+			const profile = PRORES_FOURCC_TO_PROFILE[this.config.codec as ProresFourCc];
+			assert(profile !== undefined);
+
+			codecContext.setOption('profile', String(profile));
+		}
+
+		let primaries = this.frame.colorPrimaries;
+		let transfer = this.frame.colorTrc;
+		let matrix = this.frame.colorSpace;
+		let range = this.frame.colorRange;
+
+		const inputIsRgb = isRgbPixelFormat(this.frame.format as NodeAv.AVPixelFormat);
+		const outputIsRgb = isRgbPixelFormat(pixelFormat);
+
+		// If the pixel format "types" differ, modify the destination color space accordingly
+		if (inputIsRgb && !outputIsRgb) {
+			// Very common case: RGB->YUV conversion during encoding
+			// Retag sRGB as BT.709 since players handle that way better, and pick the matrix matching the primaries
+			if (primaries === NodeAv.AVCOL_PRI_UNSPECIFIED) {
+				primaries = NodeAv.AVCOL_PRI_BT709;
+			}
+			if (transfer === NodeAv.AVCOL_TRC_UNSPECIFIED || transfer === NodeAv.AVCOL_TRC_IEC61966_2_1) {
+				transfer = NodeAv.AVCOL_TRC_BT709;
+			}
+
+			if (primaries === NodeAv.AVCOL_PRI_BT2020) {
+				matrix = NodeAv.AVCOL_SPC_BT2020_NCL;
+			} else if (primaries === NodeAv.AVCOL_PRI_BT470BG) {
+				matrix = NodeAv.AVCOL_SPC_BT470BG;
+			} else if (primaries === NodeAv.AVCOL_PRI_SMPTE170M) {
+				matrix = NodeAv.AVCOL_SPC_SMPTE170M;
+			} else {
+				matrix = NodeAv.AVCOL_SPC_BT709;
+			}
+
+			range = NodeAv.AVCOL_RANGE_MPEG;
+		} else if (!inputIsRgb && outputIsRgb) {
+			matrix = NodeAv.AVCOL_SPC_RGB;
+			range = NodeAv.AVCOL_RANGE_JPEG;
+		}
+
+		codecContext.colorPrimaries = primaries;
+		codecContext.colorTrc = transfer;
+		codecContext.colorSpace = matrix;
+		codecContext.colorRange = range;
+
+		const ret = await codecContext.open2();
+		NodeAv.FFmpegError.throwIfError(ret, 'Open codec context');
+
+		this.codecContext = codecContext;
+	}
+
+	async encode(videoSample: VideoSample, options: VideoEncoderEncodeOptions): Promise<void> {
+		if (this.config.bitrateMode === 'quantizer') {
+			let quantizer: number | null | undefined;
+			if (this.codec === 'avc') {
+				quantizer = options.avc?.quantizer;
+			} else if (this.codec === 'hevc') {
+				quantizer = options.hevc?.quantizer;
+			} else if (this.codec === 'vp9') {
+				quantizer = options.vp9?.quantizer;
+			} else {
+				quantizer = options.av1?.quantizer;
+			}
+			assert(quantizer !== undefined && quantizer !== null);
+
+			if (this.codecContext !== null && quantizer !== this.quantizer) {
+				// Almost no FFmpeg encoder supports changing the quantizer past init, so drain the current encoder
+				// and start a fresh one. Dirty but what else are you gonna do
+				const ret = await this.codecContext.sendFrame(null);
+				NodeAv.FFmpegError.throwIfError(ret, 'Send frame');
+
+				while (true) {
+					const receiveRet = await this.codecContext.receivePacket(this.packet);
+					if (receiveRet === NodeAv.AVERROR_EAGAIN || receiveRet === NodeAv.AVERROR_EOF) {
+						break;
+					}
+
+					this.receivePacket(receiveRet);
+				}
+
+				this.codecContext.freeContext();
+				this.codecContext = null;
+			}
+
+			this.quantizer = quantizer;
+		}
+
+		if (videoSample._data instanceof AvFrameVideoSampleResource) {
+			// Release any buffers still referenced from the previous encode before reffing the new frame, otherwise
+			// av_frame_ref leaks them
+			// https://github.com/Vanilagy/mediabunny/issues/392
+			this.frame.unref();
+			this.frame.ref(videoSample._data.frame);
+		} else {
+			if (videoSample.format === null) {
+				throw new Error('Cannot encode foreign VideoSample with unknown (null) format.');
+			}
+
+			this.lastBuffer = await copyVideoSampleToAvFrame(videoSample, this.frame, this.lastBuffer);
+		}
+
+		if (this.codecContext === null) {
+			// We create it after the frame was initializied since info about the frame is needed for context init
+			await this.createCodecContext();
+		}
+		assert(this.codecContext);
+
+		let frameToEncode = this.frame;
+
+		const requiresScaler
+			= this.codecContext.pixelFormat !== this.frame.format
+				|| this.codecContext.width !== this.frame.width
+				|| this.codecContext.height !== this.frame.height;
+
+		if (requiresScaler) {
+			if (!this.scaler) {
+				// Left unconfigured on purpose: getContext/initContext ignore color properties and use BT.601
+				this.scaler = new NodeAv.SoftwareScaleContext();
+				this.scaler.allocContext();
+				this.scaler.setOption('sws_flags', 'fast_bilinear');
+			}
+
+			if (!this.dstFrame) {
+				this.dstFrame = new NodeAv.Frame();
+				this.dstFrame.alloc();
+				this.dstFrame.width = this.codecContext.width;
+				this.dstFrame.height = this.codecContext.height;
+				this.dstFrame.format = this.codecContext.pixelFormat;
+				this.dstFrame.allocBuffer();
+			}
+
+			this.dstFrame.copyProps(this.frame);
+			this.dstFrame.colorPrimaries = this.codecContext.colorPrimaries;
+			this.dstFrame.colorTrc = this.codecContext.colorTrc;
+			this.dstFrame.colorSpace = this.codecContext.colorSpace;
+			this.dstFrame.colorRange = this.codecContext.colorRange;
+
+			// Primaries and transfer only ever differ due to retagging (e.g. sRGB as BT.709), so mirror them onto the
+			// source. Otherwise, swscale would do a real (and slow) transfer conversion instead of just the matrix.
+			// See https://github.com/Vanilagy/mediabunny/issues/572
+			this.frame.colorPrimaries = this.codecContext.colorPrimaries;
+			this.frame.colorTrc = this.codecContext.colorTrc;
+
+			const ret = await this.scaler.scaleFrame(this.dstFrame, this.frame);
+			NodeAv.FFmpegError.throwIfError(ret, 'Scale frame');
+
+			frameToEncode = this.dstFrame;
+		}
+
+		frameToEncode.pts = BigInt(videoSample.microsecondTimestamp);
+		frameToEncode.duration = BigInt(videoSample.microsecondDuration);
+		frameToEncode.timeBase = new NodeAv.Rational(1, 1e6);
+
+		// Let's just set both for good measure
+		frameToEncode.pictType = options?.keyFrame
+			? NodeAv.AV_PICTURE_TYPE_I
+			: NodeAv.AV_PICTURE_TYPE_NONE;
+		frameToEncode.keyFrame = options?.keyFrame
+			? 1
+			: 0;
+
+		const preciseTimingIndex = binarySearchLessOrEqual(
+			this.preciseTimings,
+			videoSample.microsecondTimestamp,
+			x => x.microsecondTimestamp,
+		);
+		const existingEntry = preciseTimingIndex !== -1
+			? this.preciseTimings[preciseTimingIndex]
+			: null;
+		if (existingEntry && existingEntry.microsecondTimestamp === videoSample.microsecondTimestamp) {
+			if (existingEntry.timestamp !== videoSample.timestamp) {
+				// Mapping isn't unique, can't use the timestamp
+				existingEntry.timestampIsValid = false;
+			}
+			if (existingEntry.duration !== videoSample.duration) {
+				// Mapping isn't unique, can't use the duration
+				existingEntry.durationIsValid = false;
+			}
+		} else {
+			this.preciseTimings.splice(preciseTimingIndex + 1, 0, {
+				microsecondTimestamp: videoSample.microsecondTimestamp,
+				timestamp: videoSample.timestamp,
+				duration: videoSample.duration,
+				timestampIsValid: true,
+				durationIsValid: true,
+			});
+
+			// Make sure it doesn't grow indefinitely
+			if (this.preciseTimings.length > 128) {
+				this.preciseTimings.shift();
+			}
+		}
+
+		const ret = await this.codecContext.sendFrame(frameToEncode);
+		NodeAv.FFmpegError.throwIfError(ret, 'Send frame');
+
+		// Keep receiving packets until no more are available for this frame
+		while (true) {
+			const receiveRet = await this.codecContext.receivePacket(this.packet);
+			if (receiveRet === NodeAv.AVERROR_EAGAIN || receiveRet === NodeAv.AVERROR_EOF) {
+				break;
+			}
+
+			this.receivePacket(receiveRet);
+		}
+	}
+
+	receivePacket(ret: number) {
+		assert(this.codecContext);
+		NodeAv.FFmpegError.throwIfError(ret, 'Receive packet');
+
+		if (!this.packet.data) {
+			return;
+		}
+		let packetData = toUint8Array(this.packet.data);
+
+		let timestamp = Number(this.packet.pts) / 1e6;
+		let duration = Number(this.packet.duration) / 1e6;
+
+		const preciseTimingIndex = binarySearchLessOrEqual(
+			this.preciseTimings,
+			Number(this.packet.pts),
+			x => x.microsecondTimestamp,
+		);
+		const entry = preciseTimingIndex !== -1
+			? this.preciseTimings[preciseTimingIndex]
+			: null;
+
+		// If there's a relevant timing entry, refine the packet's timing data to get better accuracy than
+		// microseconds
+		if (entry && entry.microsecondTimestamp === Number(this.packet.pts)) {
+			if (entry.timestampIsValid) {
+				timestamp = entry.timestamp;
+			}
+			if (entry.durationIsValid) {
+				duration = entry.duration;
+			}
+		}
+
+		const metadata: EncodedVideoChunkMetadata = {};
+		let decoderConfigCodecString: string | null = null;
+		let decoderConfigDescription: Uint8Array | null = null;
+
+		if (this.codec === 'avc' || this.codec === 'hevc') {
+			let expectsAnnexB = false;
+			if (this.codec === 'avc') {
+				expectsAnnexB = this.config.avc?.format === 'annexb';
+			} else {
+				// eslint-disable-next-line @stylistic/max-len
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+				expectsAnnexB = (this.config as any).hevc?.format === 'annexb';
+			}
+
+			if (!this.packetEmitted) {
+				let serializedRecord: Uint8Array;
+
+				if (this.codec === 'avc') {
+					const record = extractAvcDecoderConfigurationRecord(this.packet.data);
+					if (!record) {
+						throw new Error('Invalid AVC data, could not extract decoder configuration record.');
+					}
+
+					serializedRecord = serializeAvcDecoderConfigurationRecord(record);
+				} else {
+					const record = extractHevcDecoderConfigurationRecord(this.packet.data);
+					if (!record) {
+						throw new Error('Invalid HEVC data, could not extract decoder configuration record.');
+					}
+
+					serializedRecord = serializeHevcDecoderConfigurationRecord(record);
+				}
+
+				decoderConfigCodecString = extractVideoCodecString({
+					width: this.config.width,
+					height: this.config.height,
+					codec: this.codec,
+					codecDescription: serializedRecord,
+					colorSpace: null,
+					avcType: 1,
+					avcCodecInfo: null,
+					hevcCodecInfo: null,
+					vp9CodecInfo: null,
+					av1CodecInfo: null,
+					proresFormat: null,
+				});
+
+				if (!expectsAnnexB) {
+					decoderConfigDescription = serializedRecord;
+				}
+			}
+
+			if (!expectsAnnexB) {
+				const NAL_UNIT_LENGTH_SIZE = 4;
+
+				const nalUnits: NalUnitLocation[] = [];
+				for (const loc of iterateNalUnitsInAnnexB(packetData)) {
+					if (this.codec === 'avc') {
+						const naluType = extractNalUnitTypeForAvc(packetData[loc.offset]!);
+
+						// Certain NALUs get stripped
+						if (
+							naluType !== AvcNalUnitType.SPS
+							&& naluType !== AvcNalUnitType.PPS
+							&& naluType !== AvcNalUnitType.SPS_EXT
+						) {
+							nalUnits.push(loc);
+						}
+					} else {
+						const naluType = extractNalUnitTypeForHevc(packetData[loc.offset]!);
+
+						// Certain NALUs get stripped
+						if (
+							naluType !== HevcNalUnitType.SPS_NUT
+							&& naluType !== HevcNalUnitType.PPS_NUT
+							&& naluType !== HevcNalUnitType.VPS_NUT
+						) {
+							nalUnits.push(loc);
+						}
+					}
+				}
+
+				let totalSize = 0;
+				for (const nalUnit of nalUnits) {
+					totalSize += NAL_UNIT_LENGTH_SIZE + nalUnit.length;
+				}
+
+				const lengthPrefixedData = new Uint8Array(totalSize);
+				const dataView = new DataView(lengthPrefixedData.buffer);
+				let offset = 0;
+
+				// Write each NAL unit with its length prefix
+				for (const nalUnit of nalUnits) {
+					const length = nalUnit.length;
+
+					dataView.setUint32(offset, length, false);
+					offset += 4;
+
+					lengthPrefixedData.set(
+						packetData.subarray(nalUnit.offset, nalUnit.offset + nalUnit.length),
+						offset,
+					);
+					offset += nalUnit.length;
+				}
+
+				packetData = lengthPrefixedData;
+			}
+		} else if (this.codec === 'vp8') {
+			if (!this.packetEmitted) {
+				decoderConfigCodecString = extractVideoCodecString({
+					width: this.config.width,
+					height: this.config.height,
+					codec: 'vp8',
+					codecDescription: null,
+					colorSpace: null,
+					avcType: null,
+					avcCodecInfo: null,
+					hevcCodecInfo: null,
+					vp9CodecInfo: null,
+					av1CodecInfo: null,
+					proresFormat: null,
+				});
+			}
+		} else if (this.codec === 'vp9') {
+			if (!this.packetEmitted) {
+				const vp9CodecInfo = extractVp9CodecInfoFromPacket(packetData);
+
+				decoderConfigCodecString = extractVideoCodecString({
+					width: this.config.width,
+					height: this.config.height,
+					codec: 'vp9',
+					codecDescription: null,
+					colorSpace: null,
+					avcType: null,
+					avcCodecInfo: null,
+					hevcCodecInfo: null,
+					vp9CodecInfo,
+					av1CodecInfo: null,
+					proresFormat: null,
+				});
+			}
+		} else if (this.codec === 'av1') {
+			if (!this.packetEmitted) {
+				const av1CodecInfo = extractAv1CodecInfoFromPacket(packetData);
+
+				decoderConfigCodecString = extractVideoCodecString({
+					width: this.config.width,
+					height: this.config.height,
+					codec: 'av1',
+					codecDescription: null,
+					colorSpace: null,
+					avcType: null,
+					avcCodecInfo: null,
+					hevcCodecInfo: null,
+					vp9CodecInfo: null,
+					av1CodecInfo,
+					proresFormat: null,
+				});
+			}
+		} else if (this.codec === 'prores') {
+			if (!this.packetEmitted) {
+				decoderConfigCodecString = extractVideoCodecString({
+					width: this.config.width,
+					height: this.config.height,
+					codec: 'prores',
+					codecDescription: null,
+					colorSpace: null,
+					avcType: null,
+					avcCodecInfo: null,
+					hevcCodecInfo: null,
+					vp9CodecInfo: null,
+					av1CodecInfo: null,
+					proresFormat: this.config.codec as ProresFourCc,
+				});
+			}
+		} else {
+			throw new Error('Unreachable.');
+		}
+
+		const sideData: EncodedPacketSideData = {};
+		const matroskaBlockAdditional = this.packet.getSideData(NodeAv.AV_PKT_DATA_MATROSKA_BLOCKADDITIONAL);
+		if (matroskaBlockAdditional) {
+			sideData.alpha = toUint8Array(matroskaBlockAdditional).subarray(8); // Skip the BlockAddId
+		}
+
+		const packet = new EncodedPacket(
+			packetData,
+			this.packet.isKeyframe ? 'key' : 'delta',
+			timestamp,
+			duration,
+			undefined,
+			undefined,
+			sideData,
+		);
+
+		if (decoderConfigCodecString !== null) {
+			// Create the decoder config
+			metadata.decoderConfig = {
+				codec: decoderConfigCodecString,
+				codedWidth: this.codecContext.width,
+				codedHeight: this.codecContext.height,
+				displayAspectWidth: this.config.displayWidth ?? this.codecContext.width,
+				displayAspectHeight: this.config.displayHeight ?? this.codecContext.height,
+				description: decoderConfigDescription ?? undefined,
+				colorSpace: {
+					primaries: unmapColorPrimaries(this.codecContext.colorPrimaries) as VideoColorPrimaries,
+					matrix: unmapMatrixCoefficients(this.codecContext.colorSpace) as VideoMatrixCoefficients,
+					transfer:
+						unmapTransferCharacteristics(this.codecContext.colorTrc) as VideoTransferCharacteristics,
+					fullRange: this.codecContext.colorRange === NodeAv.AVCOL_RANGE_JPEG
+						? true
+						: this.codecContext.colorRange === NodeAv.AVCOL_RANGE_MPEG
+							? false
+							: undefined,
+				},
+			};
+		}
+
+		this.packetEmitted = true;
+		this.onPacket(packet, metadata);
+	}
+
+	async flush(): Promise<void> {
+		if (this.codecContext) {
+			// Send null frame to signal flush
+			const ret = await this.codecContext.sendFrame(null);
+			NodeAv.FFmpegError.throwIfError(ret, 'Send frame');
+
+			// Keep receiving packets until no more are available
+			while (true) {
+				const receiveRet = await this.codecContext.receivePacket(this.packet);
+				if (receiveRet === NodeAv.AVERROR_EAGAIN || receiveRet === NodeAv.AVERROR_EOF) {
+					break;
+				}
+
+				this.receivePacket(receiveRet);
+			}
+
+			this.codecContext.freeContext();
+			this.codecContext = null;
+			// The codec is done now and can't be reused. Any subsequent encode call will first need to recreate a
+			// codec context.
+		}
+
+		this.packetEmitted = false;
+	}
+
+	close(): MaybePromise<void> {
+		this.codecContext?.freeContext();
+		this.frame.free();
+		this.packet.free();
+		this.scaler?.freeContext();
+		this.dstFrame?.free();
+	}
+}

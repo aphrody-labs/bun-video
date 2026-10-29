@@ -1,5 +1,5 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // .js extensions are technically required in compliant ECMAScript, and Webpack needs them, so we add them here.
 
@@ -13,7 +13,7 @@ const walkDir = (dir: string) => {
 
 		if (stat.isDirectory()) {
 			files.push(...walkDir(fullPath));
-		} else if (item.endsWith('.js')) {
+		} else if (item.endsWith('.js') || item.endsWith('.ts')) {
 			files.push(fullPath);
 		}
 	}
@@ -22,14 +22,19 @@ const walkDir = (dir: string) => {
 };
 
 const fixFile = (filePath: string) => {
-	const content = await Bun.file(filePath).text();
-	const fixed = content.replace(
-		/(\s+from\s+['"])([^'"]*)(['"])/g,
+	const content = fs.readFileSync(filePath, 'utf8');
+	// We only match relative imports
+	let fixed = content.replace(
+		/(\s+from\s+['"])(\.[^'"]*)(['"])/g, // This matches static imports
+		'$1$2.js$3',
+	);
+	fixed = fixed.replace(
+		/(import\s*\(\s*['"])(\.[^'"]*)(['"]\s*\))/g, // This matches dynamic imports
 		'$1$2.js$3',
 	);
 
 	if (content !== fixed) {
-		await Bun.write(filePath, fixed);
+		fs.writeFileSync(filePath, fixed);
 	}
 };
 

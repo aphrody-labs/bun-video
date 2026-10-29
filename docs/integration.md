@@ -16,7 +16,7 @@ entry points are explicit so importing a server API does not initialize a player
 
 HLS reuses `@aphrody/bun-runtime-sdk/video/hls`, including synchronous listener
 registration, URL validation, explicit worker origin checks and cleanup. The
-decoder is pinned `hls.js` 1.7.3; no separately owned decoder fork was found in
+decoder is pinned `hls.js` 1.7.4; no separately owned decoder fork was found in
 this checkout. `attachVideoHlsPlayback` loads that decoder in the browser and
 defaults workers off; explicit worker configuration remains supported. The SDK
 dependency is 1.4.5: 1.4.4 does not publish the `video/hls` export.

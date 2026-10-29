@@ -50,6 +50,46 @@ function request() {
 }
 
 describe("RenderRequest", () => {
+  it("preserves explicit motion blur off through the distributed request round trip", () => {
+    const value = request();
+    value.options.pageMotionBlur = "off";
+    const config = distributedConfigFromRequest(value);
+    expect(config.pageMotionBlur).toBe("off");
+    expect(
+      renderRequestFromDistributedConfig({
+        projectDir: value.projectDir,
+        outputPath: value.outputPath,
+        config,
+      }).options.pageMotionBlur,
+    ).toBe("off");
+  });
+
+  it("carries the delivery encoder options through every adapter", () => {
+    const value = request();
+    Object.assign(value.options, {
+      keyframeIntervalSeconds: 2,
+      maxBitrate: "8M",
+      bufferSize: "12M",
+    });
+    const expected = { keyframeIntervalSeconds: 2, maxBitrate: "8M", bufferSize: "12M" };
+    expect(renderConfigFromRequest(value)).toMatchObject(expected);
+    const config = distributedConfigFromRequest(value);
+    expect(config).toMatchObject(expected);
+    expect(
+      renderRequestFromDistributedConfig({
+        projectDir: value.projectDir,
+        outputPath: value.outputPath,
+        config,
+      }).options,
+    ).toMatchObject(expected);
+    expect(() =>
+      parseRenderRequest({ ...value, options: { ...value.options, maxBitrate: 8 } }),
+    ).toThrow();
+    expect(() =>
+      parseRenderRequest({ ...value, options: { ...value.options, keyframeIntervalSeconds: 0 } }),
+    ).toThrow(/positive/);
+  });
+
   it("round-trips through JSON without dropping nested options", () => {
     const value = request();
     expect(parseRenderRequest(serializeRenderRequest(value))).toEqual(value);
@@ -118,6 +158,12 @@ describe("RenderRequest", () => {
 
     expect(value.options.engineConfig.forceScreenshot).toBe(true);
     expect(renderConfigFromRequest(value).producerConfig?.forceScreenshot).toBe(true);
+  });
+
+  it("accepts 25 fps for a distributed render", () => {
+    const value = request();
+    value.options.fps = { num: 25, den: 1 };
+    expect(distributedConfigFromRequest(value).fps).toBe(25);
   });
 
   it("rejects unsupported distributed fps before an adapter launch", () => {

@@ -1,3 +1,4 @@
+import { Video } from "./native-video";
 // SPDX-License-Identifier: Apache-2.0
 import { realpath, readdir } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
@@ -358,17 +359,17 @@ export function createVideoWebApp(options: VideoWebAppOptions): VideoWebApp {
         },
         {
           id: "probe",
-          enabled: media !== undefined && Bun.Video.available,
+          enabled: media !== undefined && Video.available,
           run: async () => {
-            await new Bun.Video(media!).metadata();
+            await new Video(media!).metadata();
             return "métadonnées lues";
           },
         },
         {
           id: "frame",
-          enabled: media !== undefined && Bun.Video.available,
+          enabled: media !== undefined && Video.available,
           run: async () => {
-            const bytes = await new Bun.Video(media!).frame(0).resize(640).jpeg({ quality: 85 }).bytes();
+            const bytes = await new Video(media!).frame(0).resize(640).jpeg({ quality: 85 }).bytes();
             return `${bytes.byteLength} octets`;
           },
         },
@@ -407,7 +408,7 @@ export function createVideoWebApp(options: VideoWebAppOptions): VideoWebApp {
     if (path === "/api/health")
       return json({
         status: "ok",
-        video: { available: Bun.Video.available, decoder: Bun.Video.decoder, backend: Bun.Video.backend },
+        video: { available: Video.available, decoder: Video.decoder, backend: Video.backend },
         labs: labs.map(({ id, title }) => ({ id, title })),
       });
 
@@ -446,9 +447,9 @@ export function createVideoWebApp(options: VideoWebAppOptions): VideoWebApp {
     if (path === "/api/video/metadata") {
       const file = resolveMediaPath(options.mediaRoot, url.searchParams.get("src"));
       if (!file) return json({ error: "invalid_media_path" }, 400);
-      if (!Bun.Video.available) return json({ error: "video_provider_unavailable" }, 503);
+      if (!Video.available) return json({ error: "video_provider_unavailable" }, 503);
       try {
-        return json(await new Bun.Video(file).metadata());
+        return json(await new Video(file).metadata());
       } catch {
         return json({ error: "media_unreadable" }, 422);
       }
@@ -459,9 +460,9 @@ export function createVideoWebApp(options: VideoWebAppOptions): VideoWebApp {
       const seconds = Number(url.searchParams.get("t") ?? "0");
       if (!file) return json({ error: "invalid_media_path" }, 400);
       if (!Number.isFinite(seconds) || seconds < 0 || seconds > 86400) return json({ error: "invalid_time" }, 400);
-      if (!Bun.Video.available) return json({ error: "video_provider_unavailable" }, 503);
+      if (!Video.available) return json({ error: "video_provider_unavailable" }, 503);
       try {
-        const bytes = await new Bun.Video(file).frame(seconds).resize(640).jpeg({ quality: 85 }).bytes();
+        const bytes = await new Video(file).frame(seconds).resize(640).jpeg({ quality: 85 }).bytes();
         return new Response(Uint8Array.from(bytes), {
           headers: { "content-type": "image/jpeg", "cache-control": "no-store" },
         });
@@ -473,7 +474,7 @@ export function createVideoWebApp(options: VideoWebAppOptions): VideoWebApp {
     if (path === "/api/video/watch") {
       const file = resolveMediaPath(options.mediaRoot, url.searchParams.get("src"));
       if (!file) return json({ error: "invalid_media_path" }, 400);
-      if (!Bun.Video.available) return json({ error: "video_provider_unavailable" }, 503);
+      if (!Video.available) return json({ error: "video_provider_unavailable" }, 503);
       const detail = url.searchParams.get("detail") ?? "efficient";
       if (!["transcript", "efficient", "balanced"].includes(detail)) return json({ error: "invalid_detail" }, 400);
       const number = (name: string, fallback: number | undefined, min: number, max: number) => {

@@ -259,6 +259,14 @@ describe("studioRenderTelemetry", () => {
     });
   });
 
+  it("forwards the render's CPU use on both events", () => {
+    const cpu = { cpuBusyAvgPct: 57, cpuBusyPeakPct: 90, cpuCoresBusyPeak: 2 };
+    emitStudioRenderComplete(opts, 5000, fullPerf, cpu);
+    emitStudioRenderError(opts, 100, "encode", new Error("x"), undefined, cpu);
+    expect(trackRenderComplete.mock.calls[0]![0]).toMatchObject(cpu);
+    expect(trackRenderError.mock.calls[0]![0]).toMatchObject(cpu);
+  });
+
   describe("emitStudioRenderError", () => {
     it("tags with source: 'studio' and forwards failedStage + elapsedMs", () => {
       emitStudioRenderError(opts, 1200, "encode", new Error("boom"), undefined);
@@ -350,5 +358,17 @@ describe("studioRenderTelemetry", () => {
       emitStudioRenderComplete({ ...opts, telemetryOptOut: flag }, 5000, fullPerf);
       expect(trackRenderComplete).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe("studio render telemetry: GPU encoding", () => {
+  it("reports whether the render asked for GPU encoding, on success and on failure", () => {
+    trackRenderComplete.mockClear();
+    trackRenderError.mockClear();
+    emitStudioRenderComplete({ ...opts, useGpu: true }, 1000, undefined);
+    emitStudioRenderError({ ...opts, useGpu: true }, 1000, "capture", new Error("x"), undefined);
+    emitStudioRenderComplete(opts, 1000, undefined);
+    expect(trackRenderComplete.mock.calls.map(([props]) => props.gpu)).toEqual([true, false]);
+    expect(trackRenderError.mock.calls[0]?.[0]).toMatchObject({ gpu: true });
   });
 });

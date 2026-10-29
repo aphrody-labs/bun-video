@@ -17,13 +17,19 @@
  * needs the actual planner.
  */
 
+import { validateDeliveryEncoderConfig } from "../render/deliveryEncoder.js";
 import {
   VIDEO_FRAME_FORMATS,
   isVideoFrameFormat,
   validateEngineConfigSnapshot,
 } from "@hyperframes/engine";
+import { DISTRIBUTED_FPS, isDistributedFps } from "@hyperframes/core";
 import { type DistributedFormat } from "./shared.js";
-import { type DistributedRenderConfig } from "./plan.js";
+import {
+  type DistributedRenderConfig,
+  MAX_CHUNK_SIZE,
+  MAX_PARALLEL_CHUNKS_CEILING,
+} from "./plan.js";
 
 /**
  * `DistributedRenderConfig` minus the runtime-only fields (`logger`,
@@ -48,7 +54,6 @@ export class InvalidConfigError extends Error {
   }
 }
 
-const ALLOWED_FPS = [24, 30, 60] as const;
 const ALLOWED_FORMATS = [
   "mp4",
   "mov",
@@ -62,8 +67,6 @@ const ALLOWED_HDR_MODES = ["auto", "force-sdr"] as const;
 
 const MAX_DIMENSION = 7680;
 const MIN_DIMENSION = 16;
-const MAX_CHUNK_SIZE = 3600;
-const MAX_PARALLEL_CHUNKS_CEILING = 256;
 
 /**
  * Throw an `InvalidConfigError` if `config` is not a valid
@@ -80,15 +83,19 @@ export function validateDistributedRenderConfig(
     throw new InvalidConfigError("config", "must be an object");
   }
 
-  if (!ALLOWED_FPS.includes(config.fps as 24 | 30 | 60)) {
+  if (!isDistributedFps(config.fps)) {
     throw new InvalidConfigError(
       "config.fps",
-      `must be one of ${ALLOWED_FPS.join(", ")}; got ${String(config.fps)}`,
+      `must be one of ${DISTRIBUTED_FPS.join(", ")}; got ${String(config.fps)}`,
     );
   }
 
   validateIntDimension("config.width", config.width);
   validateIntDimension("config.height", config.height);
+
+  if (config.pageMotionBlur !== undefined && config.pageMotionBlur !== "off") {
+    throw new InvalidConfigError("config.pageMotionBlur", 'must be "off" when provided');
+  }
 
   if (!ALLOWED_FORMATS.includes(config.format)) {
     throw new InvalidConfigError(
@@ -142,6 +149,34 @@ export function validateDistributedRenderConfig(
     );
   }
 
+  try {
+    validateDeliveryEncoderConfig({
+      format: config.format,
+      fps: { num: config.fps, den: 1 },
+      keyframeIntervalSeconds: config.keyframeIntervalSeconds,
+      maxBitrate: config.maxBitrate,
+      bufferSize: config.bufferSize,
+    });
+  } catch (error) {
+    throw new InvalidConfigError(
+      "config.maxBitrate",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  try {
+    validateDeliveryEncoderConfig({
+      format: config.format,
+      fps: { num: config.fps, den: 1 },
+      proresProfile: config.proresProfile,
+    });
+  } catch (error) {
+    throw new InvalidConfigError(
+      "config.proresProfile",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
   if (config.chunkSize !== undefined) {
     if (!Number.isInteger(config.chunkSize) || config.chunkSize < 1) {
       throw new InvalidConfigError(
@@ -184,6 +219,13 @@ export function validateDistributedRenderConfig(
         "config.targetChunkFrames",
         `must be <= ${MAX_CHUNK_SIZE}; got ${config.targetChunkFrames}`,
       );
+    }
+  }
+
+  for (const field of ["workerTimeoutSeconds", "workerConcurrency"] as const) {
+    const value = config[field];
+    if (value !== undefined && (!Number.isInteger(value) || value < 1)) {
+      throw new InvalidConfigError(`config.${field}`, `must be a positive integer; got ${value}`);
     }
   }
 
@@ -251,10 +293,10 @@ export function validateJsonSafeValue(value: unknown, field: string): void {
 /** Per-typeof rejection messages for JSON-unsafe leaves. */
 const LEAF_REJECTIONS: Partial<Record<string, string>> = {
   undefined:
-    "undefined leaves are silently dropped by JSON.stringify — use null if you mean an absent value",
+    "undefined leaves are silently dropped by JSON.stringify. Use null if you mean an absent value",
   function: "functions are not JSON-serializable",
   symbol: "Symbols are not JSON-serializable",
-  bigint: "BigInt values throw at JSON.stringify — encode as a string if you need 64-bit integers",
+  bigint: "BigInt values throw at JSON.stringify. Encode as a string if you need 64-bit integers",
 };
 
 // fallow-ignore-next-line complexity
@@ -279,7 +321,7 @@ function walkVariables(value: unknown, path: string, seen: WeakSet<object>): voi
   if (seen.has(value as object)) {
     throw new InvalidConfigError(
       path,
-      "circular reference detected — JSON.stringify cannot serialize cycles",
+      "circular reference detected: JSON.stringify cannot serialize cycles",
     );
   }
   seen.add(value as object);

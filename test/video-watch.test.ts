@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Video } from "../src/native-video";
 import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +8,7 @@ import { UnifiedVideoPipeline } from "../src/video-workflow";
 import { cleanWatch } from "../src/watch";
 
 const fixture = join(import.meta.dir, "../hyperframes/player/tests/perf/fixtures/10-video-grid/sample.mp4");
-const nativeVideo = (Bun as unknown as { Video?: { available: boolean } }).Video;
+const nativeVideo = Video;
 
 describe.skipIf(!nativeVideo?.available)("watch in the unified pipeline", () => {
   test("records frames, transcript and job state, then reads them back", async () => {

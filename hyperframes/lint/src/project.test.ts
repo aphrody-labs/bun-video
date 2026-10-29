@@ -399,6 +399,73 @@ describe("missing_or_empty_sub_composition", () => {
   });
 });
 
+describe("texture_mask_asset_not_found declarations", () => {
+  it("still reports a missing inline mask beside a malformed declaration", async () => {
+    const project = makeProject(
+      validHtml().replace(
+        "<div ",
+        '<div style="color: red; broken; mask-image: url(missing.png);" ',
+      ),
+    );
+
+    const { results } = await lintProject(project);
+    const findings = results
+      .flatMap((entry) => entry.result.findings)
+      .filter((finding) => finding.code === "texture_mask_asset_not_found");
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        severity: "error",
+        message: expect.stringContaining("missing.png"),
+      }),
+    ]);
+  });
+
+  it.each([
+    ["embedded", "comment", "/* .badge { mask-image: url(removed-texture.png); } */"],
+    ["linked", "comment", "/* .badge { mask-image: url(removed-texture.png); } */"],
+    ["embedded", "content string", '.badge::after { content: "mask-image: url(example.png)"; }'],
+    ["linked", "content string", '.badge::after { content: "mask-image: url(example.png)"; }'],
+  ])("ignores mask syntax in a %s stylesheet's %s", async (source, _kind, css) => {
+    const style =
+      source === "linked" ? '<link rel="stylesheet" href="style.css">' : `<style>${css}</style>`;
+    const project = makeProject(validHtml().replace("<body>", `<head>${style}</head><body>`));
+    if (source === "linked") writeFileSync(join(project, "style.css"), css);
+
+    const { totalErrors, results } = await lintProject(project);
+
+    expect(totalErrors).toBe(0);
+    expect(
+      results.flatMap((entry) => entry.result.findings).map((finding) => finding.code),
+    ).not.toContain("texture_mask_asset_not_found");
+  });
+
+  it.each(["embedded", "linked"])(
+    "still errors for missing masks declared in %s CSS",
+    async (source) => {
+      const css = `/* .badge { mask-image: url(removed-texture.png); } */
+      .badge::after { content: "mask-image: url(example.png)"; }
+      .badge { -webkit-mask-image: url(missing-webkit.png); MASK-IMAGE: url(missing.png); }`;
+      const style =
+        source === "linked" ? '<link rel="stylesheet" href="style.css">' : `<style>${css}</style>`;
+      const project = makeProject(validHtml().replace("<body>", `<head>${style}</head><body>`));
+      if (source === "linked") writeFileSync(join(project, "style.css"), css);
+
+      const { results } = await lintProject(project);
+      const findings = results
+        .flatMap((entry) => entry.result.findings)
+        .filter((finding) => finding.code === "texture_mask_asset_not_found");
+
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatchObject({ severity: "error", file: join(project, "index.html") });
+      expect(findings[0]?.message).toContain("missing-webkit.png");
+      expect(findings[0]?.message).toContain("missing.png");
+      expect(findings[0]?.message).not.toContain("removed-texture.png");
+      expect(findings[0]?.message).not.toContain("example.png");
+    },
+  );
+});
+
 describe("template shell style sources", () => {
   it("collects links, style blocks, and inline styles from template content", async () => {
     const project = makeProject(`<html><body>
@@ -431,6 +498,71 @@ describe("template shell style sources", () => {
       '[data-composition-id="from-style-block"]',
     ]);
     expect(findings.some((finding) => finding.code === "texture_mask_asset_not_found")).toBe(true);
+  });
+});
+
+describe("sub-composition stylesheet links", () => {
+  function projectWithSharedFonts(compDir: string, href: string): string {
+    const project = makeProject(validHtml());
+    mkdirSync(join(project, "assets", "fonts"), { recursive: true });
+    writeFileSync(join(project, "assets", "fonts", "repro.woff2"), "font");
+    writeFileSync(
+      join(project, "assets", "fonts.css"),
+      "@font-face{font-family:'Repro';src:url('fonts/repro.woff2') format('woff2')}",
+    );
+    mkdirSync(join(project, compDir), { recursive: true });
+    writeFileSync(
+      join(project, compDir, "scene.html"),
+      `<template>
+  <link rel="stylesheet" href="${href}">
+  <style>#scene-title{font-family:'Repro'}</style>
+  <div id="root" data-composition-id="scene" data-width="1920" data-height="1080" data-duration="1">
+    <h1 id="scene-title">Hello</h1>
+  </div>
+  <script>window.__timelines["scene"] = gsap.timeline({ paused: true });</script>
+</template>`,
+    );
+    return project;
+  }
+
+  async function fontFaceFindings(project: string): Promise<HyperframeLintFinding[]> {
+    const { results } = await lintProject(project);
+    return results
+      .flatMap((entry) => entry.result.findings)
+      .filter((finding) => finding.code === "font_family_without_font_face");
+  }
+
+  it("reads a stylesheet from the project root when none sits next to the sub-composition", async () => {
+    expect(
+      await fontFaceFindings(projectWithSharedFonts("compositions/frames", "assets/fonts.css")),
+    ).toEqual([]);
+    expect(
+      await fontFaceFindings(projectWithSharedFonts("compositions", "assets/fonts.css")),
+    ).toEqual([]);
+  });
+
+  it("reads the stylesheet next to the sub-composition when both exist", async () => {
+    const project = projectWithSharedFonts("compositions/frames", "fonts.css");
+    writeFileSync(join(project, "fonts.css"), "@font-face{font-family:'Other';src:local('Other')}");
+    writeFileSync(
+      join(project, "compositions", "frames", "fonts.css"),
+      "@font-face{font-family:'Repro';src:local('Repro')}",
+    );
+    expect(await fontFaceFindings(project)).toEqual([]);
+  });
+
+  it("does not read a root-anchored or parent href from the project root", async () => {
+    for (const href of ["/assets/fonts.css", "../assets/fonts.css", "./../assets/fonts.css"]) {
+      expect(
+        await fontFaceFindings(projectWithSharedFonts("compositions/frames", href)),
+      ).toHaveLength(1);
+    }
+  });
+
+  it("skips a folder that has the stylesheet's name", async () => {
+    const project = projectWithSharedFonts("compositions/frames", "shared.css");
+    mkdirSync(join(project, "shared.css"));
+    expect(await fontFaceFindings(project)).toHaveLength(1);
   });
 });
 
@@ -781,6 +913,86 @@ describe("audio_src_not_found with templating tokens", () => {
   });
 });
 
+describe("a double-quoted src that contains an apostrophe", () => {
+  const name = "Narrator's voice take 1.mp3";
+
+  it("finds the existing audio file instead of cutting the src at the apostrophe", async () => {
+    const project = makeProject(`<html><body>
+  <div data-composition-id="main" data-width="1920" data-height="1080" data-start="0" data-duration="10"></div>
+  <audio id="a1" class="clip" data-start="0" data-duration="3" data-track-index="10" src="assets/${name}"></audio>
+</body></html>`);
+    mkdirSync(join(project, "assets"), { recursive: true });
+    writeFileSync(join(project, "assets", name), "");
+    const { results } = await lintProject(project);
+    const codes = results.flatMap((entry) => entry.result.findings).map((f) => f.code);
+    expect(codes).not.toContain("audio_src_not_found");
+  });
+
+  async function lintCodes(body: string, files: string[]): Promise<string[]> {
+    const project = makeProject(`<html><body>
+  <div data-composition-id="main" data-width="1920" data-height="1080" data-start="0" data-duration="10"></div>
+  ${body}
+</body></html>`);
+    mkdirSync(join(project, "assets"), { recursive: true });
+    for (const file of files) writeFileSync(join(project, "assets", file), "");
+    const { results } = await lintProject(project);
+    return results.flatMap((entry) => entry.result.findings).map((f) => f.code);
+  }
+
+  it("finds an existing audio file whose apostrophe is written as a character reference", async () => {
+    const codes = await lintCodes(
+      `<audio id="a1" class="clip" data-start="0" data-duration="3" data-track-index="10" src="assets/Narrator&#39;s take.mp3"></audio>`,
+      ["Narrator's take.mp3"],
+    );
+    expect(codes).not.toContain("audio_src_not_found");
+  });
+
+  it("tells two layered files apart when their names share text up to an apostrophe", async () => {
+    const audio = (id: string, file: string) =>
+      `<audio id="${id}" class="clip" data-start="0" data-duration="5" data-track-index="10" src="assets/${file}"></audio>`;
+    const codes = await lintCodes(
+      audio("a1", "Narrator's take 1.mp3") + audio("a2", "Narrator's take 2.mp3"),
+      ["Narrator's take 1.mp3", "Narrator's take 2.mp3"],
+    );
+    expect(codes).toContain("duplicate_audio_track");
+  });
+
+  it("still reports a missing file whose name starts with a quote character", async () => {
+    const codes = await lintCodes(
+      `<audio id="a1" class="clip" data-start="0" data-duration="3" data-track-index="10" src="'90s theme.mp3"></audio>`,
+      [],
+    );
+    expect(codes).toContain("audio_src_not_found");
+  });
+
+  it("does not read an audio tag that an inline script builds as a string", async () => {
+    const codes = await lintCodes(
+      `<script>var s = '<audio src="' + u + '">'; var t = "<audio src='" + u + "'>";</script>`,
+      [],
+    );
+    expect(codes).not.toContain("audio_src_not_found");
+  });
+
+  it("does not read a src out of another attribute's text", async () => {
+    const codes = await lintCodes(`<img id="i1" alt="x src='ghost.png'" />`, []);
+    expect(codes).not.toContain("missing_local_asset");
+  });
+
+  it("finds the existing image through the shared src pattern too", async () => {
+    const image = "Ann's photo.png";
+    const project = makeProject(`<html><body>
+  <div data-composition-id="main" data-width="1920" data-height="1080" data-start="0" data-duration="10">
+    <img id="i1" class="clip" data-start="0" data-duration="3" data-track-index="0" src="assets/${image}">
+  </div>
+</body></html>`);
+    mkdirSync(join(project, "assets"), { recursive: true });
+    writeFileSync(join(project, "assets", image), "");
+    const { results } = await lintProject(project);
+    const codes = results.flatMap((entry) => entry.result.findings).map((f) => f.code);
+    expect(codes).not.toContain("missing_local_asset");
+  });
+});
+
 describe("templating tokens are checked on the raw src, before cleanAssetUrl", () => {
   // cleanAssetUrl splits on ?/#, which also chops inside a ${...} expression
   // (e.g. `${asset?.url}` -> `${asset`). The token skip must run on the RAW value or
@@ -887,6 +1099,63 @@ describe("audio-aware project rules", () => {
       );
       expect(codes).not.toContain("duplicate_audio_track");
     });
+
+    it("stays quiet for back-to-back clips whose start plus duration only rounds past the next start", async () => {
+      // 21.03 + 0.1 is 21.130000000000003 in floating point.
+      const clip = (id: string, start: string, duration: string) =>
+        `<audio id="${id}" src="a.mp3" data-start="${start}" data-duration="${duration}" data-track-index="0"></audio>`;
+      const codes = await codesFor(
+        composition(
+          clip("m1", "0", "21.03") + clip("m2", "21.03", "0.1") + clip("m3", "21.13", "5"),
+        ),
+      );
+      expect(codes).not.toContain("duplicate_audio_track");
+    });
+
+    const scene = (id: string, videoDuration = 5) => `<template id="${id}-template">
+  <div data-composition-id="${id}" data-width="1920" data-height="1080">
+    ${video('data-has-audio="true"')
+      .replace('src="a.mp4"', `src="${id}.mp4"`)
+      .replace('data-duration="5"', `data-duration="${videoDuration}"`)}
+  </div>
+</template>`;
+    const host = (id: string, start: number | string, length: number | null) =>
+      `<div data-composition-id="${id}" data-composition-src="compositions/${id}.html" data-start="${start}"${length === null ? "" : ` data-duration="${length}"`} data-track-index="1"></div>`;
+    const scenesCodes = (
+      starts: Array<number | string>,
+      { videoDuration = 5, hostDuration = 5 as number | null } = {},
+    ) => {
+      const ids = starts.map((_, i) => `s${i}`);
+      const project = makeProject(
+        composition(ids.map((id, i) => host(id, starts[i]!, hostDuration)).join("")),
+        Object.fromEntries(ids.map((id) => [`${id}.html`, scene(id, videoDuration)])),
+      );
+      return lintProject(project).then(({ results }) =>
+        results.flatMap((result) => result.result.findings.map((f) => f.code)),
+      );
+    };
+
+    it("places each scene's audio at its host's start, so scenes played one after another pass", async () => {
+      expect(await scenesCodes([0, 5])).not.toContain("duplicate_audio_track");
+      expect(await scenesCodes([0, 5], { hostDuration: null })).not.toContain(
+        "duplicate_audio_track",
+      );
+    });
+
+    it("still warns when two scenes' hosts overlap", async () => {
+      expect(await scenesCodes([0, 2])).toContain("duplicate_audio_track");
+    });
+
+    it("places a scene chained to the one before it with a reference start", async () => {
+      expect(await scenesCodes([0, "s0"])).not.toContain("duplicate_audio_track");
+      expect(await scenesCodes([0, "s0 - 2"])).toContain("duplicate_audio_track");
+    });
+
+    it("cuts a scene's audio at its host's end, as playback does", async () => {
+      expect(await scenesCodes([0, 5], { videoDuration: 10 })).not.toContain(
+        "duplicate_audio_track",
+      );
+    });
   });
 
   describe("audio_file_without_element", () => {
@@ -965,5 +1234,42 @@ describe("sub-composition files", () => {
     expect((await sceneFindings(project)).map((f) => f.code)).not.toContain(
       "root_missing_dimensions",
     );
+  });
+});
+
+describe("a media file whose own name holds # or ?", () => {
+  const name = "track #1.mp3";
+
+  async function findingFor(tag: string, code: string) {
+    const project = makeProject(`<html><body>
+  <div data-composition-id="main" data-width="1920" data-height="1080" data-start="0" data-duration="10"></div>
+  ${tag}
+</body></html>`);
+    mkdirSync(join(project, "assets"), { recursive: true });
+    writeFileSync(join(project, "assets", name), "");
+    writeFileSync(join(project, "assets", "pic #2.png"), "");
+    const { results } = await lintProject(project);
+    return results.flatMap((entry) => entry.result.findings).find((f) => f.code === code);
+  }
+
+  it("tells an audio src the name is cut at the # and how to write it", async () => {
+    const finding = await findingFor(
+      `<audio id="a1" class="clip" data-start="0" data-duration="3" data-track-index="10" src="assets/${name}"></audio>`,
+      "audio_src_not_found",
+    );
+    expect(finding?.fixHint).toContain('"assets/track%20%231.mp3"');
+  });
+
+  it("tells an image src the same", async () => {
+    const finding = await findingFor(`<img src="assets/pic #2.png" />`, "missing_local_asset");
+    expect(finding?.fixHint).toContain('"assets/pic%20%232.png"');
+  });
+
+  it("keeps the add-the-file hint when no file by that name exists", async () => {
+    const finding = await findingFor(
+      `<audio id="a1" class="clip" data-start="0" data-duration="3" data-track-index="10" src="assets/nope #1.mp3"></audio>`,
+      "audio_src_not_found",
+    );
+    expect(finding?.fixHint).toContain("Add the file");
   });
 });

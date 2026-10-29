@@ -56,7 +56,7 @@ async function serve(args: string[]) {
 async function doctor(args: string[]) {
   if (args.length) throw new Error("doctor does not accept arguments");
   const { ytDlpRuntimeInfo } = await import("./ytdlp");
-  const nativeVideo = (Bun as unknown as { Video?: { readonly available: boolean; readonly decoder?: string } }).Video;
+  const { Video: nativeVideo } = await import("./native-video");
   const ytDlp = await ytDlpRuntimeInfo();
   console.log(
     JSON.stringify(

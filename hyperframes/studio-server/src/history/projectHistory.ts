@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, rm, rmdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import {
   type Dirent,
   type Stats,
@@ -29,7 +29,8 @@ import {
   affectsProjectSignature,
   listProjectFiles,
 } from "../helpers/projectSignature.js";
-import { openBlobStore, type BlobStore } from "./blobStore.js";
+import { openBlobStore, readBlob, type BlobStore } from "./blobStore.js";
+import { isUncopied, uncopiedOnlyHashes } from "./uncopied.js";
 import { pruneGoneProjectHistoriesDaily } from "./pruneHistories.js";
 import {
   ID_PATH,
@@ -41,6 +42,7 @@ import {
   type FolderIdentity,
 } from "./historyId.js";
 import { takeHistoryOwnership } from "./ownerLock.js";
+import { writeHistoryState } from "./videoState.js";
 import {
   START,
   baselineRecord,
@@ -54,6 +56,7 @@ import {
   undoneIds,
   writeLog,
   type HistoryEntry,
+  type HistoryTarget,
   type HistoryEntrySide,
   type HistoryFileChange,
   type HistoryLog,
@@ -80,13 +83,16 @@ export interface ProjectHistoryOptions {
   onError?: (error: unknown) => void;
   /** How long an open waits for another process to close the same history (default 5 s). */
   ownerWaitMs?: number;
+  ownerUrl?: string;
   /** A CLI turn's window from an earlier open: writes since, within its idle limit, become the entry with its id. */
   closedWindow?: ClosedWindow;
+  closedWindowAfterOwnership?: () => ClosedWindow | undefined;
   undoScope?: "own" | "everyone";
   pruneGoneProjectsBudgetMs?: number;
 }
 
 interface ClaimOptions {
+  targets?: readonly HistoryTarget[];
   coalesceKey?: string;
   idleMs?: number;
   /** Per path, the version (fileContentVersion) the claimer overwrote: earlier changes stay their writer's. */
@@ -135,7 +141,7 @@ export interface ProjectHistory {
   beginWindow(
     who: HistoryWho,
     label: string,
-    options?: { idleMs?: number },
+    options?: { idleMs?: number; exclusive?: boolean },
   ): Promise<HistoryWindow>;
   /**
    * For a writer that records after writing (Studio): moves the uncommitted changes to `paths` into one entry of
@@ -166,6 +172,7 @@ export interface ProjectHistory {
   pin(id: string, pinned: boolean): void;
   onEntry(listener: (entry: HistoryEntry) => void): () => void;
   /** Takes in every pending write and commits every open window and the outside group. */
+  checkpoint(): Promise<void>;
   flush(): Promise<void>;
   /** True once another project stands at the folder's path: open that one's history instead. */
   replacedAtPath(): boolean;
@@ -181,6 +188,7 @@ interface Tracked {
 }
 
 interface Group {
+  targets?: HistoryTarget[];
   id: string;
   who: HistoryWho;
   label: string;
@@ -211,6 +219,22 @@ const KEPT_HIDDEN_PATHS = new Set<string>([...STUDIO_SIGNATURE_MANIFEST_PATHS, M
 function isHistoryPath(path: string): boolean {
   if (KEPT_HIDDEN_PATHS.has(path)) return true;
   return !path.split("/").some((segment) => segment.startsWith("."));
+}
+
+const logFileIn = (home: string) => join(home, "log.jsonl");
+
+function listOf(log: HistoryLog): HistoryListItem[] {
+  const undone = undoneIds(log.entries);
+  return log.entries.map((entry) => ({
+    ...entry,
+    pinned: log.pins.has(entry.id),
+    undone: undone.has(entry.id),
+  }));
+}
+
+function peekOf(log: HistoryLog, point: string): Record<string, string> | null {
+  const files = manifestAt(log, point);
+  return files && Object.fromEntries(files);
 }
 
 function withoutHiddenPaths(log: HistoryLog): HistoryLog {
@@ -311,6 +335,18 @@ function addChange(group: Group, path: string, before: string | null, after: str
   else group.changes.set(path, { path, before: from, after });
 }
 
+const targetKey = (target: HistoryTarget) =>
+  JSON.stringify([target.file, target.id, target.hfId, target.selector, target.selectorIndex]);
+
+function keepTargetsOfItsFiles(entry: HistoryEntry): HistoryEntry {
+  const targets = entry.targets?.filter((target) =>
+    entry.files.some((file) => file.path === target.file),
+  );
+  if (targets?.length) entry.targets = targets;
+  else delete entry.targets;
+  return entry;
+}
+
 class Engine {
   readonly dir: string;
   readonly foldsCase: boolean;
@@ -356,7 +392,7 @@ class Engine {
   }
 
   get logFile() {
-    return join(this.home, "log.jsonl");
+    return logFileIn(this.home);
   }
 
   now(): number {
@@ -367,7 +403,22 @@ class Engine {
   queue<T>(task: () => Promise<T>): Promise<T> {
     if (this.closed)
       return Promise.reject(new HistoryClosedError("This project's history is closed."));
-    const run = this.tail.then(task);
+    const run = this.tail.then(async () => {
+      try {
+        return await task();
+      } finally {
+        if (this.whereFolder() === "here") {
+          await writeHistoryState(
+            this.dir,
+            this.projectId,
+            this.home,
+            this.log.entries,
+            this.manifest(),
+            manifestAt(this.log, this.log.entries.at(-1)?.id ?? START) ?? new Map(),
+          ).catch((error) => this.options.onError?.(error));
+        }
+      }
+    });
     this.tail = run.catch(() => undefined);
     return run;
   }
@@ -410,6 +461,7 @@ class Engine {
     );
     if (!log) return this.firstOpen();
     this.log = withoutHiddenPaths(log);
+    await this.reclaimUncopied();
     if (!this.log.keepsLedger) await this.takeInUnnamedLedger();
     const cache = this.readStatCache();
     const last = this.log.entries.at(-1)?.id ?? START;
@@ -424,6 +476,11 @@ class Engine {
     // What changed while the project was closed is one outside entry, or the closed window's.
     this.reopenClosedWindow();
     await this.settleAll();
+  }
+
+  /** Copies an older version took of files that are no longer copied; text and small files are never touched. */
+  async reclaimUncopied(): Promise<void> {
+    await this.blobs.drop(uncopiedOnlyHashes(this.log, (hash) => this.blobs.size(hash)));
   }
 
   hearWrites(): void {
@@ -441,7 +498,8 @@ class Engine {
         chainBackFrom(this.overwritten.get(path), replaced).set(after, replaced),
       );
       this.queue(async () => {
-        if (!this.blobs.has(replaced)) await this.storeBytes(bytes);
+        if (!this.blobs.has(replaced) && !isUncopied(path, bytes.length))
+          await this.storeBytes(bytes);
       }).catch((error) => this.options.onError?.(error));
     });
   }
@@ -539,7 +597,8 @@ class Engine {
   async recordAdopted(file: ListedFile, sweptAt: number, stored: string | null) {
     if (stored === null || this.whereFolder() !== "here") return;
     // A prune that ran while this copy waited for the queue may have taken its bytes.
-    const hash = this.blobs.has(stored) ? stored : await this.storeIfPresent(file.path);
+    const kept = this.blobs.has(stored) || isUncopied(file.path, file.size);
+    const hash = kept ? stored : await this.storeIfPresent(file.path);
     if (hash === null) return;
     const change = { path: file.path, before: null, after: hash };
     const found = this.overwrittenBy(change, undefined, new Set());
@@ -629,7 +688,9 @@ class Engine {
   /** The file's hash once copied in; null when it was removed before the copy (the next sweep records that). */
   async storeIfPresent(path: string): Promise<string | null> {
     try {
-      return await this.blobs.put(join(this.dir, path));
+      const abs = join(this.dir, path);
+      const { size } = await stat(abs);
+      return await (isUncopied(path, size) ? this.blobs.reference(abs) : this.blobs.put(abs));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
       throw error;
@@ -667,7 +728,7 @@ class Engine {
     who: HistoryWho,
     label: string,
     paths: readonly string[],
-    { coalesceKey, idleMs, overwrote = {} }: ClaimOptions,
+    { coalesceKey, idleMs, overwrote = {}, targets = [] }: ClaimOptions,
   ): Promise<{ id: string } | null> {
     await this.sweep();
     const taken = await this.takeClaimed(who, paths, overwrote);
@@ -677,9 +738,19 @@ class Engine {
     await this.commitPending();
     const group = held ?? this.newGroup(who, label);
     for (const change of taken) addChange(group, change.path, change.before, change.after);
+    this.addTargets(group, targets);
     if (coalesceKey) return this.holdClaim(group, coalesceKey, idleMs);
     const entry = await this.commit(group);
     return entry && { id: entry.id };
+  }
+
+  addTargets(group: Group, targets: readonly HistoryTarget[]): void {
+    const unique = new Map((group.targets ?? []).map((target) => [targetKey(target), target]));
+    for (const target of targets) {
+      const normalized = { ...target, file: this.logPath(target.file) };
+      if (group.changes.has(normalized.file)) unique.set(targetKey(normalized), normalized);
+    }
+    group.targets = [...unique.values()];
   }
 
   /** A claim that took nothing still ends a held claim under another key. */
@@ -851,7 +922,7 @@ class Engine {
     if (!group.changes.size && !undoesEmptied) return null;
     const pending = this.pendingEntry(group);
     const endedAt = Math.max(pending.endedAt, this.log.entries.at(-1)?.endedAt ?? 0);
-    const entry: HistoryEntry = { ...pending, endedAt, ...extra };
+    const entry = keepTargetsOfItsFiles({ ...pending, endedAt, ...extra });
     this.log.entries.push(entry);
     try {
       this.persistLog({ type: "entry", entry });
@@ -929,10 +1000,25 @@ class Engine {
     });
   }
 
-  beginWindow(who: HistoryWho, label: string, idleMs: number): Promise<HistoryWindow> {
+  beginWindow(
+    who: HistoryWho,
+    label: string,
+    idleMs: number,
+    exclusive = false,
+  ): Promise<HistoryWindow> {
     return this.queue(async () => {
       // Writes before the window opened are not this writer's, and are logged before it.
       await this.settle();
+      const at = this.now();
+      if (exclusive) {
+        const blocking = this.windows.find(
+          (open) => !sameWho(open.who, who) && takesWrite(open, at),
+        );
+        if (blocking)
+          throw new Error(`${blocking.who.name}'s turn is open; it has to end before yours begins`);
+        for (const open of [...this.windows])
+          if (!takesWrite(open, at) || sameWho(open.who, who)) await this.endWindow(open);
+      }
       const window = { ...this.newGroup(who, label), idleMs };
       this.windows.push(window);
       this.touch(window, this.now());
@@ -1021,6 +1107,16 @@ class Engine {
     const changes = [...target]
       .filter(([path, hash]) => (this.tracked.get(path)?.hash ?? null) !== hash)
       .sort(([, a], [, b]) => Number(a !== null) - Number(b !== null));
+    const setAsideByDeletesFirst = new Set(
+      changes.filter(([, hash]) => hash === null).map(([path]) => this.tracked.get(path)?.hash),
+    );
+    const gone = changes.find(
+      ([, hash]) => hash !== null && !this.blobs.has(hash) && !setAsideByDeletesFirst.has(hash),
+    );
+    if (gone)
+      throw new Error(
+        `An earlier version of ${gone[0]} is not kept, so this cannot be brought back.`,
+      );
     const deleted = new Set(changes.filter(([, hash]) => hash === null).map(([path]) => path));
     const blocked = changes
       .filter(([, hash]) => hash !== null)
@@ -1031,6 +1127,9 @@ class Engine {
     this.windows.push(group);
     try {
       for (const [path, hash] of changes) await this.writeProjectFile(path, hash);
+      await this.blobs.release(
+        changes.flatMap(([path, hash]) => (hash ? [[hash, path] as const] : [])),
+      );
       await this.sweep();
     } finally {
       this.windows = this.windows.filter((open) => open !== group);
@@ -1047,6 +1146,9 @@ class Engine {
       const version = hash === null ? DELETED_VERSION : hashVersion(hash);
       recordFileWriteReceipt(absPath, { path, version, writeToken });
     }
+    const standing = lstatSync(absPath, { throwIfNoEntry: false });
+    if (standing?.isFile() && isUncopied(path, standing.size))
+      await this.blobs.keep(path, absPath, hash === null);
     if (hash === null) {
       this.assertWritable();
       rmSync(absPath, { force: true });
@@ -1087,7 +1189,10 @@ class Engine {
     );
     return {
       ok: true,
-      entry: await this.writeAs(who, this.undoLabel(entry), target, { undoes: id }),
+      entry: await this.writeAs(who, this.undoLabel(entry), target, {
+        undoes: id,
+        ...(entry.targets && { targets: entry.targets }),
+      }),
     };
   }
 
@@ -1116,7 +1221,15 @@ class Engine {
   pendingEntry(group: Group): HistoryEntry {
     const files = [...group.changes.values()].sort((a, b) => a.path.localeCompare(b.path));
     const { id, who, label, startedAt, lastWriteAt } = group;
-    return { id, who, label, startedAt, endedAt: lastWriteAt ?? this.now(), files };
+    return {
+      id,
+      who,
+      label,
+      startedAt,
+      endedAt: lastWriteAt ?? this.now(),
+      files,
+      ...(group.targets?.length && { targets: group.targets }),
+    };
   }
 
   conflict(
@@ -1136,6 +1249,18 @@ class Engine {
       [...this.tracked.keys()].map((path) => [path, null]),
     );
     for (const [path, hash] of files) target.set(path, hash);
+    if (point === START && this.adopting.size > 0) {
+      throw new HistoryRefusedError(
+        "The project's starting copy is still being saved; try again in a moment. Nothing was changed.",
+      );
+    }
+    const isProjectFile = (path: string) => !KEPT_HIDDEN_PATHS.has(path);
+    const keepsAny = [...target].some(([path, hash]) => hash !== null && isProjectFile(path));
+    if ([...this.tracked.keys()].some(isProjectFile) && !keepsAny) {
+      throw new HistoryRefusedError(
+        "Restoring this point would remove every file in this project, so nothing was changed.",
+      );
+    }
     return this.writeAs(who, label, target, { restoredTo: point });
   }
 
@@ -1160,7 +1285,12 @@ class Engine {
     return {
       projectId: this.projectId,
       beginWindow: (who, label, options = {}) =>
-        this.beginWindow(who, label, options.idleMs ?? this.options.maxGroupMs ?? 30_000),
+        this.beginWindow(
+          who,
+          label,
+          options.idleMs ?? this.options.maxGroupMs ?? 30_000,
+          options.exclusive === true,
+        ),
       claim: async (who, label, paths, options = {}) => {
         await Promise.all(paths.map((path) => this.adopting.get(this.logPath(path))));
         return this.queue(() => this.claimNow(who, label, paths, options));
@@ -1170,12 +1300,7 @@ class Engine {
       },
       list: () => {
         this.assertOpen();
-        const undone = undoneIds(this.log.entries);
-        return this.log.entries.map((entry) => ({
-          ...entry,
-          pinned: this.log.pins.has(entry.id),
-          undone: undone.has(entry.id),
-        }));
+        return listOf(this.log);
       },
       step: (direction, who, { writeToken } = {}) =>
         this.operation(writeToken, async () => {
@@ -1190,8 +1315,7 @@ class Engine {
         ),
       peek: (point) => {
         this.assertOpen();
-        const files = manifestAt(this.log, point);
-        return files && Object.fromEntries(files);
+        return peekOf(this.log, point);
       },
       checkout: (entryId, side, emptyDir) =>
         this.queue(async () => {
@@ -1203,6 +1327,9 @@ class Engine {
           if ((await readdir(dest).catch(missingIsEmpty)).length > 0)
             throw new Error(`Checkout writes into an empty folder only: ${dest}`);
           const files = manifestAround(this.log, entryId, side)!;
+          for (const [path, hash] of files)
+            if (!this.blobs.has(hash))
+              throw new Error(`The version of ${path} from then is not kept.`);
           try {
             for (const [path, hash] of files) await this.blobs.writeTo(hash, join(dest, path));
           } catch (error) {
@@ -1230,6 +1357,7 @@ class Engine {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);
       },
+      checkpoint: () => this.queue(() => this.settle()),
       flush: () => this.queue(() => this.settleAll()),
       replacedAtPath: () => this.whereFolder() === "replaced",
       close: () =>
@@ -1267,6 +1395,13 @@ export class HistoryClosedError extends Error {
   }
 }
 
+export class HistoryRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HistoryRefusedError";
+  }
+}
+
 /** Opens a project's history: every write to its files becomes an entry that can be undone or restored. */
 export async function openProjectHistory(options: ProjectHistoryOptions): Promise<ProjectHistory> {
   if (!existsSync(options.projectDir))
@@ -1275,10 +1410,12 @@ export async function openProjectHistory(options: ProjectHistoryOptions): Promis
   const release = await takeHistoryOwnership(
     join(options.historyRoot, projectId),
     options.ownerWaitMs ?? 5000,
+    options.ownerUrl,
   );
   try {
     const blobs = await openBlobStore(join(options.historyRoot, projectId, "blobs"));
-    const engine = new Engine(options, projectId, blobs);
+    const closedWindow = options.closedWindowAfterOwnership?.() ?? options.closedWindow;
+    const engine = new Engine({ ...options, closedWindow }, projectId, blobs);
     await engine.queue(async () => {
       await engine.start();
       engine.hearWrites();
@@ -1296,4 +1433,33 @@ export async function openProjectHistory(options: ProjectHistoryOptions): Promis
     release();
     throw error;
   }
+}
+
+/** A project's history as its log stands now, read without the owner lock: it reads while another process owns it. */
+export interface ProjectHistoryView {
+  list(): HistoryListItem[];
+  peek(point: string): Record<string, string> | null;
+  readBlob(hash: string): Promise<Buffer>;
+}
+
+/** Reads only: takes no lock and files, prunes or writes nothing; an owner's half-appended last line is skipped. */
+export function readProjectHistory(
+  options: Pick<ProjectHistoryOptions, "projectDir" | "historyRoot">,
+): ProjectHistoryView {
+  const dir = resolve(options.projectDir);
+  const id = readId(dir);
+  const home =
+    id && isRecordedFolder(join(options.historyRoot, id), statSync(dir))
+      ? join(options.historyRoot, id)
+      : null;
+  const read = home && readLog(logFileIn(home), () => {});
+  const log = withoutHiddenPaths(read || { baseline: new Map(), entries: [], pins: new Set() });
+  return {
+    list: () => listOf(log),
+    peek: (point) => peekOf(log, point),
+    readBlob: async (hash) => {
+      if (!home) throw new Error("That is not a history blob.");
+      return readBlob(join(home, "blobs"), hash);
+    },
+  };
 }

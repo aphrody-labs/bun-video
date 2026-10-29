@@ -12,8 +12,10 @@ import { existsSync, readFileSync, statSync, writeFileSync, unlinkSync } from "n
 import { replaceFileAtomically } from "@hyperframes/core/atomic-file";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { resolve, join, basename, relative, sep } from "node:path";
+import { resolve, join, basename, dirname, relative, sep } from "node:path";
+import { createRequire } from "node:module";
 import { readBundleFile } from "./readBundleFile.js";
+import { GSAP_CDN_VERSION } from "@hyperframes/core/gsap-cdn";
 import {
   createProjectWatcher,
   shouldWatchProjectFile,
@@ -32,8 +34,10 @@ import {
   resolveCliTelemetryDistinctId,
 } from "./telemetryIdentity.js";
 import { emitStudioRenderComplete, emitStudioRenderError } from "./studioRenderTelemetry.js";
+import { startRenderCpuSampler } from "../telemetry/renderCpu.js";
 import { mountDesktopRoutes } from "./desktopRoutes.js";
 import { isDevMode } from "../utils/env.js";
+import { insideHostApp } from "../utils/desktopApp.js";
 import { runRenderSetupWorker } from "../utils/cancellableProcess.js";
 import type { ProjectLintResult } from "@hyperframes/lint";
 import { resolveRenderBrowser } from "../browser/preflight.js";
@@ -63,6 +67,7 @@ import {
   HistoryClosedError,
   historyCache,
 } from "@hyperframes/studio-server";
+import { encoderJobOptions } from "@hyperframes/studio-server/encoder-options";
 import { resolveAutoProxy } from "../utils/projectConfig.js";
 import {
   clearElementScreenshotIsolation,
@@ -82,6 +87,7 @@ import {
   type BrowserGpuMode,
   type ResolvedBrowserGpuMode,
 } from "../browser/gpuPolicy.js";
+import { loadSharpInBackground } from "../utils/optionalPackages.js";
 
 const STUDIO_MANUAL_EDITS_PATH = ".hyperframes/studio-manual-edits.json";
 
@@ -167,6 +173,39 @@ function resolveRuntimePath(): string {
   );
   if (existsSync(devPath)) return devPath;
   return builtPath;
+}
+
+// Same-origin root for the GSAP files the CLI ships (build-copy.mjs), laid out
+// like an npm mirror so preview can ask for `<root>/gsap@<version>/dist/<file>`.
+const GSAP_LOCAL_ROOT = "/api/vendor/npm";
+const GSAP_VENDOR_FILES = new Set(["gsap.min.js", "CustomEase.min.js", "MotionPathPlugin.min.js"]);
+
+function installedGsapDist(): string | null {
+  try {
+    const coreRequire = createRequire(resolve(__dirname, "..", "..", "..", "core", "package.json"));
+    return join(dirname(coreRequire.resolve("gsap/package.json")), "dist");
+  } catch {
+    return null;
+  }
+}
+
+/** The bundled GSAP dist dir, or null so preview keeps loading GSAP from jsDelivr. */
+function resolveGsapVendorDir(): string | null {
+  const vendored = join("vendor", "npm", `gsap@${GSAP_CDN_VERSION}`, "dist");
+  const candidates = [
+    resolve(__dirname, vendored),
+    // Running from source: the built CLI next door, then core's installed gsap.
+    resolve(__dirname, "..", "..", "dist", vendored),
+    installedGsapDist(),
+  ];
+  for (const dir of candidates) {
+    if (!dir) continue;
+    if (!existsSync(join(dir, "gsap.min.js"))) continue;
+    const manifest = readBundleFile(join(dir, "..", "package.json"));
+    if (manifest && JSON.parse(manifest.toString("utf-8")).version !== GSAP_CDN_VERSION) continue;
+    return dir;
+  }
+  return null;
 }
 
 function readStudioManualEditManifestContent(projectDir: string): string {
@@ -362,6 +401,7 @@ export interface StudioServerOptions {
   browserGpuMode?: BrowserGpuMode;
   /** Where project histories are kept; defaults to ~/.cache/hyperframes/history. */
   historyRoot?: string;
+  origin?: () => string | undefined;
 }
 
 export interface StudioServer {
@@ -431,6 +471,7 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
   const browserGpuMode = options.browserGpuMode ?? resolveLocalBrowserGpuMode();
   const studioDir = resolveDistDir();
   const runtimePath = resolveRuntimePath();
+  const gsapVendorDir = resolveGsapVendorDir();
   stampProjectHfIds(projectDir);
   const watcher = createProjectWatcher(projectDir);
 
@@ -452,11 +493,16 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
   // Opened on first use, so a server that never serves Studio's history never writes one. A failed open stays off
   // for this run; one another process was holding is tried again on the next request, which no write waits for.
   let ownerWaitMs: number | undefined;
+  const historyUrl = () => {
+    const origin = options.origin?.();
+    return origin && `${origin}/api/projects/${encodeURIComponent(projectId)}/history`;
+  };
   const histories = historyCache(() =>
     openProjectHistory({
       projectDir,
       historyRoot: options.historyRoot ?? DEFAULT_HISTORY_ROOT,
       ownerWaitMs,
+      ownerUrl: historyUrl(),
     })
       .then((history) => {
         ownerWaitMs = undefined;
@@ -471,6 +517,7 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
       }),
   );
   const projectHistory = () => histories.get(projectDir);
+  const hostAppOwnsHistory = insideHostApp();
   watcher.addListener((changedPath) => {
     void histories.peek(projectDir)?.then((opened) => opened?.noteChange(changedPath));
   });
@@ -482,7 +529,8 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
   let shuttingDown = false;
 
   const adapter: PreviewApiAdapter = {
-    history: () => projectHistory(),
+    history: () => (hostAppOwnsHistory ? null : projectHistory()),
+    loadSharp: () => loadSharpInBackground("image thumbnails"),
     // Explicit option wins (preview's resolved --proxy/--no-proxy + config);
     // otherwise honor the project's hyperframes.json media.autoProxy so every
     // createStudioServer caller (e.g. the background preview child) gets the
@@ -524,11 +572,21 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
       const { injectDeterministicFontFaces } = await import("@hyperframes/core/fonts/embed");
       const { prepareAnimatedGifInputs } =
         await import("../../../producer/src/services/animatedGifPrep.js");
+      const { prepareHeifImageInputs } =
+        await import("../../../producer/src/services/heifImagePrep.js");
       const { downloadToTemp, writeUrlDownloadTelemetry } =
         await import("../../../producer/src/utils/urlDownloader.js");
       const gifOutputDir = join(project.dir, ".hyperframes", "prepared-assets", "gif");
       const gifDownloadDir = join(project.dir, ".hyperframes", "prepared-assets", "downloads");
-      const prepared = await prepareAnimatedGifInputs(html, {
+      const heifOutputDir = join(project.dir, ".hyperframes", "prepared-assets", "heif");
+      const { html: htmlWithJpegs } = await prepareHeifImageInputs(html, {
+        projectDir: project.dir,
+        downloadDir: gifDownloadDir,
+        outputDir: heifOutputDir,
+        outputSrcPrefix: ".hyperframes/prepared-assets/heif",
+        onFailure: (error) => console.warn(`[studio] ${error.message}`),
+      });
+      const prepared = await prepareAnimatedGifInputs(htmlWithJpegs, {
         projectDir: project.dir,
         downloadDir: gifDownloadDir,
         outputDir: gifOutputDir,
@@ -563,6 +621,7 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
       ),
 
     runtimeUrl: "/api/runtime.js",
+    gsapLocalRoot: gsapVendorDir ? GSAP_LOCAL_ROOT : undefined,
 
     rendersDir: () => join(projectDir, "renders"),
 
@@ -591,6 +650,7 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
 
       // Run render asynchronously, mutating the state object
       const startTime = Date.now();
+      const cpu = startRenderCpuSampler(opts.telemetryOptOut !== true);
       const run = (async () => {
         let renderJob: RenderJob | undefined;
         const removeCancelledOutput = () => {
@@ -599,7 +659,7 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
           state.status = "cancelled";
           for (const suffix of ["", ".meta.json"]) {
             const fp = suffix
-              ? opts.outputPath.replace(/\.(mp4|webm|mov)$/, suffix)
+              ? opts.outputPath.replace(/\.(mp4|webm|mov|gif)$/, suffix)
               : opts.outputPath;
             try {
               if (existsSync(fp)) unlinkSync(fp);
@@ -623,10 +683,14 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
             fps: opts.fps,
             quality: opts.quality as "draft" | "standard" | "high",
             format: opts.format,
+            ...(opts.gifLoop !== undefined ? { gifLoop: opts.gifLoop } : {}),
             outputResolution: opts.outputResolution,
             ...(manualEditsRenderScript ? { renderBodyScripts: [manualEditsRenderScript] } : {}),
             ...(opts.composition ? { entryFile: opts.composition } : {}),
             ...(opts.variables ? { variables: opts.variables } : {}),
+            ...encoderJobOptions(opts),
+            ...(opts.useGpu ? { useGpu: true } : {}),
+            ...(opts.pageMotionBlur ? { pageMotionBlur: opts.pageMotionBlur } : {}),
           });
           renderJob = job;
           const onProgress = (j: { progress: number; currentStage?: string }) => {
@@ -649,7 +713,7 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
           if (job.audioLoweredDb !== undefined) state.audioLoweredDb = job.audioLoweredDb;
           state.status = "complete";
           state.progress = 100;
-          const metaPath = opts.outputPath.replace(/\.(mp4|webm|mov)$/, ".meta.json");
+          const metaPath = opts.outputPath.replace(/\.(mp4|webm|mov|gif)$/, ".meta.json");
           writeFileSync(
             metaPath,
             JSON.stringify({
@@ -664,7 +728,7 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
           // /api/telemetry-identity, so this process would otherwise keep its
           // startup-cached posture for the life of the preview server.
           refreshTelemetryPosture();
-          emitStudioRenderComplete(opts, Date.now() - startTime, job.perfSummary);
+          emitStudioRenderComplete(opts, Date.now() - startTime, job.perfSummary, cpu.stop());
         } catch (err) {
           if (abortController.signal.aborted) {
             removeCancelledOutput();
@@ -674,13 +738,22 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
           state.error = err instanceof Error ? err.message : String(err);
           // fallow-ignore-next-line code-duplication
           refreshTelemetryPosture();
-          emitStudioRenderError(opts, Date.now() - startTime, state.stage, err, renderJob);
+          emitStudioRenderError(
+            opts,
+            Date.now() - startTime,
+            state.stage,
+            err,
+            renderJob,
+            cpu.stop(),
+          );
           try {
-            const metaPath = opts.outputPath.replace(/\.(mp4|webm|mov)$/, ".meta.json");
+            const metaPath = opts.outputPath.replace(/\.(mp4|webm|mov|gif)$/, ".meta.json");
             writeFileSync(metaPath, JSON.stringify({ status: "failed" }));
           } catch {
             /* ignore */
           }
+        } finally {
+          cpu.stop();
         }
       })();
       inFlightRenders.set(abortController, run);
@@ -865,11 +938,27 @@ export function createStudioServer(options: StudioServerOptions): StudioServer {
         (await loadRuntimeSource()) ?? readBundleFile(runtimePath)?.toString("utf-8") ?? null;
       if (!runtimeSource) return c.text("runtime not available", 404);
       return c.body(runtimeSource, 200, {
-        "Content-Type": "text/javascript",
+        "Content-Type": getMimeType("runtime.js"),
         "Cache-Control": "no-store",
       });
     };
     return serve();
+  });
+
+  // Bundled GSAP for preview, so opening Studio makes no jsDelivr request.
+  app.get(`${GSAP_LOCAL_ROOT}/:pkg/dist/:file`, (c) => {
+    const file = c.req.param("file");
+    const body =
+      gsapVendorDir &&
+      c.req.param("pkg") === `gsap@${GSAP_CDN_VERSION}` &&
+      GSAP_VENDOR_FILES.has(file)
+        ? readBundleFile(join(gsapVendorDir, file))
+        : null;
+    if (!body) return c.text("not found", 404);
+    return c.body(body, 200, {
+      "Content-Type": getMimeType(file),
+      "Cache-Control": "public, max-age=31536000, immutable",
+    });
   });
 
   // CLI → Studio telemetry identity endpoint (Layer 1). Studio reads the

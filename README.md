@@ -2,7 +2,7 @@
 
 [![checks](https://github.com/aphrody-labs/bun/actions/workflows/bun-video-release.yml/badge.svg)](https://github.com/aphrody-labs/bun/actions/workflows/bun-video-release.yml)
 
-Source package for Bun with HLS, DASH/MPD, HAR inspection, Bitmovin integration,
+Source package for Bun (unmodified upstream canary) with HLS, DASH/MPD, HAR inspection, Bitmovin integration,
 an isolated Crunchyroll client, OAuth PKCE, and native OS secret storage. It
 also preserves the Remotion and HyperFrames integration API, using official
 version-pinned libraries and package-local native capture adapters.
@@ -28,7 +28,7 @@ outside Cloudflare, and keep the server bound to loopback behind its configured
 edge proxy. YouTube playback remains in the official IFrame player; media
 downloading is not provided by this API.
 
-The source of [Mediabunny](mediabunny/README.md) v1.9.3 is absorbed into the unified package tree and
+The source of [Mediabunny](mediabunny/README.md) v1.63.0 is absorbed into the unified package tree and
 available through `@aphrody/bun-video/mediabunny`. This export is the media
 demuxing, muxing and WebCodecs layer; it does not install a downloader or
 desktop player.
@@ -152,7 +152,7 @@ export const Composition = () => (
 );
 ```
 
-The official Remotion renderer 4.0.534 rejects Bun prerelease versions such as
+The official Remotion renderer 4.0.539 rejects Bun prerelease versions such as
 1.4.4-debug and 1.4.3-aphrody.4 at import: its minimum-version check excludes
 prereleases. `loadRemotionRenderer()` preserves that upstream check. The three
 other library loaders and package utilities are qualified separately; importing
@@ -189,10 +189,12 @@ cd <bun checkout>/packages/bun-video && bun install --frozen-lockfile
 bun run check
 ```
 
-The `bun` runtime no longer links native video: `Bun.Video` extensions run the `bun-video`
-executable built here (`scripts/build.ts`). `native/` (`bun-video-native`) is its own Cargo
-workspace; FilmCraft is the submodule `vendor/filmcraft` (aphrody-labs/filmcraft
-`bun-runtime-0.9.0`). Build it mounted in the Bun checkout, which supplies `src/zlib_rs`:
+Bun Video runs beside unmodified upstream Bun using documented APIs only (`Bun.spawn`, `Bun.Image`, `node:zlib`);
+see [Running beside unmodified upstream Bun](docs/upstream-bun.md). The former fork class `Bun.Video` is replaced by
+`Video` from `@aphrody/bun-video/native-video` (FFmpeg/FFprobe spawned by the caller; a legacy `Bun.Video` is
+used when present). `native/` (`bun-video-native`) is its own Cargo workspace and remains a spawned executable;
+FilmCraft is the submodule `vendor/filmcraft` (aphrody-labs/filmcraft `bun-runtime-0.9.0`). Build it mounted in a
+Bun checkout that supplies `src/zlib_rs`:
 
 ```sh
 cargo build --locked --release -p bun-video-native --features filmcraft

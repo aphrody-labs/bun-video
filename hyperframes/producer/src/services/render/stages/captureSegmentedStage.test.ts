@@ -315,6 +315,37 @@ describe("runCaptureSegmentedStage", () => {
     });
   });
 
+  it("does not capture on a probe that left frames to a screenshot session", async () => {
+    closeCaptureSession.mockClear();
+    const probeSession = {
+      ...fakeStageInput({ totalFrames: 1 }).probeSession,
+      captureMode: "drawelement" as const,
+      workerEncodeEnabled: true,
+      deRiskFrames: new Set([2]),
+    };
+    const capturedOn = new Set<unknown>();
+    const captureFrame = mock(async (session: unknown) => {
+      capturedOn.add(session);
+      return { buffer: Buffer.alloc(1) };
+    });
+    const result = await runCaptureSegmentedStage({
+      ...fakeStageInput({ totalFrames: 6 }),
+      probeSession: probeSession as never,
+      segmentFrames: 3,
+      segmentDir: join(fixtureRoot, "risk-probe"),
+      deps: {
+        spawnEncoder: mock(async () => okEncoder()),
+        captureFrame,
+        concat: mock(async () => ({ success: true as const })),
+        closeSession: mock(async () => {}),
+        removeFile: () => {},
+      },
+    });
+    expect(result.success).toBe(true);
+    expect(capturedOn.has(probeSession)).toBe(false);
+    expect(closeCaptureSession.mock.calls.map((c) => c[0])).toContain(probeSession);
+  });
+
   it("skips completed segments and still concats all of them in order", async () => {
     const stableDir = join(fixtureRoot, "stable");
     const spawned: string[] = [];
@@ -698,6 +729,36 @@ describe("runCaptureSegmentedStage", () => {
     });
     expect(result.success).toBe(true);
     expect(createdSessionConfigs).toEqual([expect.objectContaining({ enableBrowserPool: false })]);
+  });
+
+  it("opens every worker's session together, so readiness waits overlap", async () => {
+    let opening = 0;
+    let mostOpeningAtOnce = 0;
+    let id = 0;
+    const result = await runCaptureSegmentedStage({
+      ...fakeStageInput({ totalFrames: 9 }),
+      probeSession: null,
+      segmentFrames: 3,
+      segmentDir: join(fixtureRoot, "concurrent-open"),
+      workerCount: 3,
+      sessionFactory: {
+        create: async () => {
+          mostOpeningAtOnce = Math.max(mostOpeningAtOnce, ++opening);
+          await new Promise((resolve) => setImmediate(resolve));
+          opening--;
+          return fakeSession(id++);
+        },
+      },
+      deps: {
+        spawnEncoder: mock(async () => okEncoder()),
+        captureFrame: mock(async () => ({ buffer: Buffer.alloc(1) })),
+        concat: mock(async () => ({ success: true as const })),
+        closeSession: mock(async () => {}),
+        removeFile: () => {},
+      },
+    });
+    expect(result.success).toBe(true);
+    expect(mostOpeningAtOnce).toBe(3);
   });
 
   it("closes a fresh session whose initialization fails", async () => {

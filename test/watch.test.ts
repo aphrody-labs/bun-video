@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Video } from "../src/native-video";
 import { join } from "node:path";
 import {
   autoFps,
@@ -17,7 +18,7 @@ import {
 } from "../src/watch";
 
 const fixture = join(import.meta.dir, "../hyperframes/player/tests/perf/fixtures/10-video-grid/sample.mp4");
-const nativeVideo = (Bun as unknown as { Video?: { available: boolean } }).Video;
+const nativeVideo = Video;
 
 describe("watch time and budgets", () => {
   test("parses SS, MM:SS and HH:MM:SS and rejects malformed times", () => {

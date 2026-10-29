@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2025-present, Vanilagy and contributors
+ * Copyright (c) 2026-present, Vanilagy and contributors
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -146,7 +146,10 @@ const onMessage = (data: { id: number; command: WorkerCommand }) => {
 						command.data.sampleRate,
 						command.data.bitrate,
 					);
-					result = { success: true };
+					result = {
+						type: command.type,
+						success: true,
+					};
 				}; break;
 
 				case 'encode': {
@@ -154,13 +157,19 @@ const onMessage = (data: { id: number; command: WorkerCommand }) => {
 						command.data.audioData,
 						command.data.numberOfFrames,
 					);
-					result = { encodedData };
+					result = {
+						type: command.type,
+						encodedData,
+					};
 					transferables.push(encodedData);
 				}; break;
 
 				case 'flush': {
 					const flushedData = flush();
-					result = { flushedData };
+					result = {
+						type: command.type,
+						flushedData,
+					};
 					transferables.push(flushedData);
 				}; break;
 			}
@@ -197,12 +206,14 @@ let parentPort: {
 	on: (event: string, listener: (data: never) => void) => void;
 } | null = null;
 
-if (typeof self === 'undefined') {
+try {
 	// We're in Node.js (or a runtime that mimics it)
 	const workerModule = 'worker_threads';
 	// eslint-disable-next-line @stylistic/max-len
 	// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 	parentPort = require(workerModule).parentPort;
+} catch {
+	// Web worker (browser, Deno), no require available
 }
 
 if (parentPort) {
@@ -210,3 +221,7 @@ if (parentPort) {
 } else {
 	self.addEventListener('message', event => onMessage(event.data as { id: number; command: WorkerCommand }));
 }
+
+// Prevents the worker for being randomly closed by Firefox
+// https://github.com/Vanilagy/mediabunny/issues/435
+setInterval(() => {}, 1000);

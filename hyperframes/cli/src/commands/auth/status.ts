@@ -15,7 +15,7 @@ import { failCommand, setCommandExitCode } from "../../utils/commandResult.js";
  * place instead of each workflow improvising its own.
  */
 
-import { defineCommand } from "citty";
+import { defineCommand } from "../../utils/defineCommand.js";
 import {
   ENV_CREDENTIAL_VAR,
   AuthClient,
@@ -37,6 +37,7 @@ import {
   type OfflineEngineLine,
   type UnconfiguredContext,
 } from "./status-guidance.js";
+import { jsonFailure } from "../../utils/jsonError.js";
 
 interface VerifiedStatus {
   credential: ResolvedCredential;
@@ -132,7 +133,9 @@ function handleUnconfigured(asJson: boolean): never {
 function handleResolveError(err: unknown, asJson: boolean): never {
   if (!isAuthError(err)) throw err;
   if (asJson) {
-    console.log(JSON.stringify({ configured: false, error: err.message, hint: err.hint ?? null }));
+    console.log(
+      JSON.stringify({ configured: false, ...jsonFailure("auth_error", err.message, err.hint) }),
+    );
   } else {
     console.error(c.error(err.message));
     if (err.hint) console.error(c.dim(err.hint));

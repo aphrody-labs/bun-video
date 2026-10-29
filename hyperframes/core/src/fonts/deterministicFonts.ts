@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -237,7 +245,7 @@ export function normalizeSystemFontPrimaryFamilies(
 }
 
 /** Surfaces font-family is declared on in served HTML. */
-export type FontFamilySurface = "font-family" | "data-font-family";
+export type FontFamilySurface = "font-family" | "font" | "data-font-family";
 
 export type FontFamilyDeclaration = {
   surface: FontFamilySurface;
@@ -246,6 +254,7 @@ export type FontFamilyDeclaration = {
 };
 
 function collectCssCustomProperties(css: string, customProperties: Map<string, string>): void {
+  if (!css.includes("--")) return;
   const root = parseCssRoot(css);
   if (!root) return;
   root.walkDecls((decl) => {
@@ -254,16 +263,32 @@ function collectCssCustomProperties(css: string, customProperties: Map<string, s
   });
 }
 
+const FONT_SIZE_KEYWORD =
+  /^(?:xx-small|x-small|small|medium|large|x-large|xx-large|xxx-large|smaller|larger)$/i;
+const FONT_SIZE_TOKEN = /^(?:\d*\.?\d+[a-z%]+|(?:calc|min|max|clamp|var)\(.*\))(?:\/\S+)?$/i;
+
+function fontShorthandFamilies(value: string): string {
+  for (const token of value.matchAll(/(?:[^\s(]|\([^)]*\))+/g)) {
+    const size = token[0].split("/")[0] ?? "";
+    if (FONT_SIZE_KEYWORD.test(size) || FONT_SIZE_TOKEN.test(token[0])) {
+      return value.slice(token.index + token[0].length).trim();
+    }
+  }
+  return "";
+}
+
 function* iterateCssRootFontFamilyDeclarations(
   root: postcss.Root,
 ): Generator<FontFamilyDeclaration> {
   const declarations: FontFamilyDeclaration[] = [];
   root.walkDecls((decl) => {
-    if (decl.prop.toLowerCase() !== "font-family") return;
+    const prop = decl.prop.toLowerCase();
+    if (prop !== "font-family" && prop !== "font") return;
     if (isFontFaceDeclaration(decl)) return;
-    const declaration = decl.value;
+    const declaration = prop === "font" ? fontShorthandFamilies(decl.value) : decl.value;
+    if (!declaration) return;
     declarations.push({
-      surface: "font-family",
+      surface: prop,
       declaration,
       families: parseFontFamilyValue(declaration),
     });
@@ -272,6 +297,7 @@ function* iterateCssRootFontFamilyDeclarations(
 }
 
 function* iterateCssFontFamilyDeclarations(css: string): Generator<FontFamilyDeclaration> {
+  if (!/font(?:-family)?\s*:/i.test(css)) return;
   const root = parseCssRoot(css);
   if (!root) return;
   yield* iterateCssRootFontFamilyDeclarations(root);
@@ -778,11 +804,11 @@ async function systemFamilyFaceRules(
   }
   if (totalBytes > SYSTEM_FONT_SIZE_LIMIT) {
     log.warn(
-      `[Compiler] System font "${lookupFamily}" is large (${(totalBytes / 1024 / 1024).toFixed(1)} MB total across ${variants.length} variant(s)) — embedding anyway. Consider font subsetting for production.`,
+      `[Compiler] System font "${lookupFamily}" is large (${(totalBytes / 1024 / 1024).toFixed(1)} MB total across ${variants.length} variant(s)), embedding anyway. Consider font subsetting for production.`,
     );
   }
   log.info(
-    `[Compiler] Embedded system font "${lookupFamily}" — ${variants.length} variant(s), ${(totalBytes / 1024).toFixed(0)} KB total`,
+    `[Compiler] Embedded system font "${lookupFamily}": ${variants.length} variant(s), ${(totalBytes / 1024).toFixed(0)} KB total`,
   );
   return rules;
 }
@@ -1126,7 +1152,7 @@ function fontCacheDir(slug: string): string {
       if (firstFallback) {
         STDERR_LOGGER.warn(
           `Font cache directory is unwritable (${dir}). ` +
-            `Using temporary fallback — fonts will re-download each run. ` +
+            `Using temporary fallback, so fonts will re-download each run. ` +
             `Fix with: chmod 755 ${resolveFontCacheRoot()}`,
         );
       }
@@ -1476,9 +1502,47 @@ type GoogleFontCssResult =
 
 const googleFontCssCache = new Map<string, Promise<GoogleFontCssResult>>();
 
-/** Test-only reset — the cache is otherwise process-lifetime, shared across calls. */
+const GOOGLE_FONT_CSS_CACHE_DIR = "_css";
+
+/** Test-only reset of the process and disk caches, so the next lookup reaches `fetchImpl`. */
 export function _clearGoogleFontCssCacheForTests(): void {
   googleFontCssCache.clear();
+  rmSync(join(resolveFontCacheRoot(), GOOGLE_FONT_CSS_CACHE_DIR), { recursive: true, force: true });
+}
+
+// The lookup names the woff2 files, so it is cached on disk beside them; otherwise each new process
+// asks the network first and, offline, never reaches them. No family slug has an underscore.
+function googleFontCssCachePath(url: string): string {
+  return join(
+    fontCacheDir(GOOGLE_FONT_CSS_CACHE_DIR),
+    `${createHash("sha256").update(url).digest("hex")}.json`,
+  );
+}
+
+function readCachedGoogleFontCss(url: string): GoogleFontCssResult | null {
+  let cached: unknown;
+  try {
+    cached = JSON.parse(readFileSync(googleFontCssCachePath(url), "utf8"));
+  } catch {
+    return null;
+  }
+  if (typeof cached !== "object" || cached === null) return null;
+  const body: unknown = Reflect.get(cached, "body");
+  const status: unknown = Reflect.get(cached, "status");
+  return typeof body === "string" && typeof status === "number" ? { ok: true, body, status } : null;
+}
+
+/** Keeps only a lookup that named faces; written aside and renamed, so a reader never sees half of it. */
+function writeCachedGoogleFontCss(url: string, body: string, status: number): void {
+  if (!/@font-face/i.test(body)) return;
+  const path = googleFontCssCachePath(url);
+  const partial = `${path}.${process.pid}.tmp`;
+  try {
+    writeFileSync(partial, JSON.stringify({ status, body }), { mode: 0o644 });
+    renameSync(partial, path);
+  } catch {
+    rmSync(partial, { force: true });
+  }
 }
 
 /** Rejects with `signal`'s own abort reason without cancelling `promise` itself. */
@@ -1502,6 +1566,11 @@ function fetchGoogleFontCss(
   const mode = options.failClosedFontFetch ? `closed${options.retryPolicy.maxAttempts}` : "open";
   const key = `${mode}:${url}`;
   let shared = googleFontCssCache.get(key);
+  const cached = shared ? null : readCachedGoogleFontCss(url);
+  if (cached) {
+    shared = Promise.resolve(cached);
+    googleFontCssCache.set(key, shared);
+  }
   attempt.cssCache = shared ? "hit" : "fresh";
   if (!shared) {
     // The shared fetch must not carry any one caller's abortSignal, or that
@@ -1514,8 +1583,10 @@ function fetchGoogleFontCss(
       "Google Fonts CSS",
       { ...options, abortSignal: undefined },
     ).then((result) => {
-      if (result.ok)
+      if (result.ok) {
+        writeCachedGoogleFontCss(url, result.body, result.response.status);
         return { ok: true as const, body: result.body, status: result.response.status };
+      }
       // A transient status must not stick for the process lifetime.
       if (isRetryableFontFetchStatus(result.response.status)) googleFontCssCache.delete(key);
       return { ok: false as const, status: result.response.status };
@@ -1884,8 +1955,13 @@ function extractGoogleFontsText(html: string): string | undefined {
   // Intentional over-approximation: raw html includes base64, scripts, and
   // class names, but they collapse in the Set and the budget gate catches bloat.
   const uniqueCharacters = new Set<string>();
-  for (const character of new Set([...Array.from(html), ...Array.from(decodedBodyText)])) {
-    addCaseClosure(uniqueCharacters, character, locales);
+  const seen = new Set<string>();
+  for (const text of [html, decodedBodyText]) {
+    for (const character of text) {
+      if (seen.has(character)) continue;
+      seen.add(character);
+      addCaseClosure(uniqueCharacters, character, locales);
+    }
   }
 
   if (hasTextTransformKeyword(html, FULL_WIDTH_KEYWORD_RE)) addFullwidthVariants(uniqueCharacters);

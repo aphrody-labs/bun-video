@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Video } from "../src/native-video";
 import { mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createVideoWebApp, resolveMediaPath } from "../src/web-app";
@@ -123,7 +124,7 @@ describe("createVideoWebApp", () => {
   test("reports the native video provider state", async () => {
     const body = await (await app.fetch(new Request("http://localhost/api/health"))).json();
     expect(body.status).toBe("ok");
-    expect(body.video.available).toBe(Bun.Video.available);
+    expect(body.video.available).toBe(Video.available);
     expect(body.labs.map((lab: { id: string }) => lab.id)).toContain("dash");
   });
 

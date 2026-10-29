@@ -1,18 +1,29 @@
 import {
-	Input,
 	ALL_FORMATS,
 	BlobSource,
-	Output,
 	BufferTarget,
-	Mp4OutputFormat,
 	Conversion,
-	QUALITY_VERY_LOW,
+	Input,
+	Mp4OutputFormat,
+	Output,
+	Quality,
+	UrlSource,
 } from 'mediabunny';
+import { registerAc3Decoder } from '@mediabunny/ac3';
+import { registerDtsDecoder } from '@mediabunny/dts';
+import { registerProresDecoder } from '@mediabunny/prores';
 
 import SampleFileUrl from '../../docs/assets/big-buck-bunny-trimmed.mp4';
+
+// Enable codecs that aren't natively supported by WebCodecs.
+registerAc3Decoder();
+registerDtsDecoder();
+registerProresDecoder();
+
 (document.querySelector('#sample-file-download') as HTMLAnchorElement).href = SampleFileUrl;
 
-const selectMediaButton = document.querySelector('button') as HTMLButtonElement;
+const selectMediaButton = document.querySelector('#select-file') as HTMLButtonElement;
+const loadUrlButton = document.querySelector('#load-url') as HTMLButtonElement;
 const fileNameElement = document.querySelector('#file-name') as HTMLParagraphElement;
 const horizontalRule = document.querySelector('hr') as HTMLHRElement;
 const progressBarContainer = document.querySelector('#progress-bar-container') as HTMLDivElement;
@@ -25,11 +36,11 @@ const errorElement = document.querySelector('#error-element') as HTMLParagraphEl
 let currentConversion: Conversion | null = null;
 let currentIntervalId = -1;
 
-const compressFile = async (file: File) => {
+const compressFile = async (resource: File | string) => {
 	clearInterval(currentIntervalId);
 	await currentConversion?.cancel();
 
-	fileNameElement.textContent = file.name;
+	fileNameElement.textContent = resource instanceof File ? resource.name : resource;
 	horizontalRule.style.display = '';
 	progressBarContainer.style.display = '';
 	speedometer.style.display = '';
@@ -39,11 +50,16 @@ const compressFile = async (file: File) => {
 	errorElement.textContent = '';
 
 	try {
-		// Create a new input from the file
+		// Create a new input from the resource
+		const source = resource instanceof File
+			? new BlobSource(resource)
+			: new UrlSource(resource);
 		const input = new Input({
-			source: new BlobSource(file),
+			source,
 			formats: ALL_FORMATS, // Accept all formats
 		});
+
+		const fileSize = await source.getSize();
 
 		// Define the output file
 		const output = new Output({
@@ -55,29 +71,42 @@ const compressFile = async (file: File) => {
 		currentConversion = await Conversion.init({
 			input,
 			output,
+			tracks: 'primary', // Keep only one track per type
 			video: {
 				width: 320, // Height will be deduced automatically to retain aspect ratio
-				bitrate: QUALITY_VERY_LOW,
+				quality: new Quality('very-low'),
 			},
 			audio: {
-				bitrate: 32e3,
+				codec: 'opus',
+				quality: new Quality('very-low'),
 			},
 		});
 
+		if (!currentConversion.isValid) {
+			console.info(currentConversion.discardedTracks);
+			throw new Error('Conversion is invalid and cannot be executed; see the console for more.');
+		}
+
 		// Keep track of progress
 		let progress = 0;
-		currentConversion.onProgress = newProgress => progress = newProgress;
+		let processedTime = 0;
+		let startTime: number | null = null;
 
-		const fileDuration = await input.computeDuration();
-		const startTime = performance.now();
+		currentConversion.onProgress = (newProgress, newProcessedTime) => {
+			progress = newProgress;
+			processedTime = newProcessedTime;
+			startTime ??= performance.now();
+		};
 
 		const updateProgress = () => {
 			progressBar.style.width = `${progress * 100}%`;
 
-			const now = performance.now();
-			const elapsedSeconds = (now - startTime) / 1000;
-			const factor = fileDuration / (elapsedSeconds / progress);
-			speedometer.textContent = `Speed: ~${factor.toPrecision(3)}x real time`;
+			if (startTime !== null) {
+				const now = performance.now();
+				const elapsedSeconds = (now - startTime) / 1000;
+				const factor = processedTime / elapsedSeconds;
+				speedometer.textContent = `Speed: ~${factor.toPrecision(3)}x real time`;
+			}
 		};
 
 		// Update the progress indicator regularly
@@ -96,7 +125,7 @@ const compressFile = async (file: File) => {
 
 		compressionFacts.style.display = '';
 		compressionFacts.textContent
-			= `${(output.target.buffer!.byteLength / file.size * 100).toPrecision(3)}% of original size`;
+			= `${(output.target.buffer!.byteLength / fileSize * 100).toPrecision(3)}% of original size`;
 	} catch (error) {
 		console.error(error);
 
@@ -117,7 +146,7 @@ const compressFile = async (file: File) => {
 selectMediaButton.addEventListener('click', () => {
 	const fileInput = document.createElement('input');
 	fileInput.type = 'file';
-	fileInput.accept = 'video/*,video/x-matroska,audio/*,audio/aac';
+	fileInput.accept = 'video/*,video/x-matroska,video/mp2t,.mkv,.ts,audio/*,audio/aac,.aac';
 	fileInput.addEventListener('change', () => {
 		const file = fileInput.files?.[0];
 		if (!file) {
@@ -128,6 +157,19 @@ selectMediaButton.addEventListener('click', () => {
 	});
 
 	fileInput.click();
+});
+
+loadUrlButton.addEventListener('click', () => {
+	const url = prompt(
+		'Please enter a URL of a media file. Note that it must be HTTPS and support cross-origin requests, so have the'
+		+ ' right CORS headers set.',
+		'https://mediabunny.dev/big-buck-bunny.mp4',
+	);
+	if (!url) {
+		return;
+	}
+
+	void compressFile(url);
 });
 
 document.addEventListener('dragover', (event) => {

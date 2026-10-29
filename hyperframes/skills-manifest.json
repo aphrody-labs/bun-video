@@ -1,89 +1,33 @@
 {
   "source": "heygen-com/hyperframes",
   "skills": {
-    "embedded-captions": {
-      "hash": "643579aed5919847",
-      "files": 144
-    },
-    "faceless-explainer": {
-      "hash": "1f10a69e0f879698",
-      "files": 28
-    },
     "figma": {
-      "hash": "f8cf9f2c78ea8374",
+      "hash": "af57c9b6411c81f5",
       "files": 2
-    },
-    "general-video": {
-      "hash": "7194a47a82647a88",
-      "files": 5
     },
     "hyperframes": {
-      "hash": "589ae40d15628917",
-      "files": 29
-    },
-    "hyperframes-animation": {
-      "hash": "9370b856259f4586",
-      "files": 122
-    },
-    "hyperframes-audio": {
-      "hash": "e96de47ed2e6097a",
-      "files": 7
-    },
-    "hyperframes-cli": {
-      "hash": "5076477812cf2c37",
-      "files": 11
-    },
-    "hyperframes-core": {
-      "hash": "010a65915fc7b45e",
-      "files": 11
-    },
-    "hyperframes-creative": {
-      "hash": "8d0601ce26adc560",
-      "files": 79
-    },
-    "hyperframes-keyframes": {
-      "hash": "a3d43b98955b1366",
-      "files": 3
-    },
-    "hyperframes-registry": {
-      "hash": "d7c1885fb4cce2cf",
-      "files": 12
-    },
-    "hyperframes-studio": {
-      "hash": "f5e0b44d68152c12",
-      "files": 1
-    },
-    "media-use": {
-      "hash": "c8800249da2d1ce6",
-      "files": 109
-    },
-    "motion-graphics": {
-      "hash": "6db77031ad839f6a",
-      "files": 23
-    },
-    "music-to-video": {
-      "hash": "b775f27b16efb1f2",
-      "files": 169
-    },
-    "pr-to-video": {
-      "hash": "88f4c68788eaba9e",
-      "files": 34
-    },
-    "product-launch-video": {
-      "hash": "76149a9f3514626e",
-      "files": 36
-    },
-    "remotion-to-hyperframes": {
-      "hash": "d02be65b7f3f4a63",
+      "hash": "ec7a77e6b9325a75",
       "files": 77
     },
-    "slideshow": {
-      "hash": "efc3c0be622fa9a1",
-      "files": 2
+    "hyperframes-cli": {
+      "hash": "19e8e8f081dabdfd",
+      "files": 13
     },
-    "talking-head-recut": {
-      "hash": "9aac076ceddd2499",
-      "files": 28
+    "hyperframes-registry": {
+      "hash": "c70325ad4ad08849",
+      "files": 13
+    },
+    "media-use": {
+      "hash": "938c00af915a46b5",
+      "files": 116
+    },
+    "remotion-to-hyperframes": {
+      "hash": "37ed4536305b3c64",
+      "files": 78
+    },
+    "slideshow": {
+      "hash": "c8a591e2aa7a6d86",
+      "files": 2
     }
   }
 }

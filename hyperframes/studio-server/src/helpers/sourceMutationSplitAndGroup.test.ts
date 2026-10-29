@@ -87,7 +87,7 @@ describe("splitElementInHtml", () => {
     expect(result.html).toMatch(/id="box-split"[^>]*class="clip"/);
   });
 
-  it("gives a split composition host a unique composition id", () => {
+  it("keeps every half of a split composition mount on the root it mounts", () => {
     const composition = source.replace(
       'id="box" class="clip"',
       'id="box" class="clip" data-composition-id="headline" data-composition-src="headline.html"',
@@ -97,13 +97,28 @@ describe("splitElementInHtml", () => {
     const second = splitElementInHtml(first.html, { id: "box-split" }, 4, "box-split-2");
 
     const { document } = parseHTML(second.html);
-    const compositionIds = Array.from(
-      document.querySelectorAll("[data-composition-id]"),
-      (element) => element.getAttribute("data-composition-id"),
+    const mounts = Array.from(document.querySelectorAll("[data-composition-src]"));
+    expect(mounts.map((element) => element.getAttribute("data-composition-id"))).toEqual([
+      "headline",
+      "headline",
+      "headline",
+    ]);
+    expect(new Set(mounts.map((element) => element.id)).size).toBe(3);
+  });
+
+  it("keeps a split inline-template mount on its template", () => {
+    const composition = source
+      .replace('id="box" class="clip"', 'id="box" class="clip" data-composition-id="headline"')
+      .replace(
+        "</body>",
+        '<template id="headline-template"><div data-composition-id="headline"></div></template></body>',
+      );
+
+    const result = splitElementInHtml(composition, { id: "box" }, 3, "box-split");
+
+    expect(result.html).toMatch(
+      /id="box-split"[^>]*data-composition-id="headline"|data-composition-id="headline"[^>]*id="box-split"/,
     );
-    expect(compositionIds).toHaveLength(4);
-    expect(new Set(compositionIds)).toHaveLength(4);
-    expect(compositionIds).toEqual(expect.arrayContaining(["root", "headline", "headline-split"]));
   });
 
   it("returns matched false for out-of-range split time", () => {
@@ -196,18 +211,87 @@ describe("splitElementInHtml", () => {
     expect(result.html).not.toContain("data-playback-start");
   });
 
+  it.each(['data-composition-src="scene.html"', 'data-composition-id="scene"'])(
+    "stamps an in-point on both halves of a sub-composition host (%s)",
+    (host) => {
+      const hostSource = source.replace('id="box"', `id="box" ${host}`);
+      const { document } = parseHTML(
+        splitElementInHtml(hostSource, { id: "box" }, 3, "box-split").html,
+      );
+
+      expect(document.getElementById("box")?.getAttribute("data-playback-start")).toBe("0");
+      expect(document.getElementById("box-split")?.getAttribute("data-playback-start")).toBe("2");
+    },
+  );
+
   it("stamps a legacy composition offset and advances the second half by playback rate", () => {
-    const result = splitElementInHtml(source, { id: "box" }, 3, "box-split", {
+    const hostSource = source.replace('id="box"', 'id="box" data-composition-src="scene.html"');
+    const result = splitElementInHtml(hostSource, { id: "box" }, 3, "box-split", {
       start: 1,
       duration: 6,
       playbackStart: 1.5,
       playbackRate: 2,
-      stampPlaybackStart: true,
     });
 
     const { document } = parseHTML(result.html);
     expect(document.getElementById("box")?.getAttribute("data-playback-start")).toBe("1.5");
     expect(document.getElementById("box-split")?.getAttribute("data-playback-start")).toBe("5.5");
+  });
+
+  it("splits the timed video inside an untimed wrapper and leaves both wrappers untimed", () => {
+    const wrapped = `<!DOCTYPE html><html><head><style>#v { object-fit: cover; }</style></head><body><div data-composition-id="root"><div id="wrap" class="frame"><video id="v" class="clip" src="a.mp4" data-start="1" data-duration="6"></video></div></div></body></html>`;
+    // The requested wrapper id is the media's natural split id: both must still come out unique.
+    const result = splitElementInHtml(wrapped, { id: "wrap" }, 3, "v-split", {
+      start: 1,
+      duration: 6,
+    });
+    const { document } = parseHTML(result.html);
+    const wrappers = [...document.querySelectorAll("div.frame")];
+    const [first, second] = [...document.querySelectorAll("video")];
+
+    expect(result.matched).toBe(true);
+    expect(wrappers).toHaveLength(2);
+    for (const wrapper of wrappers) {
+      expect(wrapper.hasAttribute("data-start")).toBe(false);
+      expect(wrapper.hasAttribute("data-duration")).toBe(false);
+    }
+    expect(first?.id).toBe("v");
+    expect(second?.id).toBeTruthy();
+    const ids = [...document.querySelectorAll("[id]")].map((node) => node.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(result.html).toContain(`#${second?.id} {`);
+    expect(first?.getAttribute("data-duration")).toBe("2");
+    expect(second?.getAttribute("data-start")).toBe("3");
+    expect(second?.getAttribute("data-duration")).toBe("4");
+    expect(second?.getAttribute("data-media-start")).toBe("2");
+  });
+
+  it.each(['data-start="1"', 'data-duration="6"', 'data-composition-id="scene"'])(
+    "cuts a wrapper with %s itself, not the video inside it",
+    (wrapperAttrs) => {
+      const wrapped = `<!DOCTYPE html><html><body><div data-composition-id="root"><div id="wrap" ${wrapperAttrs}><video id="v" src="a.mp4" data-start="1" data-duration="6"></video></div></div></body></html>`;
+      const result = splitElementInHtml(wrapped, { id: "wrap" }, 3, "wrap-split", {
+        start: 1,
+        duration: 6,
+      });
+      const { document } = parseHTML(result.html);
+
+      expect(document.getElementById("wrap-split")?.hasAttribute("data-start")).toBe(true);
+      expect(document.getElementById("v")?.getAttribute("data-duration")).toBe("6");
+    },
+  );
+
+  it("keeps cutting a GSAP scene on its own window when it holds a shorter timed video", () => {
+    const scene = `<!DOCTYPE html><html><body><div data-composition-id="root"><div id="card"><video id="v" src="a.mp4" data-start="2" data-duration="3"></video></div></div></body></html>`;
+    const result = splitElementInHtml(scene, { id: "card" }, 7, "card-split", {
+      start: 0,
+      duration: 10,
+    });
+    const { document } = parseHTML(result.html);
+
+    expect(result.matched).toBe(true);
+    expect(document.getElementById("card")?.getAttribute("data-duration")).toBe("7");
+    expect(document.getElementById("card-split")?.getAttribute("data-start")).toBe("7");
   });
 });
 

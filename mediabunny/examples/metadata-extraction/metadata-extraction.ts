@@ -1,61 +1,86 @@
-import { Input, ALL_FORMATS, BlobSource } from 'mediabunny';
+import { ALL_FORMATS, BlobSource, Input, UrlSource } from 'mediabunny';
 
 import SampleFileUrl from '../../docs/assets/big-buck-bunny-trimmed.mp4';
 (document.querySelector('#sample-file-download') as HTMLAnchorElement).href = SampleFileUrl;
 
-const selectMediaButton = document.querySelector('button') as HTMLButtonElement;
+const selectMediaButton = document.querySelector('#select-file') as HTMLButtonElement;
+const loadUrlButton = document.querySelector('#load-url') as HTMLButtonElement;
 const fileNameElement = document.querySelector('#file-name') as HTMLParagraphElement;
 const horizontalRule = document.querySelector('hr') as HTMLHRElement;
 const bytesReadElement = document.querySelector('#bytes-read') as HTMLParagraphElement;
 const metadataContainer = document.querySelector('#metadata-container') as HTMLDivElement;
 
-const extractMetadata = (file: File) => {
-	// Create a new input from the file
+const extractMetadata = (resource: File | string) => {
+	// Create a new input from the resource
 	const input = new Input({
-		source: new BlobSource(file),
+		source: typeof resource === 'string'
+			? new UrlSource(resource)
+			: new BlobSource(resource),
 		formats: ALL_FORMATS, // Accept all formats
 	});
 
 	let bytesRead = 0;
 	let fileSize: number | null = null;
+	let obtainedSources = 0;
 
 	const updateBytesRead = () => {
-		bytesReadElement.textContent = `Bytes read: ${bytesRead} / ${fileSize === null ? '?' : fileSize}`;
+		if (obtainedSources > 1) {
+			bytesReadElement.textContent = `Bytes read: ${bytesRead} across ${obtainedSources} files`;
+		} else {
+			bytesReadElement.textContent = `Bytes read: ${bytesRead} / ${fileSize === null ? '?' : fileSize}`;
 
-		if (fileSize !== null) {
-			bytesReadElement.textContent += ` (${(100 * bytesRead / fileSize).toPrecision(3)}% of entire file)`;
+			if (fileSize !== null) {
+				bytesReadElement.textContent += ` (${(100 * bytesRead / fileSize).toPrecision(3)}% of entire file)`;
+			}
 		}
 	};
 
-	input.source.onread = (start, end) => {
-		bytesRead += end - start;
-		updateBytesRead();
-	};
+	input.on('source', ({ source, isRoot }) => {
+		if (isRoot) {
+			// Get the input's size
+			void source.getSize().then((size) => {
+				fileSize = size;
+				updateBytesRead();
+			});
+		}
 
-	// Get the input's size
-	void input.source.getSize().then(size => fileSize = size);
+		obtainedSources++;
+		updateBytesRead();
+
+		source.on('read', ({ start, end }) => {
+			bytesRead += end - start;
+			updateBytesRead();
+		});
+	});
 
 	// This object contains all the data that gets displayed:
 	const object = {
 		'Format': input.getFormat().then(format => format.name),
 		'Full MIME type': input.getMimeType(),
-		'Duration': input.computeDuration().then(duration => `${duration} seconds`),
+		'Starts at': input.getFirstTimestamp().then(start => `${start} seconds`),
+		'Ends at': input.computeDuration().then(duration => `${duration} seconds`),
 		'Tracks': input.getTracks().then(tracks => tracks.map(track => ({
 			'Type': track.type,
-			'Codec': track.codec,
+			'Codec': track.getCodec(),
 			'Full codec string': track.getCodecParameterString(),
-			'Duration': track.computeDuration().then(duration => `${duration} seconds`),
-			'Language code': track.languageCode,
+			'Starts at': track.getFirstTimestamp().then(start => `${start} seconds`),
+			'Ends at': track.computeDuration().then(duration => `${duration} seconds`),
+			'Language code': track.getLanguageCode(),
 			...(track.isVideoTrack()
 				? {
-						'Coded width': `${track.codedWidth} pixels`,
-						'Coded height': `${track.codedHeight} pixels`,
-						'Rotation': `${track.rotation}° clockwise`,
+						'Coded width': track.getCodedWidth().then(w => `${w} pixels`),
+						'Coded height': track.getCodedHeight().then(h => `${h} pixels`),
+						'Rotation': track.getRotation().then(rot => `${rot}° clockwise`),
+						'Flipped': track.getFlip().then(flip => flip ? 'Yes' : 'No'),
+						'Pixel aspect ratio': track.getPixelAspectRatio().then(par => `${par.num}:${par.den}`),
+						'Display width': track.getDisplayWidth().then(w => `${w} pixels`),
+						'Display height': track.getDisplayHeight().then(h => `${h} pixels`),
+						'Transparency': track.canBeTransparent(),
 					}
 				: track.isAudioTrack()
 					? {
-							'Number of channels': track.numberOfChannels,
-							'Sample rate': `${track.sampleRate} Hz`,
+							'Number of channels': track.getNumberOfChannels(),
+							'Sample rate': track.getSampleRate().then(rate => `${rate} Hz`),
 						}
 					: {}),
 			'Packet statistics': shortDelay().then(() => track.computePacketStats()).then(stats => ({
@@ -76,9 +101,40 @@ const extractMetadata = (file: File) => {
 				: {}
 			),
 		}))),
+		'Metadata tags': input.getMetadataTags().then((tags) => {
+			const result = {
+				'Title': tags.title,
+				'Description': tags.description,
+				'Artist': tags.artist,
+				'Album': tags.album,
+				'Album artist': tags.albumArtist,
+				'Track number': tags.trackNumber,
+				'Tracks total': tags.tracksTotal,
+				'Disc number': tags.discNumber,
+				'Discs total': tags.discsTotal,
+				'Genre': tags.genre,
+				'Date': tags.date?.toISOString().slice(0, 10),
+				'Lyrics': tags.lyrics,
+				'Comment': tags.comment,
+				'Images': tags.images?.map((image) => {
+					const blob = new Blob([image.data.slice()], { type: image.mimeType });
+					const element = new Image();
+					element.src = URL.createObjectURL(blob);
+
+					return element;
+				}),
+				'Raw tag count': tags.raw && Object.keys(tags.raw).length,
+			};
+
+			if (Object.values(result).some(x => x !== undefined)) {
+				return result;
+			} else {
+				return undefined;
+			}
+		}),
 	};
 
-	fileNameElement.textContent = file.name;
+	fileNameElement.textContent = resource instanceof File ? resource.name : resource;
 	horizontalRule.style.display = '';
 	bytesReadElement.innerHTML = '';
 	metadataContainer.innerHTML = '';
@@ -89,7 +145,9 @@ const extractMetadata = (file: File) => {
 
 // Creates an HTML element to display any given value
 const renderValue = (value: unknown) => {
-	if (Array.isArray(value)) {
+	if (value instanceof HTMLElement) {
+		return value;
+	} else if (Array.isArray(value)) {
 		const arrayAsObject: Record<string, unknown> = Object.fromEntries(
 			value.map((item, index) => [(index + 1).toString(), item]),
 		);
@@ -112,6 +170,7 @@ const renderObject = (object: Record<string, unknown>) => {
 	for (const key of keys) {
 		const value = object[key];
 		const listItem = document.createElement('li');
+		listItem.style.wordBreak = 'break-word';
 		const keySpan = document.createElement('b');
 		keySpan.textContent = `${key}: `;
 
@@ -128,6 +187,10 @@ const renderObject = (object: Record<string, unknown>) => {
 				// Replace the loading text with the resolved value
 				listItem.removeChild(loadingSpan);
 				listItem.appendChild(renderValue(resolvedValue));
+
+				if (resolvedValue === undefined) {
+					listElement.removeChild(listItem);
+				}
 			}).catch((error) => {
 				console.error(error);
 
@@ -142,7 +205,9 @@ const renderObject = (object: Record<string, unknown>) => {
 			listItem.appendChild(renderValue(value));
 		}
 
-		listElement.appendChild(listItem);
+		if (value !== undefined) {
+			listElement.appendChild(listItem);
+		}
 	}
 
 	return listElement;
@@ -157,7 +222,7 @@ const shortDelay = () => {
 selectMediaButton.addEventListener('click', () => {
 	const fileInput = document.createElement('input');
 	fileInput.type = 'file';
-	fileInput.accept = 'video/*,video/x-matroska,audio/*,audio/aac';
+	fileInput.accept = 'video/*,video/x-matroska,video/mp2t,.ts,audio/*,audio/aac';
 	fileInput.addEventListener('change', () => {
 		const file = fileInput.files?.[0];
 		if (!file) {
@@ -168,6 +233,19 @@ selectMediaButton.addEventListener('click', () => {
 	});
 
 	fileInput.click();
+});
+
+loadUrlButton.addEventListener('click', () => {
+	const url = prompt(
+		'Please enter a URL of a media file. Note that it must be HTTPS and support cross-origin requests, so have the'
+		+ ' right CORS headers set.',
+		'https://mediabunny.dev/big-buck-bunny.mp4',
+	);
+	if (!url) {
+		return;
+	}
+
+	extractMetadata(url);
 });
 
 document.addEventListener('dragover', (event) => {

@@ -1,9 +1,11 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, vi } from "bun:test";
 import type { Protocol } from "puppeteer-core";
-import { COMPOSITION_SOURCE_URL } from "@hyperframes/core";
+import { COMPOSITION_SOURCE_URL, SCENE_CALLBACK_ERROR_PREFIX } from "@hyperframes/core";
 import type { CaptureSession } from "./frameCapture.js";
+import type { SubTimelineWaitMemo } from "../types.js";
 import {
   buildZeroDurationDiagnostic,
+  pollHfReady,
   captureFramesBatchPipelined,
   captureFrameToBufferPipelined,
   classifyConsoleScriptError,
@@ -163,7 +165,7 @@ describe("classifyPageError", () => {
   });
 
   // initializeSession registers its listeners before the incomplete fake session makes it throw.
-  async function listenedSession() {
+  async function listenedSession(memo: SubTimelineWaitMemo = {}) {
     const runtimeListeners = new Map<string, (event: unknown) => void>();
     const pageListeners = new Map<string, (event: unknown) => void>();
     const listen =
@@ -178,10 +180,46 @@ describe("classifyPageError", () => {
       pageErrors: [] as string[],
       warnings: [] as { code: string }[],
       browserConsoleBuffer: [],
+      subTimelineWaitMemo: memo,
     } as unknown as CaptureSession;
     await initializeSession(session).catch(() => {});
     return { session, pageListeners, runtimeListeners };
   }
+
+  it("keeps browser diagnostics on stderr and in the session buffer", async () => {
+    const stdout = vi.spyOn(console, "log").mockImplementation(() => {});
+    const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { session, pageListeners } = await listenedSession();
+      const emit = (type: string, text: string, url = "") =>
+        pageListeners.get("console")?.({
+          type: () => type,
+          text: () => text,
+          location: () => ({ url }),
+        });
+      emit("info", "[hyperframes] render runtime fps");
+      emit("warn", "GPU readback warning");
+      emit("error", "[HyperFrames] composition script error: scene TypeError: x");
+      emit("error", "Failed to load resource", "https://fonts.gstatic.com/font.woff2");
+
+      expect(stderr.mock.calls).toEqual([
+        ["[HyperFrames] render runtime fps"],
+        ["[Browser:WARN] GPU readback warning"],
+        ["[Browser:ERROR] [HyperFrames] composition script error: scene TypeError: x"],
+      ]);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(session.browserConsoleBuffer).toEqual([
+        "[HyperFrames] render runtime fps",
+        "[Browser:WARN] GPU readback warning",
+        "[Browser:ERROR] [HyperFrames] composition script error: scene TypeError: x",
+        "[Browser] Failed to load resource",
+      ]);
+      expect(session.pageErrors).toEqual(["runtime-error:scene TypeError: x"]);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  });
 
   it("records the page's uncaught errors from scripts it loaded from the server", async () => {
     const { session, pageListeners, runtimeListeners } = await listenedSession();
@@ -219,6 +257,26 @@ describe("classifyPageError", () => {
       "runtime-error:vfx-frame: #host: no paint arrived",
       "runtime-error:scene TypeError: x",
     ]);
+  });
+
+  it("logs a scene callback error once per render, and never as a page error", async () => {
+    const memo: SubTimelineWaitMemo = {};
+    const sessions = [await listenedSession(memo), await listenedSession(memo)];
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const text = `${SCENE_CALLBACK_ERROR_PREFIX} "scene" TypeError: x`;
+    for (const { pageListeners } of sessions) {
+      for (let i = 0; i < 2; i++) {
+        pageListeners.get("console")?.({
+          type: () => "warn",
+          text: () => text,
+          location: () => ({}),
+        });
+      }
+    }
+    const logged = log.mock.calls.filter(([line]) => String(line).includes('"scene" TypeError: x'));
+    expect(logged).toHaveLength(1);
+    for (const { session } of sessions) expect(session.pageErrors).toEqual([]);
+    log.mockRestore();
   });
 
   it("refuses to capture another frame once a VFX chain has failed", async () => {
@@ -556,6 +614,18 @@ describe("DrawElementVerificationError details", () => {
       { kind: "psnr", frameIndex: 5, failedDb: 12.1, verifyThresholdDb: 32 },
     );
     expect(getDrawElementVerificationDetails(adversarial)?.kind).toBe("psnr");
+  });
+});
+
+describe("pollHfReady", () => {
+  it("fails at once with the runtime's start-up error instead of waiting out the timeout", async () => {
+    const startupError = "HyperFrames runtime failed: TypeError: boom";
+    const page = {
+      evaluate: async (expr: unknown) =>
+        String(expr).includes("__hfStartupError") ? startupError : false,
+    } as unknown as Parameters<typeof pollHfReady>[0];
+
+    await expect(pollHfReady(page, 60_000)).rejects.toThrow(startupError);
   });
 });
 

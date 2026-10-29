@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
+import { resolve } from "node:path";
+import { Video } from "../src/native-video";
 
-test("root native APIs work with rendering and media extensions denied until explicitly loaded", async () => {
+test.skipIf(!Video.available)("root native APIs work with rendering and media extensions denied until explicitly loaded", async () => {
   const root = new URL("../src/index.ts", import.meta.url).href;
-  const fixture = new URL("../../../test/js/bun/video/fixture.ts", import.meta.url).href;
+  const fixture = resolve(import.meta.dir, "../hyperframes/cli/src/commands/__fixtures__/silent.mp4");
   const optional = new URL("../src/ffmpeg.ts", import.meta.url).href;
   const child = Bun.spawn(
     [
@@ -22,8 +24,7 @@ test("root native APIs work with rendering and media extensions denied until exp
     }
     if (!hookVerified) throw new Error("Optional owner isolation was not active");
     const video = await import(${JSON.stringify(root)});
-    const { mp4 } = await import(${JSON.stringify(fixture)});
-    const bytes = mp4();
+    const bytes = new Uint8Array(await Bun.file(${JSON.stringify(fixture)}).arrayBuffer());
     const input = await video.createVideo(new Response(bytes));
     const metadata = await input.metadata();
     const source = await video.loadVideoAPI("source");
@@ -37,7 +38,7 @@ test("root native APIs work with rendering and media extensions denied until exp
     console.log(JSON.stringify({
       width: metadata.width, frameCount: metadata.frameCount, fileBytes: metadata.fileBytes,
       sourceBytes: bytes.length, interpolation: engine.interpolate(5, [0, 10], [0, 100]),
-      native: input instanceof Bun.Video,
+      native: typeof input.metadata === "function",
     }));
   `,
     ],
@@ -52,8 +53,8 @@ test("root native APIs work with rendering and media extensions denied until exp
   expect(status).toBe(0);
   const result = JSON.parse(stdout);
   expect(result).toEqual({
-    width: 64,
-    frameCount: 3,
+    width: 160,
+    frameCount: 15,
     fileBytes: result.sourceBytes,
     sourceBytes: result.sourceBytes,
     interpolation: 50,

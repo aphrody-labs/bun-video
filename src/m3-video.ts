@@ -1,4 +1,5 @@
 import { schemeFromSeed, type ColorRoleMap, type SchemeVariant } from "@aphrody/m3-tokens/dynamic-color";
+import "./image-compat";
 import { EMPHASIZED_WEIGHT, EXPRESSIVE_SPRINGS, TYPE_BASE } from "@aphrody/m3-tokens/expressive";
 import { spring } from "../remotion/core/src/spring/index";
 import { captureCompositionFrames } from "./render-frame";

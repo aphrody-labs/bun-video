@@ -39,4 +39,4 @@ Un extracteur présent et `working: true` ne prouvent ni lecture, ni authentific
 
 Le bridge conserve le propriétaire CPython sur son thread d'initialisation jusqu'à la sortie du processus ; les opérations `Python.async()` s'attachent à cet interpréteur puis ferment leur session. Cela évite une finalisation/réinitialisation entre la qualification, le catalogue et une extraction.
 
-Le catalogue natif de la version vendored `2026.08.19` contient 1751 extracteurs et aucun extracteur Crunchyroll dédié. Le client `src/crunchyroll.ts` reste le propriétaire de cette intégration ; le MPD DRM capturé et ses fragments ne deviennent pas des téléchargements yt-dlp qualifiés.
+Le catalogue natif de la version vendored `2026.10.26` (count measured on `2026.08.19`, not re-measured) contient 1751 extracteurs et aucun extracteur Crunchyroll dédié. Le client `src/crunchyroll.ts` reste le propriétaire de cette intégration ; le MPD DRM capturé et ses fragments ne deviennent pas des téléchargements yt-dlp qualifiés.

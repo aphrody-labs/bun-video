@@ -1,87 +1,119 @@
 /*!
- * Copyright (c) 2025-present, Vanilagy and contributors
+ * Copyright (c) 2026-present, Vanilagy and contributors
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+import { TrackType } from '../output';
 import {
 	extractAv1CodecInfoFromPacket,
+	extractDtsFourCcFromPacket,
 	extractAvcDecoderConfigurationRecord,
 	extractHevcDecoderConfigurationRecord,
+	extractProresCodecInfoFromPacket,
 	extractVp9CodecInfoFromPacket,
 } from '../codec-data';
 import {
 	AacCodecInfo,
 	AudioCodec,
+	DtsFourCc,
 	extractAudioCodecString,
+	extractColorSpace,
 	extractVideoCodecString,
 	MediaCodec,
+	OPUS_SAMPLE_RATE,
+	PRORES_FOURCCS,
+	ProresFourCc,
 	VideoCodec,
 } from '../codec';
 import { Demuxer } from '../demuxer';
 import { Input } from '../input';
+import { Logging } from '../logging';
 import {
-	InputAudioTrack,
 	InputAudioTrackBacking,
-	InputTrack,
 	InputTrackBacking,
-	InputVideoTrack,
 	InputVideoTrackBacking,
 } from '../input-track';
+import { AttachedFile, DEFAULT_TRACK_DISPOSITION, MetadataTags, TrackDisposition } from '../metadata';
 import { PacketRetrievalOptions } from '../media-sink';
 import {
 	assert,
-	AsyncMutex,
-	binarySearchExact,
 	binarySearchLessOrEqual,
 	COLOR_PRIMARIES_MAP_INVERSE,
+	colorSpaceIsComplete,
+	EMPTY_COLOR_SPACE,
 	findLastIndex,
-	insertSorted,
 	isIso639Dash2LanguageCode,
+	isThenable,
 	last,
 	MATRIX_COEFFICIENTS_MAP_INVERSE,
+	centeredTransformationMatrix,
+	DEG_TO_RAD,
+	multiplyMatrices,
 	normalizeRotation,
 	Rotation,
-	roundToPrecision,
+	rotationMatrix,
+	roundIfAlmostInteger,
+	scaleMatrix,
+	textDecoder,
+	toDataView,
 	TRANSFER_CHARACTERISTICS_MAP_INVERSE,
 	UNDETERMINED_LANGUAGE,
 } from '../misc';
-import { EncodedPacket, PLACEHOLDER_DATA } from '../packet';
-import { Reader } from '../reader';
+import { EncodedPacket, EncodedPacketSideData, PLACEHOLDER_DATA } from '../packet';
 import {
 	assertDefinedSize,
 	CODEC_STRING_MAP,
 	EBMLId,
-	EBMLReader,
 	LEVEL_0_AND_1_EBML_IDS,
 	LEVEL_1_EBML_IDS,
 	MAX_HEADER_SIZE,
 	MIN_HEADER_SIZE,
+	readAsciiString,
+	readUnicodeString,
+	readElementHeader,
+	readElementId,
+	readFloat,
+	readUnsignedInt,
 	readVarInt,
+	resync,
+	searchForNextElementId,
+	readUnsignedBigInt,
 } from './ebml';
 import { buildMatroskaMimeType } from './matroska-misc';
+import { FileSlice, readBytes, Reader, readI16Be, readU8 } from '../reader';
 
 type Segment = {
 	seekHeadSeen: boolean;
 	infoSeen: boolean;
 	tracksSeen: boolean;
 	cuesSeen: boolean;
+	attachmentsSeen: boolean;
+	tagsSeen: boolean;
 
 	timestampScale: number;
 	timestampFactor: number;
 	duration: number;
 	seekEntries: SeekEntry[];
 	tracks: InternalTrack[];
+	idToTrack: Map<number, InternalTrack>;
 	cuePoints: CuePoint[];
 
 	dataStartPos: number;
-	elementEndPos: number;
+	elementEndPos: number | null;
 	clusterSeekStartPos: number;
 
-	clusters: Cluster[];
-	clusterLookupMutex: AsyncMutex;
+	/**
+	 * Caches the last cluster that was read. Based on the assumption that there will be multiple reads to the
+	 * same cluster in quick succession.
+	 */
+	lastReadCluster: Cluster | null;
+	clusterSummaries: Map<number, ClusterSummary>; // Keyed by cluster position
+
+	metadataTags: MetadataTags;
+	metadataTagsPromise: Promise<void> | null;
 };
 
 type SeekEntry = {
@@ -90,16 +122,21 @@ type SeekEntry = {
 };
 
 type Cluster = {
+	segment: Segment;
 	elementStartPos: number;
 	elementEndPos: number;
 	dataStartPos: number;
 	timestamp: number;
 	trackData: Map<number, ClusterTrackData>;
-	nextCluster: Cluster | null;
-	isKnownToBeFirstCluster: boolean;
+};
+
+type ClusterSummary = {
+	elementEndPos: number;
+	trackIds: Set<number>; // The tracks with blocks in the cluster
 };
 
 type ClusterTrackData = {
+	track: InternalTrack;
 	startTimestamp: number;
 	endTimestamp: number;
 	firstKeyFrameTimestamp: number | null;
@@ -121,9 +158,11 @@ type ClusterBlock = {
 	timestamp: number;
 	duration: number;
 	isKeyFrame: boolean;
-	referencedTimestamps: number[];
 	data: Uint8Array;
 	lacing: BlockLacing;
+	decoded: boolean;
+	postProcessed: boolean; // For codec-specific processing
+	mainAdditional: Uint8Array | null;
 };
 
 type CuePoint = {
@@ -132,30 +171,78 @@ type CuePoint = {
 	clusterPosition: number;
 };
 
+enum ContentEncodingScope {
+	Block = 1,
+	Private = 2,
+	Next = 4,
+}
+
+enum ContentCompAlgo {
+	Zlib,
+	Bzlib,
+	lzo1x,
+	HeaderStripping,
+}
+
+type DecodingInstruction = {
+	order: number;
+	scope: ContentEncodingScope;
+	data: {
+		type: 'decompress';
+		algorithm: ContentCompAlgo | null;
+		settings: Uint8Array | null;
+	} | {
+		type: 'decrypt';
+		// Don't store more yet since this operation is unsupported
+	} | null;
+};
+
 type InternalTrack = {
 	id: number;
 	demuxer: MatroskaDemuxer;
 	segment: Segment;
-	clusters: Cluster[];
-	clustersWithKeyFrame: Cluster[];
+	/**
+	 * List of all encountered cluster offsets alongside their timestamps. This list never gets truncated, but memory
+	 * consumption should be negligible.
+	 */
+	clusterPositionCache: {
+		elementStartPos: number;
+		startTimestamp: number;
+	}[];
 	cuePoints: CuePoint[];
 
-	isDefault: boolean;
-	inputTrack: InputTrack | null;
+	disposition: TrackDisposition;
+	trackBacking: InputTrackBacking | null;
 	codecId: string | null;
 	codecPrivate: Uint8Array | null;
 	defaultDuration: number | null;
+	defaultDurationNs: number | null;
+	codecDelay: number;
+	codecDelayNs: number;
+	name: string | null;
 	languageCode: string;
+	hasLanguageBcp47: boolean;
+	decodingInstructions: DecodingInstruction[];
+
 	info:
 		| null
 		| {
 			type: 'video';
 			width: number;
 			height: number;
+			displayWidth: number | null;
+			displayHeight: number | null;
+			displayUnit: number | null;
+			squarePixelWidth: number;
+			squarePixelHeight: number;
+			horizontalScale: number;
+			verticalScale: number;
 			rotation: Rotation;
 			codec: VideoCodec | null;
 			codecDescription: Uint8Array | null;
-			colorSpace: VideoColorSpaceInit | null;
+			colorSpace: VideoColorSpaceInit;
+			alphaMode: boolean;
+			proresFormat: ProresFourCc | null;
 		}
 		| {
 			type: 'audio';
@@ -165,6 +252,7 @@ type InternalTrack = {
 			codec: AudioCodec | null;
 			codecDescription: Uint8Array | null;
 			aacCodecInfo: AacCodecInfo | null;
+			dtsFormat: DtsFourCc | null;
 		};
 };
 type InternalVideoTrack = InternalTrack & { info: { type: 'video' } };
@@ -177,10 +265,10 @@ const METADATA_ELEMENTS = [
 	{ id: EBMLId.Cues, flag: 'cuesSeen' },
 ] as const;
 const MAX_RESYNC_LENGTH = 10 * 2 ** 20; // 10 MiB
+const MAX_ELEMENT_NESTING_DEPTH = 64;
 
 export class MatroskaDemuxer extends Demuxer {
-	metadataReader: EBMLReader;
-	clusterReader: EBMLReader;
+	reader: Reader;
 
 	readMetadataPromise: Promise<void> | null = null;
 
@@ -189,35 +277,45 @@ export class MatroskaDemuxer extends Demuxer {
 	currentTrack: InternalTrack | null = null;
 	currentCluster: Cluster | null = null;
 	currentBlock: ClusterBlock | null = null;
+	currentBlockAdditional: {
+		addId: number;
+		data: Uint8Array | null;
+	} | null = null;
+
 	currentCueTime: number | null = null;
+	currentDecodingInstruction: DecodingInstruction | null = null;
+	currentTagTargetIsMovie: boolean = true;
+	currentSimpleTagName: string | null = null;
+	currentAttachedFile: {
+		fileUid: bigint | null;
+		fileName: string | null;
+		fileMediaType: string | null;
+		fileData: Uint8Array | null;
+		fileDescription: string | null;
+	} | null = null;
 
 	isWebM = false;
+	claimedSeekTargets = new Set<number>();
+	elementNestingDepth = 0;
 
 	constructor(input: Input) {
 		super(input);
 
-		this.metadataReader = new EBMLReader(input._mainReader);
-
-		// Max 64 MiB of stored clusters
-		this.clusterReader = new EBMLReader(new Reader(input.source, 64 * 2 ** 20));
+		this.reader = input._reader;
 	}
 
-	override async computeDuration() {
-		const tracks = await this.getTracks();
-		const trackDurations = await Promise.all(tracks.map(x => x.computeDuration()));
-		return Math.max(0, ...trackDurations);
-	}
-
-	async getTracks() {
+	async getTrackBackings() {
 		await this.readMetadata();
-		return this.segments.flatMap(segment => segment.tracks.map(track => track.inputTrack!));
+		return this.segments.flatMap(segment => segment.tracks.map(track => track.trackBacking!));
 	}
 
 	override async getMimeType() {
 		await this.readMetadata();
 
-		const tracks = await this.getTracks();
-		const codecStrings = await Promise.all(tracks.map(x => x.getCodecParameterString()));
+		const backings = await this.getTrackBackings();
+		const codecStrings = await Promise.all(backings.map(
+			x => x.getDecoderConfig().then(c => c?.codec ?? null),
+		));
 
 		return buildMatroskaMimeType({
 			isWebM: this.isWebM,
@@ -227,123 +325,161 @@ export class MatroskaDemuxer extends Demuxer {
 		});
 	}
 
+	async getMetadataTags() {
+		await this.readMetadata();
+
+		// Load metadata tags from each segment lazily (only once)
+		for (const segment of this.segments) {
+			if (!segment.metadataTagsPromise) {
+				if (this.reader.fileSize !== null) {
+					segment.metadataTagsPromise = this.loadSegmentMetadata(segment);
+				} else {
+					// The seeking would be too crazy, let's not
+					segment.metadataTagsPromise = Promise.resolve();
+				}
+			}
+
+			await segment.metadataTagsPromise;
+		}
+
+		// This is kinda handwavy, and how we handle multiple segments isn't suuuuper well-defined anyway; so we just
+		// shallow-merge metadata tags from all (usually just one) segments.
+		let metadataTags: MetadataTags = {};
+		for (const segment of this.segments) {
+			metadataTags = { ...metadataTags, ...segment.metadataTags };
+		}
+
+		return metadataTags;
+	}
+
 	readMetadata() {
 		return this.readMetadataPromise ??= (async () => {
-			this.metadataReader.pos = 0;
-
-			const fileSize = await this.input.source.getSize();
+			let currentPos = 0;
 
 			// Loop over all top-level elements in the file
-			while (this.metadataReader.pos <= fileSize - MIN_HEADER_SIZE) {
-				await this.metadataReader.reader.loadRange(
-					this.metadataReader.pos,
-					this.metadataReader.pos + MAX_HEADER_SIZE,
-				);
+			while (true) {
+				let slice = this.reader.requestSliceRange(currentPos, MIN_HEADER_SIZE, MAX_HEADER_SIZE);
+				if (isThenable(slice)) slice = await slice;
+				if (!slice) break;
 
-				const header = this.metadataReader.readElementHeader();
+				const header = readElementHeader(slice);
 				if (!header) {
 					break; // Zero padding at the end of the file triggers this, for example
 				}
 
 				const id = header.id;
 				let size = header.size;
-				const startPos = this.metadataReader.pos;
+				const dataStartPos = slice.filePos;
 
 				if (id === EBMLId.EBML) {
 					assertDefinedSize(size);
 
-					await this.metadataReader.reader.loadRange(this.metadataReader.pos, this.metadataReader.pos + size);
-					this.readContiguousElements(this.metadataReader, size);
-				} else if (id === EBMLId.Segment) { // Segment found!
-					await this.readSegment(size);
+					let slice = this.reader.requestSlice(dataStartPos, size);
+					if (isThenable(slice)) slice = await slice;
+					if (!slice) break;
 
-					if (size === null) {
+					this.readContiguousElements(slice);
+				} else if (id === EBMLId.Segment) { // Segment found!
+					await this.readSegment(dataStartPos, size);
+
+					if (size === undefined) {
 						// Segment sizes can be undefined (common in livestreamed files), so assume this is the last
 						// and only segment
 						break;
 					}
+
+					if (this.reader.fileSize === null) {
+						break; // Stop at the first segment
+					}
 				} else if (id === EBMLId.Cluster) {
+					if (this.reader.fileSize === null) {
+						break; // Shouldn't be reached anyway, since we stop at the first segment
+					}
+
 					// Clusters are not a top-level element in Matroska, but some files contain a Segment whose size
 					// doesn't contain any of the clusters that follow it. In the case, we apply the following logic: if
 					// we find a top-level cluster, attribute it to the previous segment.
 
-					if (size === null) {
+					if (size === undefined) {
 						// Just in case this is one of those weird sizeless clusters, let's do our best and still try to
 						// determine its size.
-						const nextElementPos = await this.clusterReader.searchForNextElementId(
+						const nextElementPos = await searchForNextElementId(
+							this.reader,
+							dataStartPos,
 							LEVEL_0_AND_1_EBML_IDS,
-							fileSize,
+							this.reader.fileSize,
 						);
-						size = (nextElementPos ?? fileSize) - startPos;
+						size = nextElementPos.pos - dataStartPos;
 					}
 
 					const lastSegment = last(this.segments);
 					if (lastSegment) {
 						// Extend the previous segment's size
-						lastSegment.elementEndPos = startPos + size;
+						lastSegment.elementEndPos = dataStartPos + size;
 					}
 				}
 
 				assertDefinedSize(size);
-				this.metadataReader.pos = startPos + size;
+				currentPos = dataStartPos + size;
 			}
 		})();
 	}
 
-	async readSegment(dataSize: number | null) {
-		const segmentDataStart = this.metadataReader.pos;
-
+	async readSegment(segmentDataStart: number, dataSize: number | undefined) {
 		this.currentSegment = {
 			seekHeadSeen: false,
 			infoSeen: false,
 			tracksSeen: false,
 			cuesSeen: false,
+			tagsSeen: false,
+			attachmentsSeen: false,
 
 			timestampScale: -1,
 			timestampFactor: -1,
 			duration: -1,
 			seekEntries: [],
 			tracks: [],
+			idToTrack: new Map(),
 			cuePoints: [],
 
 			dataStartPos: segmentDataStart,
-			elementEndPos: dataSize === null
-				? await this.input.source.getSize() // Assume it goes until the end of the file
+			elementEndPos: dataSize === undefined
+				? null // Assume it goes until the end of the file
 				: segmentDataStart + dataSize,
 			clusterSeekStartPos: segmentDataStart,
 
-			clusters: [],
-			clusterLookupMutex: new AsyncMutex(),
+			lastReadCluster: null,
+			clusterSummaries: new Map(),
+
+			metadataTags: {},
+			metadataTagsPromise: null,
 		};
 		this.segments.push(this.currentSegment);
 
-		// Let's load a good amount of data, enough for all segment metadata to likely fit into (minus cues)
-		await this.metadataReader.reader.loadRange(
-			this.metadataReader.pos,
-			this.metadataReader.pos + 2 ** 14,
-		);
+		let currentPos = segmentDataStart;
+		const visitedSeekHeadPositions = new Set<number>();
 
-		let clusterEncountered = false;
-		while (this.metadataReader.pos <= this.currentSegment.elementEndPos - MIN_HEADER_SIZE) {
-			await this.metadataReader.reader.loadRange(
-				this.metadataReader.pos,
-				this.metadataReader.pos + MAX_HEADER_SIZE,
-			);
+		while (this.currentSegment.elementEndPos === null || currentPos < this.currentSegment.elementEndPos) {
+			let slice = this.reader.requestSliceRange(currentPos, MIN_HEADER_SIZE, MAX_HEADER_SIZE);
+			if (isThenable(slice)) slice = await slice;
+			if (!slice) break;
 
-			const elementStartPos = this.metadataReader.pos;
-			const header = this.metadataReader.readElementHeader();
+			const elementStartPos = currentPos;
+			const header = readElementHeader(slice);
 
-			if (!header || !LEVEL_1_EBML_IDS.includes(header.id)) {
-				// Potential junk. Let's try to resync
+			if (!header || (!LEVEL_1_EBML_IDS.includes(header.id) && header.id !== EBMLId.Void)) {
+				// Potential junk. Let's try to resync (skipping the current position, which might hold a valid ID
+				// followed by a broken size)
 
-				this.metadataReader.pos = elementStartPos;
-				const nextPos = await this.metadataReader.resync(
+				const nextPos = await resync(
+					this.reader,
+					elementStartPos + 1,
 					LEVEL_1_EBML_IDS,
-					Math.min(this.currentSegment.elementEndPos, this.metadataReader.pos + MAX_RESYNC_LENGTH),
+					Math.min(this.currentSegment.elementEndPos ?? Infinity, elementStartPos + MAX_RESYNC_LENGTH),
 				);
 
 				if (nextPos) {
-					this.metadataReader.pos = nextPos;
+					currentPos = nextPos;
 					continue;
 				} else {
 					break; // Resync failed
@@ -351,92 +487,127 @@ export class MatroskaDemuxer extends Demuxer {
 			}
 
 			const { id, size } = header;
-			const dataStartPos = this.metadataReader.pos;
+			const dataStartPos = slice.filePos;
 
 			const metadataElementIndex = METADATA_ELEMENTS.findIndex(x => x.id === id);
 			if (metadataElementIndex !== -1) {
 				const field = METADATA_ELEMENTS[metadataElementIndex]!.flag;
 				this.currentSegment[field] = true;
 
+				if (id === EBMLId.SeekHead) {
+					visitedSeekHeadPositions.add(elementStartPos - segmentDataStart);
+				}
+
 				assertDefinedSize(size);
-				await this.metadataReader.reader.loadRange(this.metadataReader.pos, this.metadataReader.pos + size);
-				this.readContiguousElements(this.metadataReader, size);
+
+				let slice = this.reader.requestSlice(dataStartPos, size);
+				if (isThenable(slice)) slice = await slice;
+
+				if (slice) {
+					this.readContiguousElements(slice);
+				}
+			} else if (id === EBMLId.Tags || id === EBMLId.Attachments) {
+				// Metadata found at the beginning of the segment, great, let's parse it
+				if (id === EBMLId.Tags) {
+					this.currentSegment.tagsSeen = true;
+				} else {
+					this.currentSegment.attachmentsSeen = true;
+				}
+
+				assertDefinedSize(size);
+
+				let slice = this.reader.requestSlice(dataStartPos, size);
+				if (isThenable(slice)) slice = await slice;
+
+				if (slice) {
+					this.readContiguousElements(slice);
+				}
 			} else if (id === EBMLId.Cluster) {
-				if (!clusterEncountered) {
-					clusterEncountered = true;
-					this.currentSegment.clusterSeekStartPos = elementStartPos;
-				}
+				this.currentSegment.clusterSeekStartPos = elementStartPos;
+				break; // Stop at the first cluster
 			}
 
-			if (size !== null) {
-				this.metadataReader.pos = dataStartPos + size;
-			}
-
-			if (this.currentSegment.infoSeen && this.currentSegment.tracksSeen && this.currentSegment.cuesSeen) {
-				// No need to search anymore, we have everything
+			if (size === undefined) {
 				break;
-			}
-
-			if (this.currentSegment.seekHeadSeen) {
-				let hasInfo = this.currentSegment.infoSeen;
-				let hasTracks = this.currentSegment.tracksSeen;
-				let hasCues = this.currentSegment.cuesSeen;
-
-				for (const entry of this.currentSegment.seekEntries) {
-					if (entry.id === EBMLId.Info) {
-						hasInfo = true;
-					} else if (entry.id === EBMLId.Tracks) {
-						hasTracks = true;
-					} else if (entry.id === EBMLId.Cues) {
-						hasCues = true;
-					}
-				}
-
-				if (hasInfo && hasTracks && hasCues) {
-					// No need to search sequentially anymore, we can use the seek head
-					break;
-				}
-			}
-
-			if (size === null) {
-				break;
-			}
-		}
-
-		if (!clusterEncountered) {
-			const seekEntry = this.currentSegment.seekEntries.find(entry => entry.id === EBMLId.Cluster);
-
-			if (seekEntry) {
-				// The seek head points us to the first cluster, nice
-				this.currentSegment.clusterSeekStartPos = segmentDataStart + seekEntry.segmentPosition;
 			} else {
-				this.currentSegment.clusterSeekStartPos = this.metadataReader.pos;
+				currentPos = dataStartPos + size;
 			}
 		}
 
-		// Use the seek head to read missing metadata elements
-		for (const target of METADATA_ELEMENTS) {
-			if (this.currentSegment[target.flag]) continue;
+		if (this.reader.fileSize !== null) {
+			// Seek heads can sometimes point to other seek heads, so follow them until there are no unvisited
+			// ones left. Following a seek head appends its entries to the list we're iterating over.
+			for (let i = 0; i < this.currentSegment.seekEntries.length; i++) {
+				const seekEntry = this.currentSegment.seekEntries[i]!;
+				if (seekEntry.id !== EBMLId.SeekHead || visitedSeekHeadPositions.has(seekEntry.segmentPosition)) {
+					continue;
+				}
 
-			const seekEntry = this.currentSegment.seekEntries.find(entry => entry.id === target.id);
-			if (!seekEntry) continue;
+				visitedSeekHeadPositions.add(seekEntry.segmentPosition);
+				if (!this.claimSeekTarget(segmentDataStart + seekEntry.segmentPosition)) {
+					continue;
+				}
 
-			this.metadataReader.pos = segmentDataStart + seekEntry.segmentPosition;
-			await this.metadataReader.reader.loadRange(
-				this.metadataReader.pos,
-				this.metadataReader.pos + 2 ** 12, // Load a larger range, assuming the correct element will be there
-			);
-			const header = this.metadataReader.readElementHeader();
-			if (!header) continue;
+				let slice = this.reader.requestSliceRange(
+					segmentDataStart + seekEntry.segmentPosition,
+					MIN_HEADER_SIZE,
+					MAX_HEADER_SIZE,
+				);
+				if (isThenable(slice)) slice = await slice;
+				if (!slice) continue;
 
-			const { id, size } = header;
-			if (id !== target.id) continue;
+				const header = readElementHeader(slice);
+				if (!header || header.id !== EBMLId.SeekHead) continue;
 
-			assertDefinedSize(size);
+				const { size } = header;
+				assertDefinedSize(size);
 
-			this.currentSegment[target.flag] = true;
-			await this.metadataReader.reader.loadRange(this.metadataReader.pos, this.metadataReader.pos + size);
-			this.readContiguousElements(this.metadataReader, size);
+				let dataSlice = this.reader.requestSlice(slice.filePos, size);
+				if (isThenable(dataSlice)) dataSlice = await dataSlice;
+				if (!dataSlice) continue;
+
+				this.readContiguousElements(dataSlice);
+			}
+		}
+
+		// Sort the seek entries by file position so reading them exhibits a sequential pattern
+		this.currentSegment.seekEntries.sort((a, b) => a.segmentPosition - b.segmentPosition);
+
+		if (this.reader.fileSize !== null) {
+			// Use the seek head to read missing metadata elements
+			for (const seekEntry of this.currentSegment.seekEntries) {
+				const target = METADATA_ELEMENTS.find(x => x.id === seekEntry.id);
+				if (!target) {
+					continue;
+				}
+
+				if (this.currentSegment[target.flag]) continue;
+				if (!this.claimSeekTarget(segmentDataStart + seekEntry.segmentPosition)) continue;
+
+				let slice = this.reader.requestSliceRange(
+					segmentDataStart + seekEntry.segmentPosition,
+					MIN_HEADER_SIZE,
+					MAX_HEADER_SIZE,
+				);
+				if (isThenable(slice)) slice = await slice;
+				if (!slice) continue;
+
+				const header = readElementHeader(slice);
+				if (!header) continue;
+
+				const { id, size } = header;
+				if (id !== target.id) continue;
+
+				assertDefinedSize(size);
+
+				this.currentSegment[target.flag] = true;
+
+				let dataSlice = this.reader.requestSlice(slice.filePos, size);
+				if (isThenable(dataSlice)) dataSlice = await dataSlice;
+				if (!dataSlice) continue;
+
+				this.readContiguousElements(dataSlice);
+			}
 		}
 
 		if (this.currentSegment.timestampScale === -1) {
@@ -446,122 +617,130 @@ export class MatroskaDemuxer extends Demuxer {
 			this.currentSegment.timestampFactor = 1e9 / 1e6;
 		}
 
-		// Put default tracks first
-		this.currentSegment.tracks.sort((a, b) => Number(b.isDefault) - Number(a.isDefault));
-
-		// Sort cue points by cluster position (required for the next algorithm)
-		this.currentSegment.cuePoints.sort((a, b) => a.clusterPosition - b.clusterPosition);
-
-		// Now, let's distribute the cue points to each track. Ideally, each track has their own cue point, but some
-		// Matroska files may only specify cue points for a single track. In this case, we still wanna use those cue
-		// points for all tracks.
-		const allTrackIds = this.currentSegment.tracks.map(x => x.id);
-		const remainingTrackIds = new Set<number>();
-		let lastClusterPosition: number | null = null;
-		let lastCuePoint: CuePoint | null = null;
-
-		for (const cuePoint of this.currentSegment.cuePoints) {
-			if (cuePoint.clusterPosition !== lastClusterPosition) {
-				for (const id of remainingTrackIds) {
-					// These tracks didn't receive a cue point for the last cluster, so let's give them one
-					assert(lastCuePoint);
-					const track = this.currentSegment.tracks.find(x => x.id === id)!;
-					track.cuePoints.push(lastCuePoint);
-				}
-
-				for (const id of allTrackIds) {
-					remainingTrackIds.add(id);
-				}
+		// Compute default duration and codec delay for all tracks now that we have the timestamp factor
+		for (const track of this.currentSegment.tracks) {
+			if (track.defaultDurationNs !== null) {
+				track.defaultDuration = (this.currentSegment.timestampFactor * track.defaultDurationNs) / 1e9;
 			}
 
-			lastCuePoint = cuePoint;
-
-			if (!remainingTrackIds.has(cuePoint.trackId)) {
-				continue;
-			}
-
-			const track = this.currentSegment.tracks.find(x => x.id === cuePoint.trackId)!;
-			track.cuePoints.push(cuePoint);
-
-			remainingTrackIds.delete(cuePoint.trackId);
-			lastClusterPosition = cuePoint.clusterPosition;
+			track.codecDelay = Math.round((this.currentSegment.timestampFactor * track.codecDelayNs) / 1e9);
 		}
 
-		for (const id of remainingTrackIds) {
-			assert(lastCuePoint);
-			const track = this.currentSegment.tracks.find(x => x.id === id)!;
-			track.cuePoints.push(lastCuePoint);
+		// Assign cue points to their respective tracks
+		for (const cuePoint of this.currentSegment.cuePoints) {
+			const track = this.currentSegment.idToTrack.get(cuePoint.trackId);
+			if (track) {
+				track.cuePoints.push(cuePoint);
+			}
 		}
 
 		for (const track of this.currentSegment.tracks) {
-			// Sort cue points by time
-			track.cuePoints.sort((a, b) => a.time - b.time);
+			// Sort cue points by time and remove multiple cue points for the same time
+			const cuePoints = track.cuePoints;
+			cuePoints.sort((a, b) => a.time - b.time);
+
+			let writeIndex = 0;
+			for (const cuePoint of cuePoints) {
+				if (writeIndex === 0 || cuePoint.time !== cuePoints[writeIndex - 1]!.time) {
+					cuePoints[writeIndex++] = cuePoint;
+				}
+			}
+			cuePoints.length = writeIndex;
+		}
+
+		let trackWithMostCuePoints: InternalTrack | null = null;
+		let maxCuePointCount = -Infinity;
+		for (const track of this.currentSegment.tracks) {
+			if (track.cuePoints.length > maxCuePointCount) {
+				maxCuePointCount = track.cuePoints.length;
+				trackWithMostCuePoints = track;
+			}
+		}
+
+		// For every track that has received 0 cue points (can happen, often only the video track receives cue points),
+		// we still want to have better seeking. Therefore, let's give it the cue points of the track with the most cue
+		// points, which should provide us with the most fine-grained seeking.
+		for (const track of this.currentSegment.tracks) {
+			if (track.cuePoints.length === 0) {
+				track.cuePoints = trackWithMostCuePoints!.cuePoints;
+			}
 		}
 
 		this.currentSegment = null;
 	}
 
-	async readCluster(segment: Segment) {
-		await this.metadataReader.reader.loadRange(this.metadataReader.pos, this.metadataReader.pos + MAX_HEADER_SIZE);
+	async readCluster(startPos: number, segment: Segment) {
+		if (segment.lastReadCluster?.elementStartPos === startPos) {
+			return segment.lastReadCluster;
+		}
 
-		const elementStartPos = this.metadataReader.pos;
-		const elementHeader = this.metadataReader.readElementHeader();
+		let headerSlice = this.reader.requestSliceRange(startPos, MIN_HEADER_SIZE, MAX_HEADER_SIZE);
+		if (isThenable(headerSlice)) headerSlice = await headerSlice;
+		assert(headerSlice);
+
+		const elementStartPos = startPos;
+		const elementHeader = readElementHeader(headerSlice);
 		assert(elementHeader);
 
 		const id = elementHeader.id;
-		let size = elementHeader.size;
-		const dataStartPos = this.metadataReader.pos;
+		assert(id === EBMLId.Cluster);
 
-		if (size === null) {
+		let size = elementHeader.size;
+		const dataStartPos = headerSlice.filePos;
+
+		if (size === undefined) {
 			// The cluster's size is undefined (can happen in livestreamed files). We'd still like to know the size of
 			// it, so we have no other choice but to iterate over the EBML structure until we find an element at level
 			// 0 or 1, indicating the end of the cluster (all elements inside the cluster are at level 2).
-			this.clusterReader.pos = dataStartPos;
-			const nextElementPos = await this.clusterReader.searchForNextElementId(
+			const nextElementPos = await searchForNextElementId(
+				this.reader,
+				dataStartPos,
 				LEVEL_0_AND_1_EBML_IDS,
 				segment.elementEndPos,
 			);
 
-			size = (nextElementPos ?? segment.elementEndPos) - dataStartPos;
+			size = nextElementPos.pos - dataStartPos;
 		}
 
-		assert(id === EBMLId.Cluster);
-
 		// Load the entire cluster
-		this.clusterReader.pos = dataStartPos;
-		await this.clusterReader.reader.loadRange(this.clusterReader.pos, this.clusterReader.pos + size);
+		let dataSlice = this.reader.requestSlice(dataStartPos, size);
+		if (isThenable(dataSlice)) dataSlice = await dataSlice;
 
 		const cluster: Cluster = {
+			segment,
 			elementStartPos,
 			elementEndPos: dataStartPos + size,
 			dataStartPos,
 			timestamp: -1,
 			trackData: new Map(),
-			nextCluster: null,
-			isKnownToBeFirstCluster: false,
 		};
-		this.currentCluster = cluster;
-		this.readContiguousElements(this.clusterReader, size);
+		if (dataSlice) {
+			this.currentCluster = cluster;
 
-		for (const [trackId, trackData] of cluster.trackData) {
-			const track = segment.tracks.find(x => x.id === trackId) ?? null;
+			try {
+				// Read the children of the cluster, stopping early at level 0 or 1 EBML elements. We do this because
+				// some clusters have incorrect sizes that are too large
+				const endPos = this.readContiguousElements(dataSlice, LEVEL_0_AND_1_EBML_IDS);
+				cluster.elementEndPos = endPos;
+			} finally {
+				this.currentCluster = null;
+				this.currentBlock = null;
+			}
+		}
+
+		for (const [, trackData] of cluster.trackData) {
+			const track = trackData.track;
 
 			// This must hold, as track datas only get created if a block for that track is encountered
 			assert(trackData.blocks.length > 0);
 
-			let blockReferencesExist = false;
 			let hasLacedBlocks = false;
 
 			for (let i = 0; i < trackData.blocks.length; i++) {
 				const block = trackData.blocks[i]!;
 				block.timestamp += cluster.timestamp;
 
-				blockReferencesExist ||= block.referencedTimestamps.length > 0;
 				hasLacedBlocks ||= block.lacing !== BlockLacing.None;
-			}
-
-			if (blockReferencesExist) {
-				trackData.blocks = sortBlocksByReferences(trackData.blocks);
 			}
 
 			trackData.presentationTimestamps = trackData.blocks
@@ -581,7 +760,7 @@ export class MatroskaDemuxer extends Demuxer {
 					const nextEntry = trackData.presentationTimestamps[i + 1]!;
 					currentBlock.duration = nextEntry.timestamp - currentBlock.timestamp;
 				} else if (currentBlock.duration === 0) {
-					if (track?.defaultDuration != null) {
+					if (track.defaultDuration != null) {
 						if (currentBlock.lacing === BlockLacing.None) {
 							currentBlock.duration = track.defaultDuration;
 						} else {
@@ -595,7 +774,7 @@ export class MatroskaDemuxer extends Demuxer {
 				// Perform lace resolution. Here, we expand each laced block into multiple blocks where each contains
 				// one frame of the lace. We do this after determining block timestamps so we can properly distribute
 				// the block's duration across the laced frames.
-				this.expandLacedBlocks(trackData.blocks, track);
+				trackData.blocks = this.expandLacedBlocks(trackData.blocks, track);
 
 				// Recompute since blocks have changed
 				trackData.presentationTimestamps = trackData.blocks
@@ -609,18 +788,32 @@ export class MatroskaDemuxer extends Demuxer {
 			trackData.startTimestamp = firstBlock.timestamp;
 			trackData.endTimestamp = lastBlock.timestamp + lastBlock.duration;
 
-			if (track) {
-				insertSorted(track.clusters, cluster, x => x.elementStartPos);
+			// Let's remember that a cluster with a given timestamp is here, speeding up future lookups if no cues exist
+			const insertionIndex = binarySearchLessOrEqual(
+				track.clusterPositionCache,
+				trackData.startTimestamp,
+				x => x.startTimestamp,
+			);
+			const previousEntry = track.clusterPositionCache[insertionIndex];
+			const nextEntry = track.clusterPositionCache[insertionIndex + 1];
 
-				const hasKeyFrame = trackData.firstKeyFrameTimestamp !== null;
-				if (hasKeyFrame) {
-					insertSorted(track.clustersWithKeyFrame, cluster, x => x.elementStartPos);
-				}
+			// Only remember it if the timestamp order matches the cluster position order
+			if (
+				(!previousEntry || previousEntry.elementStartPos < elementStartPos)
+				&& (!nextEntry || nextEntry.elementStartPos > elementStartPos)
+			) {
+				track.clusterPositionCache.splice(insertionIndex + 1, 0, {
+					elementStartPos: cluster.elementStartPos,
+					startTimestamp: trackData.startTimestamp,
+				});
 			}
 		}
 
-		insertSorted(segment.clusters, cluster, x => x.elementStartPos);
-		this.currentCluster = null;
+		segment.lastReadCluster = cluster;
+		segment.clusterSummaries.set(startPos, {
+			elementEndPos: cluster.elementEndPos,
+			trackIds: new Set(cluster.trackData.keys()),
+		});
 
 		return cluster;
 	}
@@ -628,7 +821,13 @@ export class MatroskaDemuxer extends Demuxer {
 	getTrackDataInCluster(cluster: Cluster, trackNumber: number) {
 		let trackData = cluster.trackData.get(trackNumber);
 		if (!trackData) {
+			const track = cluster.segment.idToTrack.get(trackNumber);
+			if (!track) {
+				return null;
+			}
+
 			trackData = {
+				track,
 				startTimestamp: 0,
 				endTimestamp: 0,
 				firstKeyFrameTimestamp: null,
@@ -641,21 +840,25 @@ export class MatroskaDemuxer extends Demuxer {
 		return trackData;
 	}
 
-	expandLacedBlocks(blocks: ClusterBlock[], track: InternalTrack | null) {
+	expandLacedBlocks(blocks: ClusterBlock[], track: InternalTrack) {
 		// https://www.matroska.org/technical/notes.html#block-lacing
 
-		for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
-			const originalBlock = blocks[blockIndex]!;
+		const expandedBlocks: ClusterBlock[] = [];
+
+		for (const originalBlock of blocks) {
 			if (originalBlock.lacing === BlockLacing.None) {
+				expandedBlocks.push(originalBlock);
 				continue;
 			}
 
-			const data = originalBlock.data;
-			let pos = 0;
+			// Content encodings apply to each frame, excluding the lacing data, so the frames get decoded lazily later
+			const slice = FileSlice.tempFromBytes(originalBlock.data);
+			if (slice.length === 0) {
+				throw new Error('Invalid laced block: no data.');
+			}
 
 			const frameSizes: number[] = [];
-			const frameCount = data[pos]! + 1;
-			pos++;
+			const frameCount = readU8(slice) + 1;
 
 			switch (originalBlock.lacing) {
 				case BlockLacing.Xiph: {
@@ -665,10 +868,9 @@ export class MatroskaDemuxer extends Demuxer {
 					for (let i = 0; i < frameCount - 1; i++) {
 						let frameSize = 0;
 
-						while (pos < data.length) {
-							const value = data[pos]!;
+						while (slice.bufferPos < slice.length) {
+							const value = readU8(slice);
 							frameSize += value;
-							pos++;
 
 							if (value < 255) {
 								frameSizes.push(frameSize);
@@ -680,12 +882,12 @@ export class MatroskaDemuxer extends Demuxer {
 					}
 
 					// Compute the last frame's size from whatever's left
-					frameSizes.push(data.length - (pos + totalUsedSize));
+					frameSizes.push(slice.length - (slice.bufferPos + totalUsedSize));
 				}; break;
 
 				case BlockLacing.FixedSize: {
 					// Fixed size lacing: all frames have same size
-					const totalDataSize = data.length - 1; // Minus the frame count byte
+					const totalDataSize = slice.length - 1; // Minus the frame count byte
 					const frameSize = Math.floor(totalDataSize / frameCount);
 
 					for (let i = 0; i < frameCount; i++) {
@@ -695,98 +897,184 @@ export class MatroskaDemuxer extends Demuxer {
 
 				case BlockLacing.Ebml: {
 					// EBML lacing: first size absolute, subsequent ones are coded as signed differences from the last
-					const firstResult = readVarInt(data, pos);
-					let currentSize = firstResult.value;
+					const firstResult = readVarInt(slice);
+					if (firstResult === null) {
+						throw new Error('Invalid EBML lacing: bad frame size.');
+					}
+
+					let currentSize = firstResult;
 					frameSizes.push(currentSize);
-					pos += firstResult.width;
 
 					let totalUsedSize = currentSize;
 
 					for (let i = 1; i < frameCount - 1; i++) {
-						const diffResult = readVarInt(data, pos);
-						const unsignedDiff = diffResult.value;
-						const bias = (1 << (diffResult.width * 7 - 1)) - 1; // Typo-corrected version of 2^((7*n)-1)^-1
+						const startPos = slice.bufferPos;
+						const diffResult = readVarInt(slice);
+						if (diffResult === null) {
+							throw new Error('Invalid EBML lacing: bad frame size.');
+						}
+
+						const unsignedDiff = diffResult;
+						const width = slice.bufferPos - startPos;
+						const bias = (1 << (width * 7 - 1)) - 1; // Typo-corrected version of 2^((7*n)-1)^-1
 						const diff = unsignedDiff - bias;
 
 						currentSize += diff;
 						frameSizes.push(currentSize);
-						pos += diffResult.width;
 
 						totalUsedSize += currentSize;
 					}
 
 					// Compute the last frame's size from whatever's left
-					frameSizes.push(data.length - (pos + totalUsedSize));
+					frameSizes.push(slice.length - (slice.bufferPos + totalUsedSize));
 				}; break;
 
 				default: assert(false);
 			}
 
-			assert(frameSizes.length === frameCount);
+			// Every frame must hold actual data; this also catches frame sizes that exceed the block
+			if (frameSizes.length !== frameCount || frameSizes.some(x => x <= 0)) {
+				throw new Error('Invalid block lacing: frame sizes don\'t match the block.');
+			}
 
-			blocks.splice(blockIndex, 1); // Remove the original block
-			let dataOffset = pos;
+			const blockDuration = originalBlock.duration || frameCount * (track.defaultDuration ?? 0);
 
-			// Now, let's insert each frame as its own block
+			// Now, let's replace the block with one block per frame
 			for (let i = 0; i < frameCount; i++) {
 				const frameSize = frameSizes[i]!;
-				const frameData = data.subarray(dataOffset, dataOffset + frameSize);
-
-				const blockDuration = originalBlock.duration || (frameCount * (track?.defaultDuration ?? 0));
+				const frameData = readBytes(slice, frameSize);
 
 				// Distribute timestamps evenly across the block duration
 				const frameTimestamp = originalBlock.timestamp + (blockDuration * i / frameCount);
 				const frameDuration = blockDuration / frameCount;
 
-				blocks.splice(blockIndex + i, 0, {
+				expandedBlocks.push({
 					timestamp: frameTimestamp,
 					duration: frameDuration,
 					isKeyFrame: originalBlock.isKeyFrame,
-					referencedTimestamps: originalBlock.referencedTimestamps,
 					data: frameData,
 					lacing: BlockLacing.None,
+					decoded: originalBlock.decoded,
+					postProcessed: false,
+					mainAdditional: originalBlock.mainAdditional,
 				});
+			}
+		}
 
-				dataOffset += frameSize;
+		return expandedBlocks;
+	}
+
+	async loadSegmentMetadata(segment: Segment) {
+		for (const seekEntry of segment.seekEntries) {
+			if (seekEntry.id === EBMLId.Tags && !segment.tagsSeen) {
+				// We need to load the tags
+			} else if (seekEntry.id === EBMLId.Attachments && !segment.attachmentsSeen) {
+				// We need to load the attachments
+			} else {
+				continue;
 			}
 
-			blockIndex += frameCount; // Skip the blocks we just added
-			blockIndex--;
+			if (!this.claimSeekTarget(segment.dataStartPos + seekEntry.segmentPosition)) {
+				continue;
+			}
+
+			let slice = this.reader.requestSliceRange(
+				segment.dataStartPos + seekEntry.segmentPosition,
+				MIN_HEADER_SIZE,
+				MAX_HEADER_SIZE,
+			);
+			if (isThenable(slice)) slice = await slice;
+			if (!slice) continue;
+
+			const header = readElementHeader(slice);
+			if (!header || header.id !== seekEntry.id) continue;
+
+			const { size } = header;
+			assertDefinedSize(size);
+
+			let dataSlice = this.reader.requestSlice(slice.filePos, size);
+			if (isThenable(dataSlice)) dataSlice = await dataSlice;
+			if (dataSlice) {
+				// No awaiting while the segment is set, so concurrent calls can't interfere with each other
+				assert(!this.currentSegment);
+				this.currentSegment = segment;
+
+				try {
+					this.readContiguousElements(dataSlice);
+				} finally {
+					this.currentSegment = null;
+				}
+			}
+
+			// Mark as seen
+			if (seekEntry.id === EBMLId.Tags) {
+				segment.tagsSeen = true;
+			} else if (seekEntry.id === EBMLId.Attachments) {
+				segment.attachmentsSeen = true;
+			}
 		}
 	}
 
-	readContiguousElements(reader: EBMLReader, totalSize: number) {
-		const startIndex = reader.pos;
+	claimSeekTarget(position: number) {
+		if (this.claimedSeekTargets.has(position)) {
+			return false;
+		}
 
-		while (reader.pos - startIndex <= totalSize - MIN_HEADER_SIZE) {
-			const foundElement = this.traverseElement(reader);
+		this.claimedSeekTargets.add(position);
+		return true;
+	}
 
-			if (!foundElement) {
-				break;
+	readContiguousElements(slice: FileSlice, stopIds?: number[]) {
+		if (this.elementNestingDepth === MAX_ELEMENT_NESTING_DEPTH) {
+			throw new Error('Invalid file: elements are nested too deeply.');
+		}
+
+		this.elementNestingDepth++;
+
+		try {
+			while (slice.remainingLength >= MIN_HEADER_SIZE) {
+				const startPos = slice.filePos;
+				const foundElement = this.traverseElement(slice, stopIds);
+
+				if (!foundElement) {
+					return startPos;
+				}
 			}
+
+			return slice.filePos;
+		} finally {
+			this.elementNestingDepth--;
 		}
 	}
 
-	traverseElement(reader: EBMLReader): boolean {
-		const header = reader.readElementHeader();
+	traverseElement(slice: FileSlice, stopIds?: number[]): boolean {
+		const header = readElementHeader(slice);
 		if (!header) {
 			return false;
 		}
 
+		if (stopIds && stopIds.includes(header.id)) {
+			return false;
+		}
+
 		const { id, size } = header;
-		const dataStartPos = reader.pos;
+		const dataStartPos = slice.filePos;
 		assertDefinedSize(size);
+
+		if (dataStartPos + size > slice.end) {
+			return false; // The element doesn't fit into its parent
+		}
 
 		switch (id) {
 			case EBMLId.DocType: {
-				this.isWebM = reader.readAsciiString(size) === 'webm';
+				this.isWebM = readAsciiString(slice, size) === 'webm';
 			}; break;
 
 			case EBMLId.Seek: {
 				if (!this.currentSegment) break;
 				const seekEntry: SeekEntry = { id: -1, segmentPosition: -1 };
 				this.currentSegment.seekEntries.push(seekEntry);
-				this.readContiguousElements(reader, size);
+				this.readContiguousElements(slice.slice(dataStartPos, size));
 
 				if (seekEntry.id === -1 || seekEntry.segmentPosition === -1) {
 					this.currentSegment.seekEntries.pop();
@@ -797,27 +1085,32 @@ export class MatroskaDemuxer extends Demuxer {
 				const lastSeekEntry = this.currentSegment?.seekEntries[this.currentSegment.seekEntries.length - 1];
 				if (!lastSeekEntry) break;
 
-				lastSeekEntry.id = reader.readUnsignedInt(size);
+				lastSeekEntry.id = readUnsignedInt(slice, size);
 			}; break;
 
 			case EBMLId.SeekPosition: {
 				const lastSeekEntry = this.currentSegment?.seekEntries[this.currentSegment.seekEntries.length - 1];
 				if (!lastSeekEntry) break;
 
-				lastSeekEntry.segmentPosition = reader.readUnsignedInt(size);
+				lastSeekEntry.segmentPosition = readUnsignedInt(slice, size);
 			}; break;
 
 			case EBMLId.TimestampScale: {
 				if (!this.currentSegment) break;
 
-				this.currentSegment.timestampScale = reader.readUnsignedInt(size);
-				this.currentSegment.timestampFactor = 1e9 / this.currentSegment.timestampScale;
+				const timestampScale = readUnsignedInt(slice, size);
+				if (timestampScale === 0) {
+					throw new Error('Invalid TimestampScale element: must not be 0.');
+				}
+
+				this.currentSegment.timestampScale = timestampScale;
+				this.currentSegment.timestampFactor = 1e9 / timestampScale;
 			}; break;
 
 			case EBMLId.Duration: {
 				if (!this.currentSegment) break;
 
-				this.currentSegment.duration = reader.readFloat(size);
+				this.currentSegment.duration = readFloat(slice, size);
 			}; break;
 
 			case EBMLId.TrackEntry: {
@@ -827,20 +1120,49 @@ export class MatroskaDemuxer extends Demuxer {
 					id: -1,
 					segment: this.currentSegment,
 					demuxer: this,
-					clusters: [],
-					clustersWithKeyFrame: [],
+					clusterPositionCache: [],
 					cuePoints: [],
 
-					isDefault: false,
-					inputTrack: null,
+					disposition: {
+						...DEFAULT_TRACK_DISPOSITION,
+						primary: false,
+					},
+					trackBacking: null,
 					codecId: null,
 					codecPrivate: null,
 					defaultDuration: null,
-					languageCode: UNDETERMINED_LANGUAGE,
+					defaultDurationNs: null,
+					codecDelay: 0,
+					codecDelayNs: 0,
+					name: null,
+					languageCode: 'eng', // The default in Matroska
+					hasLanguageBcp47: false,
+					decodingInstructions: [],
+
 					info: null,
 				};
 
-				this.readContiguousElements(reader, size);
+				this.readContiguousElements(slice.slice(dataStartPos, size));
+
+				// Check if track was disabled during parsing (e.g., by FlagEnabled being 0)
+				if (!this.currentTrack) {
+					break;
+				}
+
+				if (this.currentTrack.decodingInstructions.some((instruction) => {
+					return instruction.data?.type !== 'decompress'
+						|| instruction.scope !== ContentEncodingScope.Block
+						|| instruction.data.algorithm !== ContentCompAlgo.HeaderStripping;
+				})) {
+					Logging._warn(`Track #${this.currentTrack.id} has an unsupported content encoding; dropping.`);
+					this.currentTrack = null;
+				}
+
+				if (this.currentTrack && this.currentSegment.idToTrack.has(this.currentTrack.id)) {
+					// Blocks can't tell the tracks apart
+					Logging._warn(`Track #${this.currentTrack.id} is defined more than once; dropping.`);
+					this.currentTrack = null;
+				}
 
 				if (
 					this.currentTrack
@@ -858,6 +1180,29 @@ export class MatroskaDemuxer extends Demuxer {
 						&& this.currentTrack.info.width !== -1
 						&& this.currentTrack.info.height !== -1
 					) {
+						this.currentTrack.info.squarePixelWidth = this.currentTrack.info.width;
+						this.currentTrack.info.squarePixelHeight = this.currentTrack.info.height;
+
+						if (
+							this.currentTrack.info.displayWidth !== null
+							&& this.currentTrack.info.displayHeight !== null
+						) {
+							const num = this.currentTrack.info.displayWidth * this.currentTrack.info.height;
+							const den = this.currentTrack.info.displayHeight * this.currentTrack.info.width;
+
+							if (num > 0 && den > 0) {
+								if (num > den) {
+									this.currentTrack.info.squarePixelWidth = Math.round(
+										this.currentTrack.info.width * num / den,
+									);
+								} else {
+									this.currentTrack.info.squarePixelHeight = Math.round(
+										this.currentTrack.info.height * den / num,
+									);
+								}
+							}
+						}
+
 						if (this.currentTrack.codecId === CODEC_STRING_MAP.avc) {
 							this.currentTrack.info.codec = 'avc';
 							this.currentTrack.info.codecDescription = this.currentTrack.codecPrivate;
@@ -870,21 +1215,30 @@ export class MatroskaDemuxer extends Demuxer {
 							this.currentTrack.info.codec = 'vp9';
 						} else if (codecIdWithoutSuffix === CODEC_STRING_MAP.av1) {
 							this.currentTrack.info.codec = 'av1';
+						} else if (codecIdWithoutSuffix === CODEC_STRING_MAP.prores) {
+							const format = this.currentTrack.codecPrivate
+								? textDecoder.decode(this.currentTrack.codecPrivate)
+								: '';
+
+							if ((PRORES_FOURCCS as readonly string[]).includes(format)) {
+								this.currentTrack.info.codec = 'prores';
+								this.currentTrack.info.proresFormat = format as ProresFourCc;
+							} else {
+								// Either an invalid string or ProRes RAW, which we don't support yet (it's a
+								// different codec).
+							}
 						}
 
 						const videoTrack = this.currentTrack as InternalVideoTrack;
-						const inputTrack = new InputVideoTrack(new MatroskaVideoTrackBacking(videoTrack));
-						this.currentTrack.inputTrack = inputTrack;
+						this.currentTrack.trackBacking = new MatroskaVideoTrackBacking(videoTrack);
 						this.currentSegment.tracks.push(this.currentTrack);
-					} else if (
-						this.currentTrack.info.type === 'audio'
-						&& this.currentTrack.info.numberOfChannels !== -1
-						&& this.currentTrack.info.sampleRate !== -1
-					) {
+						this.currentSegment.idToTrack.set(this.currentTrack.id, this.currentTrack);
+					} else if (this.currentTrack.info.type === 'audio') {
 						if (codecIdWithoutSuffix === CODEC_STRING_MAP.aac) {
 							this.currentTrack.info.codec = 'aac';
 							this.currentTrack.info.aacCodecInfo = {
 								isMpeg2: this.currentTrack.codecId.includes('MPEG2'),
+								objectType: null,
 							};
 							this.currentTrack.info.codecDescription = this.currentTrack.codecPrivate;
 						} else if (this.currentTrack.codecId === CODEC_STRING_MAP.mp3) {
@@ -892,12 +1246,27 @@ export class MatroskaDemuxer extends Demuxer {
 						} else if (codecIdWithoutSuffix === CODEC_STRING_MAP.opus) {
 							this.currentTrack.info.codec = 'opus';
 							this.currentTrack.info.codecDescription = this.currentTrack.codecPrivate;
+							this.currentTrack.info.sampleRate = OPUS_SAMPLE_RATE; // Always the same
 						} else if (codecIdWithoutSuffix === CODEC_STRING_MAP.vorbis) {
 							this.currentTrack.info.codec = 'vorbis';
 							this.currentTrack.info.codecDescription = this.currentTrack.codecPrivate;
 						} else if (codecIdWithoutSuffix === CODEC_STRING_MAP.flac) {
 							this.currentTrack.info.codec = 'flac';
 							this.currentTrack.info.codecDescription = this.currentTrack.codecPrivate;
+						} else if (codecIdWithoutSuffix === CODEC_STRING_MAP.ac3) {
+							this.currentTrack.info.codec = 'ac3';
+							this.currentTrack.info.codecDescription = this.currentTrack.codecPrivate;
+						} else if (codecIdWithoutSuffix === CODEC_STRING_MAP.eac3) {
+							this.currentTrack.info.codec = 'eac3';
+							this.currentTrack.info.codecDescription = this.currentTrack.codecPrivate;
+						} else if (codecIdWithoutSuffix === CODEC_STRING_MAP.dts) {
+							this.currentTrack.info.codec = 'dts';
+
+							if (this.currentTrack.codecId === 'A_DTS/EXPRESS') {
+								this.currentTrack.info.dtsFormat = 'dtse';
+							} else if (this.currentTrack.codecId === 'A_DTS/LOSSLESS') {
+								this.currentTrack.info.dtsFormat = 'dtsl';
+							}
 						} else if (this.currentTrack.codecId === 'A_PCM/INT/LIT') {
 							if (this.currentTrack.info.bitDepth === 8) {
 								this.currentTrack.info.codec = 'pcm-u8';
@@ -927,9 +1296,9 @@ export class MatroskaDemuxer extends Demuxer {
 						}
 
 						const audioTrack = this.currentTrack as InternalAudioTrack;
-						const inputTrack = new InputAudioTrack(new MatroskaAudioTrackBacking(audioTrack));
-						this.currentTrack.inputTrack = inputTrack;
+						this.currentTrack.trackBacking = new MatroskaAudioTrackBacking(audioTrack);
 						this.currentSegment.tracks.push(this.currentTrack);
+						this.currentSegment.idToTrack.set(this.currentTrack.id, this.currentTrack);
 					}
 				}
 
@@ -939,32 +1308,42 @@ export class MatroskaDemuxer extends Demuxer {
 			case EBMLId.TrackNumber: {
 				if (!this.currentTrack) break;
 
-				this.currentTrack.id = reader.readUnsignedInt(size);
+				this.currentTrack.id = readUnsignedInt(slice, size);
 			}; break;
 
 			case EBMLId.TrackType: {
 				if (!this.currentTrack) break;
 
-				const type = reader.readUnsignedInt(size);
+				const type = readUnsignedInt(slice, size);
 				if (type === 1) {
 					this.currentTrack.info = {
 						type: 'video',
 						width: -1,
 						height: -1,
+						displayWidth: null,
+						displayHeight: null,
+						displayUnit: null,
+						squarePixelWidth: -1,
+						squarePixelHeight: -1,
+						horizontalScale: 1,
+						verticalScale: 1,
 						rotation: 0,
 						codec: null,
 						codecDescription: null,
-						colorSpace: null,
+						colorSpace: { ...EMPTY_COLOR_SPACE },
+						alphaMode: false,
+						proresFormat: null,
 					};
 				} else if (type === 2) {
 					this.currentTrack.info = {
 						type: 'audio',
-						numberOfChannels: -1,
-						sampleRate: -1,
+						numberOfChannels: 1, // Default value
+						sampleRate: 8000, // Default value
 						bitDepth: -1,
 						codec: null,
 						codecDescription: null,
 						aacCodecInfo: null,
+						dtsFormat: null,
 					};
 				}
 			}; break;
@@ -972,9 +1351,8 @@ export class MatroskaDemuxer extends Demuxer {
 			case EBMLId.FlagEnabled: {
 				if (!this.currentTrack) break;
 
-				const enabled = reader.readUnsignedInt(size);
+				const enabled = readUnsignedInt(slice, size);
 				if (!enabled) {
-					this.currentSegment!.tracks.pop();
 					this.currentTrack = null;
 				}
 			}; break;
@@ -982,103 +1360,219 @@ export class MatroskaDemuxer extends Demuxer {
 			case EBMLId.FlagDefault: {
 				if (!this.currentTrack) break;
 
-				this.currentTrack.isDefault = !!reader.readUnsignedInt(size);
+				this.currentTrack.disposition.default = !!readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.FlagForced: {
+				if (!this.currentTrack) break;
+
+				this.currentTrack.disposition.forced = !!readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.FlagOriginal: {
+				if (!this.currentTrack) break;
+
+				this.currentTrack.disposition.original = !!readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.FlagHearingImpaired: {
+				if (!this.currentTrack) break;
+
+				this.currentTrack.disposition.hearingImpaired = !!readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.FlagVisualImpaired: {
+				if (!this.currentTrack) break;
+
+				this.currentTrack.disposition.visuallyImpaired = !!readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.FlagCommentary: {
+				if (!this.currentTrack) break;
+
+				this.currentTrack.disposition.commentary = !!readUnsignedInt(slice, size);
 			}; break;
 
 			case EBMLId.CodecID: {
 				if (!this.currentTrack) break;
 
-				this.currentTrack.codecId = reader.readAsciiString(size);
+				this.currentTrack.codecId = readAsciiString(slice, size);
 			}; break;
 
 			case EBMLId.CodecPrivate: {
 				if (!this.currentTrack) break;
 
-				this.currentTrack.codecPrivate = reader.readBytes(size);
+				this.currentTrack.codecPrivate = readBytes(slice, size);
 			}; break;
 
 			case EBMLId.DefaultDuration: {
 				if (!this.currentTrack) break;
+				this.currentTrack.defaultDurationNs = readUnsignedInt(slice, size);
+			}; break;
 
-				this.currentTrack.defaultDuration
-					= this.currentTrack.segment.timestampFactor * reader.readUnsignedInt(size) / 1e9;
+			case EBMLId.CodecDelay: {
+				if (!this.currentTrack) break;
+				this.currentTrack.codecDelayNs = readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.Name: {
+				if (!this.currentTrack) break;
+
+				this.currentTrack.name = readUnicodeString(slice, size);
 			}; break;
 
 			case EBMLId.Language: {
 				if (!this.currentTrack) break;
+				if (this.currentTrack.hasLanguageBcp47) {
+					// LanguageBCP47 was present, which takes precedence
+					break;
+				}
 
-				this.currentTrack.languageCode = reader.readAsciiString(size);
+				this.currentTrack.languageCode = readAsciiString(slice, size);
 
 				if (!isIso639Dash2LanguageCode(this.currentTrack.languageCode)) {
 					this.currentTrack.languageCode = UNDETERMINED_LANGUAGE;
 				}
 			}; break;
 
+			case EBMLId.LanguageBCP47: {
+				if (!this.currentTrack) break;
+
+				const bcp47 = readAsciiString(slice, size);
+				const languageSubtag = bcp47.split('-')[0];
+
+				if (languageSubtag) {
+					// Technically invalid, for now: The language subtag might be a language code from ISO 639-1,
+					// ISO 639-2, ISO 639-3, ISO 639-5 or some other thing (source: Wikipedia). But, `languageCode` is
+					// documented as ISO 639-2. Changing the definition would be a breaking change. This will get
+					// cleaned up in the future by defining languageCode to be BCP 47 instead.
+					this.currentTrack.languageCode = languageSubtag;
+				} else {
+					this.currentTrack.languageCode = UNDETERMINED_LANGUAGE;
+				}
+
+				this.currentTrack.hasLanguageBcp47 = true;
+			}; break;
+
 			case EBMLId.Video: {
 				if (this.currentTrack?.info?.type !== 'video') break;
 
-				this.readContiguousElements(reader, size);
+				this.readContiguousElements(slice.slice(dataStartPos, size));
 			}; break;
 
 			case EBMLId.PixelWidth: {
 				if (this.currentTrack?.info?.type !== 'video') break;
 
-				this.currentTrack.info.width = reader.readUnsignedInt(size);
+				this.currentTrack.info.width = readUnsignedInt(slice, size);
 			}; break;
 
 			case EBMLId.PixelHeight: {
 				if (this.currentTrack?.info?.type !== 'video') break;
 
-				this.currentTrack.info.height = reader.readUnsignedInt(size);
+				this.currentTrack.info.height = readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.DisplayWidth: {
+				if (this.currentTrack?.info?.type !== 'video') break;
+
+				this.currentTrack.info.displayWidth = readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.DisplayHeight: {
+				if (this.currentTrack?.info?.type !== 'video') break;
+
+				this.currentTrack.info.displayHeight = readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.DisplayUnit: {
+				if (this.currentTrack?.info?.type !== 'video') break;
+
+				this.currentTrack.info.displayUnit = readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.AlphaMode: {
+				if (this.currentTrack?.info?.type !== 'video') break;
+
+				this.currentTrack.info.alphaMode = readUnsignedInt(slice, size) === 1;
 			}; break;
 
 			case EBMLId.Colour: {
 				if (this.currentTrack?.info?.type !== 'video') break;
 
-				this.currentTrack.info.colorSpace = {};
-				this.readContiguousElements(reader, size);
+				this.readContiguousElements(slice.slice(dataStartPos, size));
 			}; break;
 
 			case EBMLId.MatrixCoefficients: {
-				if (this.currentTrack?.info?.type !== 'video' || !this.currentTrack.info.colorSpace) break;
+				if (this.currentTrack?.info?.type !== 'video') break;
 
-				const matrixCoefficients = reader.readUnsignedInt(size);
-				const mapped = MATRIX_COEFFICIENTS_MAP_INVERSE[matrixCoefficients] ?? null;
+				const matrixCoefficients = readUnsignedInt(slice, size);
+				const mapped = MATRIX_COEFFICIENTS_MAP_INVERSE[matrixCoefficients];
 				this.currentTrack.info.colorSpace.matrix = mapped as VideoColorSpaceInit['matrix'];
 			}; break;
 
 			case EBMLId.Range: {
-				if (this.currentTrack?.info?.type !== 'video' || !this.currentTrack.info.colorSpace) break;
+				if (this.currentTrack?.info?.type !== 'video') break;
 
-				this.currentTrack.info.colorSpace.fullRange = reader.readUnsignedInt(size) === 2;
+				const range = readUnsignedInt(slice, size);
+				this.currentTrack.info.colorSpace.fullRange = range === 1 || range === 2
+					? range === 2
+					: undefined;
 			}; break;
 
 			case EBMLId.TransferCharacteristics: {
-				if (this.currentTrack?.info?.type !== 'video' || !this.currentTrack.info.colorSpace) break;
+				if (this.currentTrack?.info?.type !== 'video') break;
 
-				const transferCharacteristics = reader.readUnsignedInt(size);
-				const mapped = TRANSFER_CHARACTERISTICS_MAP_INVERSE[transferCharacteristics] ?? null;
+				const transferCharacteristics = readUnsignedInt(slice, size);
+				const mapped = TRANSFER_CHARACTERISTICS_MAP_INVERSE[transferCharacteristics];
 				this.currentTrack.info.colorSpace.transfer = mapped as VideoColorSpaceInit['transfer'];
 			}; break;
 
 			case EBMLId.Primaries: {
-				if (this.currentTrack?.info?.type !== 'video' || !this.currentTrack.info.colorSpace) break;
+				if (this.currentTrack?.info?.type !== 'video') break;
 
-				const primaries = reader.readUnsignedInt(size);
-				const mapped = COLOR_PRIMARIES_MAP_INVERSE[primaries] ?? null;
+				const primaries = readUnsignedInt(slice, size);
+				const mapped = COLOR_PRIMARIES_MAP_INVERSE[primaries];
 				this.currentTrack.info.colorSpace.primaries = mapped as VideoColorSpaceInit['primaries'];
 			}; break;
 
 			case EBMLId.Projection: {
 				if (this.currentTrack?.info?.type !== 'video') break;
 
-				this.readContiguousElements(reader, size);
+				this.readContiguousElements(slice.slice(dataStartPos, size));
+			}; break;
+
+			// Yaw and pitch rotate the frame in 3D space about the vertical and horizontal axis respectively. When
+			// snapped to multiples of 90 degrees, that amounts to scaling each axis by the cosine, which models flips.
+			case EBMLId.ProjectionPoseYaw: {
+				if (this.currentTrack?.info?.type !== 'video') break;
+
+				const yaw = readFloat(slice, size);
+
+				try {
+					const normalized = normalizeRotation(yaw);
+					this.currentTrack.info.horizontalScale = Math.round(Math.cos(normalized * DEG_TO_RAD));
+				} catch {
+					// It wasn't a valid rotation
+				}
+			}; break;
+
+			case EBMLId.ProjectionPosePitch: {
+				if (this.currentTrack?.info?.type !== 'video') break;
+
+				const pitch = readFloat(slice, size);
+
+				try {
+					const normalized = normalizeRotation(pitch);
+					this.currentTrack.info.verticalScale = Math.round(Math.cos(normalized * DEG_TO_RAD));
+				} catch {
+					// It wasn't a valid rotation
+				}
 			}; break;
 
 			case EBMLId.ProjectionPoseRoll: {
 				if (this.currentTrack?.info?.type !== 'video') break;
 
-				const rotation = reader.readFloat(size);
+				const rotation = readFloat(slice, size);
 				const flippedRotation = -rotation; // Convert counter-clockwise to clockwise
 
 				try {
@@ -1091,45 +1585,54 @@ export class MatroskaDemuxer extends Demuxer {
 			case EBMLId.Audio: {
 				if (this.currentTrack?.info?.type !== 'audio') break;
 
-				this.readContiguousElements(reader, size);
+				this.readContiguousElements(slice.slice(dataStartPos, size));
 			}; break;
 
 			case EBMLId.SamplingFrequency: {
 				if (this.currentTrack?.info?.type !== 'audio') break;
 
-				this.currentTrack.info.sampleRate = reader.readFloat(size);
+				const sampleRate = readFloat(slice, size);
+				if (!(sampleRate > 0) || !Number.isFinite(sampleRate)) {
+					throw new Error('Invalid SamplingFrequency element: must be a positive, finite number.');
+				}
+
+				this.currentTrack.info.sampleRate = sampleRate;
 			}; break;
 
 			case EBMLId.Channels: {
 				if (this.currentTrack?.info?.type !== 'audio') break;
 
-				this.currentTrack.info.numberOfChannels = reader.readUnsignedInt(size);
+				const numberOfChannels = readUnsignedInt(slice, size);
+				if (numberOfChannels === 0) {
+					throw new Error('Invalid Channels element: must not be 0.');
+				}
+
+				this.currentTrack.info.numberOfChannels = numberOfChannels;
 			}; break;
 
 			case EBMLId.BitDepth: {
 				if (this.currentTrack?.info?.type !== 'audio') break;
 
-				this.currentTrack.info.bitDepth = reader.readUnsignedInt(size);
+				this.currentTrack.info.bitDepth = readUnsignedInt(slice, size);
 			}; break;
 
 			case EBMLId.CuePoint: {
 				if (!this.currentSegment) break;
 
-				this.readContiguousElements(reader, size);
+				this.readContiguousElements(slice.slice(dataStartPos, size));
 				this.currentCueTime = null;
 			}; break;
 
 			case EBMLId.CueTime: {
-				this.currentCueTime = reader.readUnsignedInt(size);
+				this.currentCueTime = readUnsignedInt(slice, size);
 			}; break;
 
 			case EBMLId.CueTrackPositions: {
-				if (this.currentCueTime === null) break;
-				assert(this.currentSegment);
+				if (this.currentCueTime === null || !this.currentSegment) break;
 
 				const cuePoint: CuePoint = { time: this.currentCueTime, trackId: -1, clusterPosition: -1 };
 				this.currentSegment.cuePoints.push(cuePoint);
-				this.readContiguousElements(reader, size);
+				this.readContiguousElements(slice.slice(dataStartPos, size));
 
 				if (cuePoint.trackId === -1 || cuePoint.clusterPosition === -1) {
 					this.currentSegment.cuePoints.pop();
@@ -1140,7 +1643,7 @@ export class MatroskaDemuxer extends Demuxer {
 				const lastCuePoint = this.currentSegment?.cuePoints[this.currentSegment.cuePoints.length - 1];
 				if (!lastCuePoint) break;
 
-				lastCuePoint.trackId = reader.readUnsignedInt(size);
+				lastCuePoint.trackId = readUnsignedInt(slice, size);
 			}; break;
 
 			case EBMLId.CueClusterPosition: {
@@ -1148,95 +1651,489 @@ export class MatroskaDemuxer extends Demuxer {
 				if (!lastCuePoint) break;
 
 				assert(this.currentSegment);
-				lastCuePoint.clusterPosition = this.currentSegment.dataStartPos + reader.readUnsignedInt(size);
+				lastCuePoint.clusterPosition = this.currentSegment.dataStartPos + readUnsignedInt(slice, size);
 			}; break;
 
 			case EBMLId.Timestamp: {
 				if (!this.currentCluster) break;
 
-				this.currentCluster.timestamp = reader.readUnsignedInt(size);
+				this.currentCluster.timestamp = readUnsignedInt(slice, size);
 			}; break;
 
 			case EBMLId.SimpleBlock: {
 				if (!this.currentCluster) break;
 
-				const trackNumber = reader.readVarInt();
-				if (trackNumber === null) break;
+				const blockSlice = slice.slice(dataStartPos, size);
 
-				const relativeTimestamp = reader.readS16();
-
-				const flags = reader.readU8();
-				const isKeyFrame = !!(flags & 0x80);
-				const lacing = (flags >> 1) & 0x3 as BlockLacing; // If the block is laced, we'll expand it later
+				const trackNumber = readVarInt(blockSlice);
+				if (trackNumber === null || blockSlice.remainingLength < 3) break;
 
 				const trackData = this.getTrackDataInCluster(this.currentCluster, trackNumber);
+				if (!trackData) break; // Not a track we care about
+
+				const relativeTimestamp = readI16Be(blockSlice);
+
+				const flags = readU8(blockSlice);
+				const lacing = (flags >> 1) & 0x3 as BlockLacing; // If the block is laced, we'll expand it later
+
+				let isKeyFrame = !!(flags & 0x80);
+				if (trackData.track.info?.type === 'audio' && trackData.track.info.codec) {
+					// Some files don't mark their audio packets as key packets (I'm looking at you, Firefox). But, we
+					// can fix this in most cases: if we recognize the codec of the track, then we know every packet is
+					// necessarily a key packet, no matter what the container says.
+					// https://github.com/Vanilagy/mediabunny/issues/192
+					isKeyFrame = true;
+				}
+
+				const blockData = readBytes(blockSlice, blockSlice.remainingLength);
+				const hasDecodingInstructions = trackData.track.decodingInstructions.length > 0;
+
 				trackData.blocks.push({
 					timestamp: relativeTimestamp, // We'll add the cluster's timestamp to this later
 					duration: 0, // Will set later
 					isKeyFrame,
-					referencedTimestamps: [],
-					data: reader.readBytes(size - (reader.pos - dataStartPos)),
+					data: blockData,
 					lacing,
+					decoded: !hasDecodingInstructions,
+					postProcessed: false,
+					mainAdditional: null,
 				});
 			}; break;
 
 			case EBMLId.BlockGroup: {
 				if (!this.currentCluster) break;
 
-				this.readContiguousElements(reader, size);
+				this.readContiguousElements(slice.slice(dataStartPos, size));
 
-				if (this.currentBlock) {
-					for (let i = 0; i < this.currentBlock.referencedTimestamps.length; i++) {
-						this.currentBlock.referencedTimestamps[i]! += this.currentBlock.timestamp;
-					}
-
-					this.currentBlock = null;
-				}
+				this.currentBlock = null;
 			}; break;
 
 			case EBMLId.Block: {
 				if (!this.currentCluster) break;
 
-				const trackNumber = reader.readVarInt();
-				if (trackNumber === null) break;
+				const blockSlice = slice.slice(dataStartPos, size);
 
-				const relativeTimestamp = reader.readS16();
-
-				const flags = reader.readU8();
-				const lacing = (flags >> 1) & 0x3 as BlockLacing; // If the block is laced, we'll expand it later
+				const trackNumber = readVarInt(blockSlice);
+				if (trackNumber === null || blockSlice.remainingLength < 3) break;
 
 				const trackData = this.getTrackDataInCluster(this.currentCluster, trackNumber);
+				if (!trackData) break;
+
+				const relativeTimestamp = readI16Be(blockSlice);
+
+				const flags = readU8(blockSlice);
+				const lacing = (flags >> 1) & 0x3 as BlockLacing; // If the block is laced, we'll expand it later
+
+				const blockData = readBytes(blockSlice, blockSlice.remainingLength);
+				const hasDecodingInstructions = trackData.track.decodingInstructions.length > 0;
+
 				this.currentBlock = {
 					timestamp: relativeTimestamp, // We'll add the cluster's timestamp to this later
 					duration: 0, // Will set later
 					isKeyFrame: true,
-					referencedTimestamps: [],
-					data: reader.readBytes(size - (reader.pos - dataStartPos)),
+					data: blockData,
 					lacing,
+					decoded: !hasDecodingInstructions,
+					postProcessed: false,
+					mainAdditional: null,
 				};
 				trackData.blocks.push(this.currentBlock);
+			}; break;
+
+			case EBMLId.BlockAdditions: {
+				this.readContiguousElements(slice.slice(dataStartPos, size));
+			}; break;
+
+			case EBMLId.BlockMore: {
+				// Nested elements may modify the current block, so hold onto it
+				const block = this.currentBlock;
+				if (!block) break;
+
+				const blockAdditional = {
+					addId: 1,
+					data: null as Uint8Array | null,
+				};
+				this.currentBlockAdditional = blockAdditional;
+
+				this.readContiguousElements(slice.slice(dataStartPos, size));
+
+				if (blockAdditional.data && blockAdditional.addId === 1) {
+					block.mainAdditional = blockAdditional.data;
+				}
+				this.currentBlockAdditional = null;
+			}; break;
+
+			case EBMLId.BlockAdditional: {
+				if (!this.currentBlockAdditional) break;
+
+				this.currentBlockAdditional.data = readBytes(slice, size);
+			}; break;
+
+			case EBMLId.BlockAddID: {
+				if (!this.currentBlockAdditional) break;
+
+				this.currentBlockAdditional.addId = readUnsignedInt(slice, size);
 			}; break;
 
 			case EBMLId.BlockDuration: {
 				if (!this.currentBlock) break;
 
-				this.currentBlock.duration = reader.readUnsignedInt(size);
+				this.currentBlock.duration = readUnsignedInt(slice, size);
 			}; break;
 
 			case EBMLId.ReferenceBlock: {
 				if (!this.currentBlock) break;
 
 				this.currentBlock.isKeyFrame = false;
+				// We ignore the actual value here, we just use the reference as an indicator for "not a key frame".
+				// This is in line with FFmpeg's behavior.
+			}; break;
 
-				const relativeTimestamp = reader.readSignedInt(size);
+			case EBMLId.Tag: {
+				this.currentTagTargetIsMovie = true;
+				this.readContiguousElements(slice.slice(dataStartPos, size));
+			}; break;
 
-				// We'll offset this by the block's timestamp later
-				this.currentBlock.referencedTimestamps.push(relativeTimestamp);
+			case EBMLId.Targets: {
+				this.readContiguousElements(slice.slice(dataStartPos, size));
+			}; break;
+
+			case EBMLId.TargetTypeValue: {
+				const targetTypeValue = readUnsignedInt(slice, size);
+				if (targetTypeValue !== 50) {
+					this.currentTagTargetIsMovie = false;
+				}
+			}; break;
+
+			case EBMLId.TagTrackUID:
+			case EBMLId.TagEditionUID:
+			case EBMLId.TagChapterUID:
+			case EBMLId.TagAttachmentUID: {
+				this.currentTagTargetIsMovie = false;
+			}; break;
+
+			case EBMLId.SimpleTag: {
+				if (!this.currentTagTargetIsMovie) break;
+
+				this.currentSimpleTagName = null;
+				this.readContiguousElements(slice.slice(dataStartPos, size));
+			}; break;
+
+			case EBMLId.TagName: {
+				this.currentSimpleTagName = readUnicodeString(slice, size);
+			}; break;
+
+			case EBMLId.TagString: {
+				if (!this.currentSimpleTagName) break;
+
+				const value = readUnicodeString(slice, size);
+				this.processTagValue(this.currentSimpleTagName, value);
+			}; break;
+
+			case EBMLId.TagBinary: {
+				if (!this.currentSimpleTagName) break;
+
+				const value = readBytes(slice, size);
+				this.processTagValue(this.currentSimpleTagName, value);
+			}; break;
+
+			case EBMLId.AttachedFile: {
+				if (!this.currentSegment || this.currentAttachedFile) break; // Nested attached files make no sense
+
+				this.currentAttachedFile = {
+					fileUid: null,
+					fileName: null,
+					fileMediaType: null,
+					fileData: null,
+					fileDescription: null,
+				};
+
+				this.readContiguousElements(slice.slice(dataStartPos, size));
+
+				const tags = this.currentSegment.metadataTags;
+
+				if (this.currentAttachedFile.fileUid && this.currentAttachedFile.fileData) {
+					// All attached files get surfaced in the `raw` metadata tags
+					tags.raw ??= {};
+					tags.raw[this.currentAttachedFile.fileUid.toString()] = new AttachedFile(
+						this.currentAttachedFile.fileData,
+						this.currentAttachedFile.fileMediaType ?? undefined,
+						this.currentAttachedFile.fileName ?? undefined,
+						this.currentAttachedFile.fileDescription ?? undefined,
+					);
+				}
+
+				// Only process image attachments
+				if (this.currentAttachedFile.fileMediaType?.startsWith('image/') && this.currentAttachedFile.fileData) {
+					const fileName = this.currentAttachedFile.fileName;
+					let kind: 'coverFront' | 'coverBack' | 'unknown' = 'unknown';
+
+					if (fileName) {
+						const lowerName = fileName.toLowerCase();
+						if (lowerName.startsWith('cover.')) {
+							kind = 'coverFront';
+						} else if (lowerName.startsWith('back.')) {
+							kind = 'coverBack';
+						}
+					}
+
+					tags.images ??= [];
+					tags.images.push({
+						data: this.currentAttachedFile.fileData,
+						mimeType: this.currentAttachedFile.fileMediaType,
+						kind,
+						name: this.currentAttachedFile.fileName ?? undefined,
+						description: this.currentAttachedFile.fileDescription ?? undefined,
+					});
+				}
+
+				this.currentAttachedFile = null;
+			}; break;
+
+			case EBMLId.FileUID: {
+				if (!this.currentAttachedFile) break;
+
+				this.currentAttachedFile.fileUid = readUnsignedBigInt(slice, size);
+			}; break;
+
+			case EBMLId.FileName: {
+				if (!this.currentAttachedFile) break;
+
+				this.currentAttachedFile.fileName = readUnicodeString(slice, size);
+			}; break;
+
+			case EBMLId.FileMediaType: {
+				if (!this.currentAttachedFile) break;
+
+				this.currentAttachedFile.fileMediaType = readAsciiString(slice, size);
+			}; break;
+
+			case EBMLId.FileData: {
+				if (!this.currentAttachedFile) break;
+
+				this.currentAttachedFile.fileData = readBytes(slice, size);
+			}; break;
+
+			case EBMLId.FileDescription: {
+				if (!this.currentAttachedFile) break;
+
+				this.currentAttachedFile.fileDescription = readUnicodeString(slice, size);
+			}; break;
+
+			case EBMLId.ContentEncodings: {
+				// Nested elements may modify the current track, so hold onto it
+				const track = this.currentTrack;
+				if (!track) break;
+
+				this.readContiguousElements(slice.slice(dataStartPos, size));
+
+				// "**MUST** start with the `ContentEncoding` with the highest `ContentEncodingOrder`"
+				track.decodingInstructions.sort((a, b) => b.order - a.order);
+			}; break;
+
+			case EBMLId.ContentEncoding: {
+				const track = this.currentTrack;
+				if (!track) break;
+
+				const instruction: DecodingInstruction = {
+					order: 0,
+					scope: ContentEncodingScope.Block,
+					data: null,
+				};
+				this.currentDecodingInstruction = instruction;
+
+				this.readContiguousElements(slice.slice(dataStartPos, size));
+
+				if (instruction.data) {
+					track.decodingInstructions.push(instruction);
+				}
+
+				this.currentDecodingInstruction = null;
+			}; break;
+
+			case EBMLId.ContentEncodingOrder: {
+				if (!this.currentDecodingInstruction) break;
+
+				this.currentDecodingInstruction.order = readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.ContentEncodingScope: {
+				if (!this.currentDecodingInstruction) break;
+
+				this.currentDecodingInstruction.scope = readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.ContentCompression: {
+				if (!this.currentDecodingInstruction) break;
+
+				this.currentDecodingInstruction.data = {
+					type: 'decompress',
+					algorithm: ContentCompAlgo.Zlib,
+					settings: null,
+				};
+
+				this.readContiguousElements(slice.slice(dataStartPos, size));
+			}; break;
+
+			case EBMLId.ContentCompAlgo: {
+				if (this.currentDecodingInstruction?.data?.type !== 'decompress') break;
+
+				this.currentDecodingInstruction.data.algorithm = readUnsignedInt(slice, size);
+			}; break;
+
+			case EBMLId.ContentCompSettings: {
+				if (this.currentDecodingInstruction?.data?.type !== 'decompress') break;
+
+				this.currentDecodingInstruction.data.settings = readBytes(slice, size);
+			}; break;
+
+			case EBMLId.ContentEncryption: {
+				if (!this.currentDecodingInstruction) break;
+
+				this.currentDecodingInstruction.data = {
+					type: 'decrypt',
+				};
 			}; break;
 		}
 
-		reader.pos = dataStartPos + size;
+		slice.filePos = dataStartPos + size;
 		return true;
+	}
+
+	decodeBlockData(track: InternalTrack, rawData: Uint8Array) {
+		assert(track.decodingInstructions.length > 0); // This method shouldn't be called otherwise
+
+		let currentData = rawData;
+
+		for (const instruction of track.decodingInstructions) {
+			assert(instruction.data);
+
+			switch (instruction.data.type) {
+				case 'decompress': {
+					switch (instruction.data.algorithm) {
+						case ContentCompAlgo.HeaderStripping: {
+							if (instruction.data.settings && instruction.data.settings.length > 0) {
+								const prefix = instruction.data.settings;
+								const newData = new Uint8Array(prefix.length + currentData.length);
+
+								newData.set(prefix, 0);
+								newData.set(currentData, prefix.length);
+
+								currentData = newData;
+							}
+						}; break;
+
+						default: {
+							// Unhandled
+						};
+					}
+				}; break;
+
+				default: {
+					// Unhandled
+				};
+			}
+		}
+
+		return currentData;
+	}
+
+	processTagValue(name: string, value: string | Uint8Array) {
+		if (!this.currentSegment?.metadataTags) return;
+
+		const metadataTags = this.currentSegment.metadataTags;
+		metadataTags.raw ??= {};
+		metadataTags.raw[name] ??= value;
+
+		if (typeof value === 'string') {
+			switch (name.toLowerCase()) {
+				case 'title': {
+					metadataTags.title ??= value;
+				}; break;
+
+				case 'description': {
+					metadataTags.description ??= value;
+				}; break;
+
+				case 'artist': {
+					metadataTags.artist ??= value;
+				}; break;
+
+				case 'album': {
+					metadataTags.album ??= value;
+				}; break;
+
+				case 'album_artist': {
+					metadataTags.albumArtist ??= value;
+				}; break;
+
+				case 'genre': {
+					metadataTags.genre ??= value;
+				}; break;
+
+				case 'bpm': {
+					const bpm = Number.parseInt(value, 10);
+					if (Number.isInteger(bpm) && bpm > 0) {
+						metadataTags.beatsPerMinute ??= bpm;
+					}
+				}; break;
+
+				case 'comment': {
+					metadataTags.comment ??= value;
+				}; break;
+
+				case 'lyrics': {
+					metadataTags.lyrics ??= value;
+				}; break;
+
+				case 'date': {
+					const date = new Date(value);
+					if (!Number.isNaN(date.getTime())) {
+						metadataTags.date ??= date;
+					}
+				}; break;
+
+				case 'track_number':
+				case 'part_number': {
+					const parts = value.split('/');
+					const trackNum = Number.parseInt(parts[0]!, 10);
+					const tracksTotal = parts[1] && Number.parseInt(parts[1], 10);
+
+					if (Number.isInteger(trackNum) && trackNum > 0) {
+						metadataTags.trackNumber ??= trackNum;
+					}
+					if (tracksTotal && Number.isInteger(tracksTotal) && tracksTotal > 0) {
+						metadataTags.tracksTotal ??= tracksTotal;
+					}
+				}; break;
+
+				case 'disc_number':
+				case 'disc': {
+					const discParts = value.split('/');
+					const discNum = Number.parseInt(discParts[0]!, 10);
+					const discsTotal = discParts[1] && Number.parseInt(discParts[1], 10);
+
+					if (Number.isInteger(discNum) && discNum > 0) {
+						metadataTags.discNumber ??= discNum;
+					}
+					if (discsTotal && Number.isInteger(discsTotal) && discsTotal > 0) {
+						metadataTags.discsTotal ??= discsTotal;
+					}
+				}; break;
+			}
+		}
+	}
+
+	getDurationFromMetadata(segment: Segment) {
+		if (segment.duration <= 0) {
+			return null;
+		}
+
+		const minCodecDelay = Math.min(...segment.tracks.map(x => x.codecDelay));
+
+		// We treat the Duration field as the end timestamp of the segment, since this is what FFmpeg treats it as.
+		// The spec unfortunately does not clarify what it means by duration here.
+		return (segment.duration - minCodecDelay) / segment.timestampFactor;
 	}
 }
 
@@ -1248,59 +2145,98 @@ abstract class MatroskaTrackBacking implements InputTrackBacking {
 
 	constructor(public internalTrack: InternalTrack) {}
 
+	abstract getType(): TrackType;
+	abstract getDecoderConfig(): Promise<VideoDecoderConfig | AudioDecoderConfig | null>;
+
 	getId() {
 		return this.internalTrack.id;
+	}
+
+	getNumber() {
+		const demuxer = this.internalTrack.demuxer;
+		const trackType = this.internalTrack.trackBacking!.getType();
+
+		let number = 0;
+		for (const segment of demuxer.segments) {
+			for (const track of segment.tracks) {
+				if (track.trackBacking!.getType() === trackType) {
+					number++;
+				}
+
+				if (track === this.internalTrack) {
+					break;
+				}
+			}
+		}
+
+		return number;
 	}
 
 	getCodec(): MediaCodec | null {
 		throw new Error('Not implemented on base class.');
 	}
 
-	async computeDuration() {
-		const lastPacket = await this.getPacket(Infinity, { metadataOnly: true });
-		return (lastPacket?.timestamp ?? 0) + (lastPacket?.duration ?? 0);
+	getInternalCodecId() {
+		return this.internalTrack.codecId;
+	}
+
+	getName() {
+		return this.internalTrack.name;
 	}
 
 	getLanguageCode() {
 		return this.internalTrack.languageCode;
 	}
 
-	async getFirstTimestamp() {
-		const firstPacket = await this.getFirstPacket({ metadataOnly: true });
-		return firstPacket?.timestamp ?? 0;
-	}
-
 	getTimeResolution() {
 		return this.internalTrack.segment.timestampFactor;
 	}
 
+	isRelativeToUnixEpoch() {
+		return false;
+	}
+
+	getUnixTimeForTimestamp() {
+		return null;
+	}
+
+	getDisposition() {
+		return this.internalTrack.disposition;
+	}
+
+	getPairingMask() {
+		return 1n;
+	}
+
+	getBitrate() {
+		return null;
+	}
+
+	getAverageBitrate() {
+		return null;
+	}
+
+	async getDurationFromMetadata() {
+		return this.internalTrack.demuxer.getDurationFromMetadata(this.internalTrack.segment);
+	}
+
+	async getLiveRefreshInterval() {
+		return null;
+	}
+
 	async getFirstPacket(options: PacketRetrievalOptions) {
 		return this.performClusterLookup(
-			() => {
-				const startCluster = this.internalTrack.segment.clusters[0] ?? null;
-				if (startCluster?.isKnownToBeFirstCluster) {
-					// Walk from the very first cluster in the file until we find one with our track in it
-					let currentCluster: Cluster | null = startCluster;
-					while (currentCluster) {
-						const trackData = currentCluster.trackData.get(this.internalTrack.id);
-						if (trackData) {
-							return {
-								clusterIndex: binarySearchExact(
-									this.internalTrack.clusters,
-									currentCluster.elementStartPos,
-									x => x.elementStartPos,
-								),
-								blockIndex: 0,
-								correctBlockFound: true,
-							};
-						}
-
-						currentCluster = currentCluster.nextCluster;
-					}
+			null,
+			(cluster) => {
+				const trackData = cluster.trackData.get(this.internalTrack.id);
+				if (trackData) {
+					return {
+						blockIndex: 0,
+						correctBlockFound: true,
+					};
 				}
 
 				return {
-					clusterIndex: -1,
 					blockIndex: -1,
 					correctBlockFound: false,
 				};
@@ -1315,14 +2251,32 @@ abstract class MatroskaTrackBacking implements InputTrackBacking {
 		// Do a little rounding to catch cases where the result is very close to an integer. If it is, it's likely
 		// that the number was originally an integer divided by the timescale. For stability, it's best
 		// to return the integer in this case.
-		return roundToPrecision(timestamp * this.internalTrack.segment.timestampFactor, 14);
+		return roundIfAlmostInteger(timestamp * this.internalTrack.segment.timestampFactor)
+			+ this.internalTrack.codecDelay;
 	}
 
 	async getPacket(timestamp: number, options: PacketRetrievalOptions) {
 		const timestampInTimescale = this.intoTimescale(timestamp);
 
 		return this.performClusterLookup(
-			() => this.findBlockInClustersForTimestamp(timestampInTimescale),
+			null,
+			(cluster) => {
+				const trackData = cluster.trackData.get(this.internalTrack.id);
+				if (!trackData) {
+					return { blockIndex: -1, correctBlockFound: false };
+				}
+
+				const index = binarySearchLessOrEqual(
+					trackData.presentationTimestamps,
+					timestampInTimescale,
+					x => x.timestamp,
+				);
+
+				const blockIndex = index !== -1 ? trackData.presentationTimestamps[index]!.blockIndex : -1;
+				const correctBlockFound = index !== -1 && timestampInTimescale < trackData.endTimestamp;
+
+				return { blockIndex, correctBlockFound };
+			},
 			timestampInTimescale,
 			timestampInTimescale,
 			options,
@@ -1335,53 +2289,32 @@ abstract class MatroskaTrackBacking implements InputTrackBacking {
 			throw new Error('Packet was not created from this track.');
 		}
 
-		const trackData = locationInCluster.cluster.trackData.get(this.internalTrack.id)!;
-
-		const clusterIndex = binarySearchExact(
-			this.internalTrack.clusters,
-			locationInCluster.cluster.elementStartPos,
-			x => x.elementStartPos,
-		);
-		assert(clusterIndex !== -1);
-
 		return this.performClusterLookup(
-			() => {
-				if (locationInCluster.blockIndex + 1 < trackData.blocks.length) {
-					// We can simply take the next block in the cluster
-					return {
-						clusterIndex,
-						blockIndex: locationInCluster.blockIndex + 1,
-						correctBlockFound: true,
-					};
-				} else {
-					// Walk the list of clusters until we find the next cluster for this track
-					let currentCluster = locationInCluster.cluster;
-					while (currentCluster.nextCluster) {
-						currentCluster = currentCluster.nextCluster;
-
-						const trackData = currentCluster.trackData.get(this.internalTrack.id);
-						if (trackData) {
-							const clusterIndex = binarySearchExact(
-								this.internalTrack.clusters,
-								currentCluster.elementStartPos,
-								x => x.elementStartPos,
-							);
-							assert(clusterIndex !== -1);
-
-							return {
-								clusterIndex,
-								blockIndex: 0,
-								correctBlockFound: true,
-							};
-						}
+			locationInCluster.cluster,
+			(cluster) => {
+				if (cluster === locationInCluster.cluster) {
+					const trackData = cluster.trackData.get(this.internalTrack.id)!;
+					if (locationInCluster.blockIndex + 1 < trackData.blocks.length) {
+						// We can simply take the next block in the cluster
+						return {
+							blockIndex: locationInCluster.blockIndex + 1,
+							correctBlockFound: true,
+						};
 					}
-
-					return {
-						clusterIndex,
-						blockIndex: -1,
-						correctBlockFound: false,
-					};
+				} else {
+					const trackData = cluster.trackData.get(this.internalTrack.id);
+					if (trackData) {
+						return {
+							blockIndex: 0,
+							correctBlockFound: true,
+						};
+					}
 				}
+
+				return {
+					blockIndex: -1,
+					correctBlockFound: false,
+				};
 			},
 			-Infinity, // Use -Infinity as a search timestamp to avoid using the cues
 			Infinity,
@@ -1393,7 +2326,23 @@ abstract class MatroskaTrackBacking implements InputTrackBacking {
 		const timestampInTimescale = this.intoTimescale(timestamp);
 
 		return this.performClusterLookup(
-			() => this.findKeyBlockInClustersForTimestamp(timestampInTimescale),
+			null,
+			(cluster) => {
+				const trackData = cluster.trackData.get(this.internalTrack.id);
+				if (!trackData) {
+					return { blockIndex: -1, correctBlockFound: false };
+				}
+
+				const index = findLastIndex(trackData.presentationTimestamps, (x) => {
+					const block = trackData.blocks[x.blockIndex]!;
+					return block.isKeyFrame && x.timestamp <= timestampInTimescale;
+				});
+
+				const blockIndex = index !== -1 ? trackData.presentationTimestamps[index]!.blockIndex : -1;
+				const correctBlockFound = index !== -1 && timestampInTimescale < trackData.endTimestamp;
+
+				return { blockIndex, correctBlockFound };
+			},
 			timestampInTimescale,
 			timestampInTimescale,
 			options,
@@ -1406,60 +2355,38 @@ abstract class MatroskaTrackBacking implements InputTrackBacking {
 			throw new Error('Packet was not created from this track.');
 		}
 
-		const trackData = locationInCluster.cluster.trackData.get(this.internalTrack.id)!;
-
-		const clusterIndex = binarySearchExact(
-			this.internalTrack.clusters,
-			locationInCluster.cluster.elementStartPos,
-			x => x.elementStartPos,
-		);
-		assert(clusterIndex !== -1);
-
 		return this.performClusterLookup(
-			() => {
-				const nextKeyFrameIndex = trackData.blocks.findIndex(
-					(x, i) => x.isKeyFrame && i > locationInCluster.blockIndex,
-				);
+			locationInCluster.cluster,
+			(cluster) => {
+				if (cluster === locationInCluster.cluster) {
+					const trackData = cluster.trackData.get(this.internalTrack.id)!;
 
-				if (nextKeyFrameIndex !== -1) {
-					// We can simply take the next key frame in the cluster
-					return {
-						clusterIndex,
-						blockIndex: nextKeyFrameIndex,
-						correctBlockFound: true,
-					};
-				} else {
-					// Walk the list of clusters until we find the next cluster for this track with a key frame
-					let currentCluster = locationInCluster.cluster;
-					while (currentCluster.nextCluster) {
-						currentCluster = currentCluster.nextCluster;
-
-						const trackData = currentCluster.trackData.get(this.internalTrack.id);
-						if (trackData && trackData.firstKeyFrameTimestamp !== null) {
-							const clusterIndex = binarySearchExact(
-								this.internalTrack.clusters,
-								currentCluster.elementStartPos,
-								x => x.elementStartPos,
-							);
-							assert(clusterIndex !== -1);
-
-							const keyFrameIndex = trackData.blocks.findIndex(x => x.isKeyFrame);
-							assert(keyFrameIndex !== -1); // There must be one
-
+					for (let i = locationInCluster.blockIndex + 1; i < trackData.blocks.length; i++) {
+						if (trackData.blocks[i]!.isKeyFrame) {
+							// We can simply take the next key frame in the cluster
 							return {
-								clusterIndex,
-								blockIndex: keyFrameIndex,
+								blockIndex: i,
 								correctBlockFound: true,
 							};
 						}
 					}
+				} else {
+					const trackData = cluster.trackData.get(this.internalTrack.id);
+					if (trackData && trackData.firstKeyFrameTimestamp !== null) {
+						const keyFrameIndex = trackData.blocks.findIndex(x => x.isKeyFrame);
+						assert(keyFrameIndex !== -1); // There must be one
 
-					return {
-						clusterIndex,
-						blockIndex: -1,
-						correctBlockFound: false,
-					};
+						return {
+							blockIndex: keyFrameIndex,
+							correctBlockFound: true,
+						};
+					}
 				}
+
+				return {
+					blockIndex: -1,
+					correctBlockFound: false,
+				};
 			},
 			-Infinity, // Use -Infinity as a search timestamp to avoid using the cues
 			Infinity,
@@ -1476,9 +2403,53 @@ abstract class MatroskaTrackBacking implements InputTrackBacking {
 		const block = trackData.blocks[blockIndex];
 		assert(block);
 
+		// Perform lazy decoding if needed
+		if (!block.decoded) {
+			block.data = this.internalTrack.demuxer.decodeBlockData(this.internalTrack, block.data);
+			block.decoded = true;
+		}
+
+		if (!block.postProcessed) {
+			if (this.internalTrack.info?.codec === 'prores') {
+				// For some reason, ProRes packets are stored in Matroska without the frame container atom. FFmpeg cites
+				// the "Matroska spec" but the actual spec says nothing about this.
+
+				const hasFrameContainer = block.data.length >= 8
+					&& block.data[4] === 105 // 'i'
+					&& block.data[5] === 99 // 'c'
+					&& block.data[6] === 112 // 'p'
+					&& block.data[7] === 102; // 'f'
+
+				if (!hasFrameContainer) {
+					// Wrap the frame in a frame container
+					const newData = new Uint8Array(block.data.length + 8);
+					const newDataView = toDataView(newData);
+
+					newDataView.setUint32(0, newData.length, false);
+					newData[4] = 105; // 'i'
+					newData[5] = 99; // 'c'
+					newData[6] = 112; // 'p'
+					newData[7] = 102; // 'f'
+					newData.set(block.data, 8);
+					block.data = newData;
+				}
+			}
+
+			block.postProcessed = true;
+		}
+
 		const data = options.metadataOnly ? PLACEHOLDER_DATA : block.data;
-		const timestamp = block.timestamp / this.internalTrack.segment.timestampFactor;
-		const duration = block.duration / this.internalTrack.segment.timestampFactor;
+
+		const { codecDelay, segment } = this.internalTrack;
+		const timestamp = (block.timestamp - codecDelay) / segment.timestampFactor;
+		const duration = block.duration / segment.timestampFactor;
+
+		const sideData: EncodedPacketSideData = {};
+		if (block.mainAdditional && this.internalTrack.info?.type === 'video' && this.internalTrack.info.alphaMode) {
+			sideData.alpha = options.metadataOnly ? PLACEHOLDER_DATA : block.mainAdditional;
+			sideData.alphaByteLength = block.mainAdditional.byteLength;
+		}
+
 		const packet = new EncodedPacket(
 			data,
 			block.isKeyFrame ? 'key' : 'delta',
@@ -1486,6 +2457,7 @@ abstract class MatroskaTrackBacking implements InputTrackBacking {
 			duration,
 			cluster.dataStartPos + blockIndex,
 			block.data.byteLength,
+			sideData,
 		);
 
 		this.packetToClusterLocation.set(packet, { cluster, blockIndex });
@@ -1493,274 +2465,237 @@ abstract class MatroskaTrackBacking implements InputTrackBacking {
 		return packet;
 	}
 
-	private findBlockInClustersForTimestamp(timestampInTimescale: number) {
-		const clusterIndex = binarySearchLessOrEqual(
-			// This array is technically not sorted by start timestamp, but for any reasonable file, it basically is.
-			this.internalTrack.clusters,
-			timestampInTimescale,
-			x => x.trackData.get(this.internalTrack.id)!.startTimestamp,
-		);
-		let blockIndex = -1;
-		let correctBlockFound = false;
-
-		if (clusterIndex !== -1) {
-			const cluster = this.internalTrack.clusters[clusterIndex]!;
-			const trackData = cluster.trackData.get(this.internalTrack.id)!;
-
-			const index = binarySearchLessOrEqual(
-				trackData.presentationTimestamps,
-				timestampInTimescale,
-				x => x.timestamp,
-			);
-			assert(index !== -1);
-
-			blockIndex = trackData.presentationTimestamps[index]!.blockIndex;
-			correctBlockFound = timestampInTimescale < trackData.endTimestamp;
-		}
-
-		return { clusterIndex, blockIndex, correctBlockFound };
-	}
-
-	private findKeyBlockInClustersForTimestamp(timestampInTimescale: number) {
-		const indexInKeyFrameClusters = binarySearchLessOrEqual(
-			// This array is technically not sorted by start timestamp, but for any reasonable file, it basically is.
-			this.internalTrack.clustersWithKeyFrame,
-			timestampInTimescale,
-			x => x.trackData.get(this.internalTrack.id)!.firstKeyFrameTimestamp!,
-		);
-
-		let clusterIndex = -1;
-		let blockIndex = -1;
-		let correctBlockFound = false;
-
-		if (indexInKeyFrameClusters !== -1) {
-			const cluster = this.internalTrack.clustersWithKeyFrame[indexInKeyFrameClusters]!;
-
-			// Now, let's find the actual index of the cluster in the list of ALL clusters, not just key frame ones
-			clusterIndex = binarySearchExact(
-				this.internalTrack.clusters,
-				cluster.elementStartPos,
-				x => x.elementStartPos,
-			);
-			assert(clusterIndex !== -1);
-
-			const trackData = cluster.trackData.get(this.internalTrack.id)!;
-			const index = findLastIndex(trackData.presentationTimestamps, (x) => {
-				const block = trackData.blocks[x.blockIndex]!;
-				return block.isKeyFrame && x.timestamp <= timestampInTimescale;
-			});
-			assert(index !== -1); // It's a key frame cluster, so there must be a key frame
-
-			const entry = trackData.presentationTimestamps[index]!;
-			blockIndex = entry.blockIndex;
-			correctBlockFound = timestampInTimescale < trackData.endTimestamp;
-		}
-
-		return { clusterIndex, blockIndex, correctBlockFound };
-	}
-
 	/** Looks for a packet in the clusters while trying to load as few clusters as possible to retrieve it. */
 	private async performClusterLookup(
-		// This function returns the best-matching block that is currently loaded. Based on this information, we know
-		// which clusters we need to load to find the actual match.
-		getBestMatch: () => { clusterIndex: number; blockIndex: number; correctBlockFound: boolean },
+		// The cluster where we start looking
+		startCluster: Cluster | null,
+		// This function returns the best-matching block in a given cluster
+		getMatchInCluster: (cluster: Cluster) => { blockIndex: number; correctBlockFound: boolean },
 		// The timestamp with which we can search the lookup table
 		searchTimestamp: number,
 		// The timestamp for which we know the correct block will not come after it
 		latestTimestamp: number,
 		options: PacketRetrievalOptions,
+		// The position for which we know the correct block will not come after it
+		stopPos = Infinity,
+		// How many times we've retried due to a faulty lookup entry
+		lookupRetryCount = 0,
 	): Promise<EncodedPacket | null> {
 		const { demuxer, segment } = this.internalTrack;
-		const release = await segment.clusterLookupMutex.acquire(); // The algorithm requires exclusivity
 
-		try {
-			const { clusterIndex, blockIndex, correctBlockFound } = getBestMatch();
+		let currentCluster: Cluster | null = null;
+		let bestCluster: Cluster | null = null;
+		let bestBlockIndex = -1;
+
+		if (startCluster) {
+			const { blockIndex, correctBlockFound } = getMatchInCluster(startCluster);
+
 			if (correctBlockFound) {
-				// The correct block already exists, easy path.
-				const cluster = this.internalTrack.clusters[clusterIndex]!;
-				return this.fetchPacketInCluster(cluster, blockIndex, options);
+				return this.fetchPacketInCluster(startCluster, blockIndex, options);
 			}
 
-			// We use the metadata reader to find the cluster, but the cluster reader to load the cluster
-			const metadataReader = demuxer.metadataReader;
-			const clusterReader = demuxer.clusterReader;
-
-			let prevCluster: Cluster | null = null;
-			let bestClusterIndex = clusterIndex;
-			let bestBlockIndex = blockIndex;
-
-			// Search for a cue point; this way, we won't need to start searching from the start of the file
-			// but can jump right into the correct cluster (or at least nearby).
-			const cuePointIndex = binarySearchLessOrEqual(
-				this.internalTrack.cuePoints,
-				searchTimestamp,
-				x => x.time,
-			);
-			const cuePoint = cuePointIndex !== -1 ? this.internalTrack.cuePoints[cuePointIndex]! : null;
-
-			let nextClusterIsFirstCluster = false;
-
-			if (clusterIndex === -1) {
-				metadataReader.pos = cuePoint?.clusterPosition ?? segment.clusterSeekStartPos;
-				nextClusterIsFirstCluster = metadataReader.pos === segment.clusterSeekStartPos;
-			} else {
-				const cluster = this.internalTrack.clusters[clusterIndex]!;
-
-				if (!cuePoint || cluster.elementStartPos >= cuePoint.clusterPosition) {
-					metadataReader.pos = cluster.elementEndPos;
-					prevCluster = cluster;
-				} else {
-					// Use the lookup entry
-					metadataReader.pos = cuePoint.clusterPosition;
-				}
+			if (blockIndex !== -1) {
+				bestCluster = startCluster;
+				bestBlockIndex = blockIndex;
 			}
-
-			while (metadataReader.pos <= segment.elementEndPos - MIN_HEADER_SIZE) {
-				if (prevCluster) {
-					const trackData = prevCluster.trackData.get(this.internalTrack.id);
-					if (trackData && trackData.startTimestamp > latestTimestamp) {
-						// We're already past the upper bound, no need to keep searching
-						break;
-					}
-
-					if (prevCluster.nextCluster) {
-						// Skip ahead quickly without needing to read the file again
-						metadataReader.pos = prevCluster.nextCluster.elementEndPos;
-						prevCluster = prevCluster.nextCluster;
-						continue;
-					}
-				}
-
-				// Load the header
-				await metadataReader.reader.loadRange(metadataReader.pos, metadataReader.pos + MAX_HEADER_SIZE);
-				const elementStartPos = metadataReader.pos;
-				const elementHeader = metadataReader.readElementHeader();
-
-				if (!elementHeader || !LEVEL_1_EBML_IDS.includes(elementHeader.id)) {
-					// There's an element here that shouldn't be here (or Void). Might be garbage. In this case, let's
-					// try and resync to the next valid element.
-
-					metadataReader.pos = elementStartPos;
-
-					const nextPos = await metadataReader.resync(
-						LEVEL_1_EBML_IDS,
-						Math.min(segment.elementEndPos, metadataReader.pos + MAX_RESYNC_LENGTH),
-					);
-
-					if (nextPos) {
-						metadataReader.pos = nextPos;
-						continue;
-					} else {
-						break; // Resync failed
-					}
-				}
-
-				const id = elementHeader.id;
-				let size = elementHeader.size;
-				const dataStartPos = metadataReader.pos;
-
-				if (id === EBMLId.Cluster) {
-					const index = binarySearchExact(segment.clusters, elementStartPos, x => x.elementStartPos);
-
-					let cluster: Cluster;
-					if (index === -1) {
-						// This is the first time we've seen this cluster
-						metadataReader.pos = elementStartPos;
-						cluster = await demuxer.readCluster(segment);
-					} else {
-						// We already know this cluster
-						cluster = segment.clusters[index]!;
-					}
-
-					// Even if we already know the cluster, we might not yet know its predecessor, so always do this
-					if (prevCluster) prevCluster.nextCluster = cluster;
-					prevCluster = cluster;
-
-					if (nextClusterIsFirstCluster) {
-						cluster.isKnownToBeFirstCluster = true;
-						nextClusterIsFirstCluster = false;
-					}
-
-					const { clusterIndex, blockIndex, correctBlockFound } = getBestMatch();
-					if (correctBlockFound) {
-						const cluster = this.internalTrack.clusters[clusterIndex]!;
-						return this.fetchPacketInCluster(cluster, blockIndex, options);
-					}
-					if (clusterIndex !== -1) {
-						bestClusterIndex = clusterIndex;
-						bestBlockIndex = blockIndex;
-					}
-				}
-
-				if (size === null) {
-					// Undefined element size (can happen in livestreamed files). In this case, we need to do some
-					// searching to determine the actual size of the element.
-
-					if (id === EBMLId.Cluster) {
-						// The cluster should have already computed its length, we can just copy that result
-						assert(prevCluster);
-						size = prevCluster.elementEndPos - dataStartPos;
-					} else {
-						// Search for the next element at level 0 or 1
-						clusterReader.pos = dataStartPos;
-						const nextElementPos = await clusterReader.searchForNextElementId(
-							LEVEL_0_AND_1_EBML_IDS,
-							segment.elementEndPos,
-						);
-
-						size = (nextElementPos ?? segment.elementEndPos) - dataStartPos;
-					}
-
-					const endPos = dataStartPos + size;
-					if (endPos > segment.elementEndPos - MIN_HEADER_SIZE) {
-						// No more elements fit in this segment
-						break;
-					} else {
-						// Check the next element. If it's a new segment, we know this segment ends here. The new
-						// segment is just ignored, since we're likely in a livestreamed file and thus only care about
-						// the first segment.
-						clusterReader.pos = endPos;
-						const elementId = clusterReader.readElementId();
-						if (elementId === EBMLId.Segment) {
-							segment.elementEndPos = endPos;
-							break;
-						}
-					}
-				}
-
-				metadataReader.pos = dataStartPos + size;
-			}
-
-			let result: EncodedPacket | null = null;
-			const bestCluster = bestClusterIndex !== -1 ? this.internalTrack.clusters[bestClusterIndex]! : null;
-			if (bestCluster) {
-				// If we finished looping but didn't find a perfect match, still return the best match we found
-				result = await this.fetchPacketInCluster(bestCluster, bestBlockIndex, options);
-			}
-
-			// Catch faulty cue points
-			if (!result && cuePoint && (!bestCluster || bestCluster.elementStartPos < cuePoint.clusterPosition)) {
-				// The cue point lied to us! We found a cue point but no cluster there that satisfied the match. In this
-				// case, let's search again but using the cue point before that.
-				const previousCuePoint = this.internalTrack.cuePoints[cuePointIndex - 1];
-				const newSearchTimestamp = previousCuePoint?.time ?? -Infinity;
-				return this.performClusterLookup(getBestMatch, newSearchTimestamp, latestTimestamp, options);
-			}
-
-			return result;
-		} finally {
-			release();
 		}
+
+		// Search for a cue point; this way, we won't need to start searching from the start of the file
+		// but can jump right into the correct cluster (or at least nearby).
+		const cuePointIndex = binarySearchLessOrEqual(
+			this.internalTrack.cuePoints,
+			searchTimestamp,
+			x => x.time,
+		);
+		const cuePoint = cuePointIndex !== -1
+			? this.internalTrack.cuePoints[cuePointIndex]!
+			: null;
+
+		// Also check the position cache
+		const positionCacheIndex = binarySearchLessOrEqual(
+			this.internalTrack.clusterPositionCache,
+			searchTimestamp,
+			x => x.startTimestamp,
+		);
+		const positionCacheEntry = positionCacheIndex !== -1
+			? this.internalTrack.clusterPositionCache[positionCacheIndex]!
+			: null;
+
+		const lookupEntryPosition = Math.max(
+			cuePoint?.clusterPosition ?? 0,
+			positionCacheEntry?.elementStartPos ?? 0,
+		) || null;
+		const cuePointWins = !!cuePoint && cuePoint.clusterPosition >= (positionCacheEntry?.elementStartPos ?? 0);
+
+		let currentPos: number;
+
+		if (!startCluster) {
+			currentPos = lookupEntryPosition ?? segment.clusterSeekStartPos;
+		} else {
+			if (lookupEntryPosition === null || startCluster.elementStartPos >= lookupEntryPosition) {
+				currentPos = startCluster.elementEndPos;
+				currentCluster = startCluster;
+			} else {
+				// Use the lookup entry
+				currentPos = lookupEntryPosition;
+			}
+		}
+
+		const scanStartPos = currentCluster ? currentCluster.elementStartPos : currentPos;
+
+		while (
+			(segment.elementEndPos === null || currentPos <= segment.elementEndPos - MIN_HEADER_SIZE)
+			&& currentPos < stopPos
+		) {
+			if (currentCluster) {
+				const trackData = currentCluster.trackData.get(this.internalTrack.id);
+				if (trackData && trackData.startTimestamp > latestTimestamp) {
+					// We're already past the upper bound, no need to keep searching
+					break;
+				}
+
+				currentCluster = null; // So we don't process it again next iteration
+			}
+
+			const summary = segment.clusterSummaries.get(currentPos);
+			if (summary && !summary.trackIds.has(this.internalTrack.id)) {
+				// We've read this cluster before and know it has nothing for this track, so let's not read it again
+				currentPos = summary.elementEndPos;
+				continue;
+			}
+
+			// Load the header
+			let slice = demuxer.reader.requestSliceRange(currentPos, MIN_HEADER_SIZE, MAX_HEADER_SIZE);
+			if (isThenable(slice)) slice = await slice;
+			if (!slice) break;
+
+			const elementStartPos = currentPos;
+			const elementHeader = readElementHeader(slice);
+
+			if (
+				!elementHeader
+				|| (!LEVEL_1_EBML_IDS.includes(elementHeader.id) && elementHeader.id !== EBMLId.Void)
+			) {
+				// There's an element here that shouldn't be here. Might be garbage. In this case, let's
+				// try and resync to the next valid element.
+				const nextPos = await resync(
+					demuxer.reader,
+					elementStartPos + 1,
+					LEVEL_1_EBML_IDS,
+					Math.min(segment.elementEndPos ?? Infinity, elementStartPos + MAX_RESYNC_LENGTH),
+				);
+
+				if (nextPos) {
+					currentPos = nextPos;
+					continue;
+				} else {
+					break; // Resync failed
+				}
+			}
+
+			const id = elementHeader.id;
+			let size = elementHeader.size;
+			const dataStartPos = slice.filePos;
+
+			if (id === EBMLId.Cluster) {
+				currentCluster = await demuxer.readCluster(elementStartPos, segment);
+				// readCluster computes the proper size even if it's undefined in the header, so let's use that instead
+				size = currentCluster.elementEndPos - dataStartPos;
+
+				const { blockIndex, correctBlockFound } = getMatchInCluster(currentCluster);
+				if (correctBlockFound) {
+					return this.fetchPacketInCluster(currentCluster, blockIndex, options);
+				}
+
+				if (blockIndex !== -1) {
+					bestCluster = currentCluster;
+					bestBlockIndex = blockIndex;
+				}
+			}
+
+			if (size === undefined) {
+				// Undefined element size (can happen in livestreamed files). In this case, we need to do some
+				// searching to determine the actual size of the element.
+
+				assert(id !== EBMLId.Cluster); // Undefined cluster sizes are fixed further up
+
+				// Search for the next element at level 0 or 1
+				const nextElementPos = await searchForNextElementId(
+					demuxer.reader,
+					dataStartPos,
+					LEVEL_0_AND_1_EBML_IDS,
+					segment.elementEndPos,
+				);
+
+				size = nextElementPos.pos - dataStartPos;
+			}
+
+			const endPos = dataStartPos + size;
+			if (segment.elementEndPos === null) {
+				// Check the next element. If it's a new segment, we know this segment ends here. The new
+				// segment is just ignored, since we're likely in a livestreamed file and thus only care about
+				// the first segment.
+
+				let slice = demuxer.reader.requestSliceRange(endPos, MIN_HEADER_SIZE, MAX_HEADER_SIZE);
+				if (isThenable(slice)) slice = await slice;
+				if (!slice) break;
+
+				const elementId = readElementId(slice);
+				if (elementId === EBMLId.Segment) {
+					segment.elementEndPos = endPos; // We now know the segment's size
+					break;
+				}
+			}
+
+			currentPos = endPos;
+		}
+
+		// Handle unsatisfactoy cue points or position cache entries
+		if (lookupEntryPosition !== null && (!bestCluster || bestCluster.elementStartPos < lookupEntryPosition)) {
+			// We found a lookup entry but no cluster from there on that satisfied the match. In this case, let's search
+			// again but using a previous entry of the kind we started from. Each time this happens, we double the
+			// backwards step to perform better (and have more sequential reads) if it takes us a long time to find
+			// the media.
+			//
+			// Note that this doesn't only kick for faulty cue points but also for multi-track files where only one
+			// track has cue points. Since we distribute the cue points to the track with none, they might not
+			// accurately reflect where media can be found.
+			const step = 1 << lookupRetryCount;
+			const previousEntryTimestamp = cuePointWins
+				? this.internalTrack.cuePoints[cuePointIndex - step]?.time
+				: this.internalTrack.clusterPositionCache[positionCacheIndex - step]?.startTimestamp;
+			const newSearchTimestamp = previousEntryTimestamp ?? -Infinity;
+
+			return this.performClusterLookup(
+				null,
+				getMatchInCluster,
+				newSearchTimestamp,
+				latestTimestamp,
+				options,
+				scanStartPos, // So we don't read the same clusters again
+				lookupRetryCount + 1,
+			);
+		}
+
+		if (bestCluster) {
+			// If we finished looping but didn't find a perfect match, still return the best match we found
+			return this.fetchPacketInCluster(bestCluster, bestBlockIndex, options);
+		}
+
+		return null;
 	}
 }
 
 class MatroskaVideoTrackBacking extends MatroskaTrackBacking implements InputVideoTrackBacking {
-	override internalTrack: InternalVideoTrack;
+	declare internalTrack: InternalVideoTrack;
 	decoderConfigPromise: Promise<VideoDecoderConfig> | null = null;
 
 	constructor(internalTrack: InternalVideoTrack) {
 		super(internalTrack);
-		this.internalTrack = internalTrack;
+	}
+
+	getType() {
+		return 'video' as const;
 	}
 
 	override getCodec(): VideoCodec | null {
@@ -1775,17 +2710,47 @@ class MatroskaVideoTrackBacking extends MatroskaTrackBacking implements InputVid
 		return this.internalTrack.info.height;
 	}
 
-	getRotation() {
-		return this.internalTrack.info.rotation;
+	getSquarePixelWidth() {
+		return this.internalTrack.info.squarePixelWidth;
+	}
+
+	getSquarePixelHeight() {
+		return this.internalTrack.info.squarePixelHeight;
+	}
+
+	getTransformationMatrix() {
+		const info = this.internalTrack.info;
+
+		// Yaw and pitch are applied before roll
+		const linear = multiplyMatrices(
+			scaleMatrix(info.horizontalScale, info.verticalScale),
+			rotationMatrix(info.rotation),
+		);
+
+		return centeredTransformationMatrix(linear, info.width, info.height);
 	}
 
 	async getColorSpace(): Promise<VideoColorSpaceInit> {
+		const decoderConfig = await this.getDecoderConfig();
+		if (!decoderConfig) {
+			return this.internalTrack.info.colorSpace;
+		}
+
 		return {
-			primaries: this.internalTrack.info.colorSpace?.primaries,
-			transfer: this.internalTrack.info.colorSpace?.transfer,
-			matrix: this.internalTrack.info.colorSpace?.matrix,
-			fullRange: this.internalTrack.info.colorSpace?.fullRange,
+			primaries: decoderConfig.colorSpace?.primaries,
+			transfer: decoderConfig.colorSpace?.transfer,
+			matrix: decoderConfig.colorSpace?.matrix,
+			fullRange: decoderConfig.colorSpace?.fullRange,
 		};
+	}
+
+	async canBeTransparent() {
+		return this.internalTrack.info.alphaMode || (
+			this.internalTrack.info.codec === 'prores' && (
+				this.internalTrack.info.proresFormat === 'ap4h'
+				|| this.internalTrack.info.proresFormat === 'ap4x'
+			)
+		);
 	}
 
 	async getDecoderConfig(): Promise<VideoDecoderConfig | null> {
@@ -1798,6 +2763,7 @@ class MatroskaVideoTrackBacking extends MatroskaTrackBacking implements InputVid
 			const needsPacketForAdditionalInfo
 				= this.internalTrack.info.codec === 'vp9'
 					|| this.internalTrack.info.codec === 'av1'
+					|| this.internalTrack.info.codec === 'prores'
 					// Packets are in Annex B format:
 					|| (this.internalTrack.info.codec === 'avc' && !this.internalTrack.info.codecDescription)
 					// Packets are in Annex B format:
@@ -1807,42 +2773,72 @@ class MatroskaVideoTrackBacking extends MatroskaTrackBacking implements InputVid
 				firstPacket = await this.getFirstPacket({});
 			}
 
-			return {
-				codec: extractVideoCodecString({
-					width: this.internalTrack.info.width,
-					height: this.internalTrack.info.height,
-					codec: this.internalTrack.info.codec,
-					codecDescription: this.internalTrack.info.codecDescription,
-					colorSpace: this.internalTrack.info.colorSpace,
-					avcCodecInfo: this.internalTrack.info.codec === 'avc' && firstPacket
-						? extractAvcDecoderConfigurationRecord(firstPacket.data)
-						: null,
-					hevcCodecInfo: this.internalTrack.info.codec === 'hevc' && firstPacket
-						? extractHevcDecoderConfigurationRecord(firstPacket.data)
-						: null,
-					vp9CodecInfo: this.internalTrack.info.codec === 'vp9' && firstPacket
-						? extractVp9CodecInfoFromPacket(firstPacket.data)
-						: null,
-					av1CodecInfo: this.internalTrack.info.codec === 'av1' && firstPacket
-						? extractAv1CodecInfoFromPacket(firstPacket.data)
-						: null,
-				}),
+			const codecInfo = {
+				width: this.internalTrack.info.width,
+				height: this.internalTrack.info.height,
+				codec: this.internalTrack.info.codec,
+				codecDescription: this.internalTrack.info.codecDescription,
+				colorSpace: this.internalTrack.info.colorSpace,
+				avcType: 1 as const, // We don't know better (or do we?) so just assume 'avc1'
+				avcCodecInfo: this.internalTrack.info.codec === 'avc' && firstPacket
+					? extractAvcDecoderConfigurationRecord(firstPacket.data)
+					: null,
+				hevcCodecInfo: this.internalTrack.info.codec === 'hevc' && firstPacket
+					? extractHevcDecoderConfigurationRecord(firstPacket.data)
+					: null,
+				vp9CodecInfo: this.internalTrack.info.codec === 'vp9' && firstPacket
+					? extractVp9CodecInfoFromPacket(firstPacket.data)
+					: null,
+				av1CodecInfo: this.internalTrack.info.codec === 'av1' && firstPacket
+					? extractAv1CodecInfoFromPacket(firstPacket.data)
+					: null,
+				proresCodecInfo: this.internalTrack.info.codec === 'prores' && firstPacket
+					? extractProresCodecInfoFromPacket(firstPacket.data)
+					: null,
+				proresFormat: this.internalTrack.info.proresFormat,
+			};
+
+			if (!colorSpaceIsComplete(this.internalTrack.info.colorSpace)) {
+				const colorSpace = extractColorSpace(codecInfo);
+
+				// Fill the missing values
+				this.internalTrack.info.colorSpace.primaries ??= colorSpace.primaries;
+				this.internalTrack.info.colorSpace.transfer ??= colorSpace.transfer;
+				this.internalTrack.info.colorSpace.matrix ??= colorSpace.matrix;
+				this.internalTrack.info.colorSpace.fullRange ??= colorSpace.fullRange;
+			}
+
+			const config: VideoDecoderConfig = {
+				codec: extractVideoCodecString(codecInfo),
 				codedWidth: this.internalTrack.info.width,
 				codedHeight: this.internalTrack.info.height,
 				description: this.internalTrack.info.codecDescription ?? undefined,
-				colorSpace: this.internalTrack.info.colorSpace ?? undefined,
+				colorSpace: this.internalTrack.info.colorSpace,
 			};
+
+			if (
+				this.internalTrack.info.width !== this.internalTrack.info.squarePixelWidth
+				|| this.internalTrack.info.height !== this.internalTrack.info.squarePixelHeight
+			) {
+				config.displayAspectWidth = this.internalTrack.info.squarePixelWidth;
+				config.displayAspectHeight = this.internalTrack.info.squarePixelHeight;
+			}
+
+			return config;
 		})();
 	}
 }
 
 class MatroskaAudioTrackBacking extends MatroskaTrackBacking implements InputAudioTrackBacking {
-	override internalTrack: InternalAudioTrack;
-	decoderConfig: AudioDecoderConfig | null = null;
+	declare internalTrack: InternalAudioTrack;
+	decoderConfigPromise: Promise<AudioDecoderConfig> | null = null;
 
 	constructor(internalTrack: InternalAudioTrack) {
 		super(internalTrack);
-		this.internalTrack = internalTrack;
+	}
+
+	getType() {
+		return 'audio' as const;
 	}
 
 	override getCodec(): AudioCodec | null {
@@ -1862,55 +2858,24 @@ class MatroskaAudioTrackBacking extends MatroskaTrackBacking implements InputAud
 			return null;
 		}
 
-		return this.decoderConfig ??= {
-			codec: extractAudioCodecString({
-				codec: this.internalTrack.info.codec,
-				codecDescription: this.internalTrack.info.codecDescription,
-				aacCodecInfo: this.internalTrack.info.aacCodecInfo,
-			}),
-			numberOfChannels: this.internalTrack.info.numberOfChannels,
-			sampleRate: this.internalTrack.info.sampleRate,
-			description: this.internalTrack.info.codecDescription ?? undefined,
-		};
-	}
-}
-
-/** Sorts blocks such that referenced blocks come before the blocks that reference them. */
-const sortBlocksByReferences = (blocks: ClusterBlock[]) => {
-	const timestampToBlock = new Map<number, ClusterBlock>();
-
-	for (let i = 0; i < blocks.length; i++) {
-		const block = blocks[i]!;
-		timestampToBlock.set(block.timestamp, block);
-	}
-
-	const processedBlocks = new Set<ClusterBlock>();
-	const result: ClusterBlock[] = [];
-
-	const processBlock = (block: ClusterBlock) => {
-		if (processedBlocks.has(block)) {
-			return;
-		}
-
-		// Marking the block as processed here already; prevents this algorithm from dying on cycles
-		processedBlocks.add(block);
-
-		for (let j = 0; j < block.referencedTimestamps.length; j++) {
-			const timestamp = block.referencedTimestamps[j]!;
-			const otherBlock = timestampToBlock.get(timestamp);
-			if (!otherBlock) {
-				continue;
+		return this.decoderConfigPromise ??= (async (): Promise<AudioDecoderConfig> => {
+			if (this.internalTrack.info.codec === 'dts' && !this.internalTrack.info.dtsFormat) {
+				// Gotta check the packet to determine the DTS variant
+				const firstPacket = await this.getFirstPacket({});
+				this.internalTrack.info.dtsFormat = firstPacket && extractDtsFourCcFromPacket(firstPacket.data);
 			}
 
-			processBlock(otherBlock);
-		}
-
-		result.push(block);
-	};
-
-	for (let i = 0; i < blocks.length; i++) {
-		processBlock(blocks[i]!);
+			return {
+				codec: extractAudioCodecString({
+					codec: this.internalTrack.info.codec,
+					codecDescription: this.internalTrack.info.codecDescription,
+					aacCodecInfo: this.internalTrack.info.aacCodecInfo,
+					dtsFormat: this.internalTrack.info.dtsFormat,
+				}),
+				numberOfChannels: this.internalTrack.info.numberOfChannels,
+				sampleRate: this.internalTrack.info.sampleRate,
+				description: this.internalTrack.info.codecDescription ?? undefined,
+			};
+		})();
 	}
-
-	return result;
-};
+}

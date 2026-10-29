@@ -4,16 +4,28 @@ import {
 	BlobSource,
 	CanvasSink,
 	Input,
+	UrlSource,
 	WrappedAudioBuffer,
 	WrappedCanvas,
 } from 'mediabunny';
+import { registerAc3Decoder } from '@mediabunny/ac3';
+import { registerDtsDecoder } from '@mediabunny/dts';
+import { registerProresDecoder } from '@mediabunny/prores';
 
 import SampleFileUrl from '../../docs/assets/big-buck-bunny-trimmed.mp4';
+
+// Enable codecs that aren't natively supported by WebCodecs.
+registerAc3Decoder();
+registerDtsDecoder();
+registerProresDecoder();
+
 (document.querySelector('#sample-file-download') as HTMLAnchorElement).href = SampleFileUrl;
 
-const selectMediaButton = document.querySelector('button') as HTMLButtonElement;
+const selectMediaButton = document.querySelector('#select-file') as HTMLButtonElement;
+const loadUrlButton = document.querySelector('#load-url') as HTMLButtonElement;
 const fileNameElement = document.querySelector('#file-name') as HTMLParagraphElement;
 const horizontalRule = document.querySelector('hr') as HTMLHRElement;
+const loadingElement = document.querySelector('#loading-element') as HTMLParagraphElement;
 const playerContainer = document.querySelector('#player') as HTMLDivElement;
 const canvas = document.querySelector('canvas') as HTMLCanvasElement;
 const controlsElement = document.querySelector('#controls') as HTMLDivElement;
@@ -28,11 +40,12 @@ const volumeBarContainer = document.querySelector('#volume-bar-container') as HT
 const volumeBar = document.querySelector('#volume-bar') as HTMLDivElement;
 const volumeIconWrapper = document.querySelector('#volume-icon-wrapper') as HTMLDivElement;
 const volumeButton = document.querySelector('#volume-button') as HTMLButtonElement;
+const liveDot = document.querySelector('#live-dot') as HTMLButtonElement;
 const fullscreenButton = document.querySelector('#fullscreen-button') as HTMLButtonElement;
 const errorElement = document.querySelector('#error-element') as HTMLDivElement;
 const warningElement = document.querySelector('#warning-element') as HTMLDivElement;
 
-const context = canvas.getContext('2d', { alpha: false, desynchronized: true })!;
+const context = canvas.getContext('2d')!;
 
 let audioContext: AudioContext | null = null;
 let gainNode: GainNode | null = null;
@@ -41,7 +54,9 @@ let fileLoaded = false;
 let videoSink: CanvasSink | null = null;
 let audioSink: AudioBufferSink | null = null;
 
-let totalDuration = 0;
+let firstTimestamp = 0;
+let endTimestamp = 0;
+let isRelativeToUnixEpoch = false;
 /** The value of the audio context's currentTime the moment the playback was started. */
 let audioContextStartTime: number | null = null;
 let playing = false;
@@ -59,6 +74,8 @@ const queuedAudioNodes: Set<AudioBufferSourceNode> = new Set();
  */
 let asyncId = 0;
 
+let liveRefreshIntervalId = -1;
+
 let draggingProgressBar = false;
 let volume = 0.7;
 let draggingVolumeBar = false;
@@ -66,7 +83,7 @@ let volumeMuted = false;
 
 /** === INIT LOGIC === */
 
-const initMediaPlayer = async (file: File) => {
+const initMediaPlayer = async (resource: File | string) => {
 	try {
 		// First, dispose any ongoing playback:
 
@@ -76,32 +93,60 @@ const initMediaPlayer = async (file: File) => {
 
 		void videoFrameIterator?.return();
 		void audioBufferIterator?.return();
+
 		asyncId++;
 
 		fileLoaded = false;
-		fileNameElement.textContent = file.name;
+		fileNameElement.textContent = resource instanceof File ? resource.name : resource;
 		horizontalRule.style.display = '';
+		loadingElement.style.display = '';
 		playerContainer.style.display = 'none';
 		errorElement.textContent = '';
 		warningElement.textContent = '';
+		liveDot.style.display = 'none';
+		clearTimeout(liveRefreshIntervalId);
 
-		// Create an Input from the file
+		// Create an Input from the resource
 		const input = new Input({
-			source: new BlobSource(file),
-			formats: ALL_FORMATS,
+			source: typeof resource === 'string'
+				? new UrlSource(resource)
+				: new BlobSource(resource),
+			formats: ALL_FORMATS, // Accept all formats
 		});
-
-		playbackTimeAtStart = 0;
-		totalDuration = await input.computeDuration();
-		durationElement.textContent = formatSeconds(totalDuration);
 
 		let videoTrack = await input.getPrimaryVideoTrack();
 		let audioTrack = await input.getPrimaryAudioTrack();
 
+		const tracks = [videoTrack, audioTrack].filter(t => t !== null);
+
+		firstTimestamp = Math.max(
+			await input.getFirstTimestamp(tracks),
+			0,
+		);
+		endTimestamp = await input.getDurationFromMetadata(tracks, { skipLiveWait: true })
+			?? await input.computeDuration(tracks, { skipLiveWait: true });
+		isRelativeToUnixEpoch = (await Promise.all(tracks.map(t => t.isRelativeToUnixEpoch()))).some(Boolean);
+		playbackTimeAtStart = firstTimestamp;
+
+		// For degenerate cases where the end timestamp is less than 0
+		endTimestamp = Math.max(firstTimestamp, endTimestamp);
+
+		// Configure the time display elements accordingly
+		const timestampFontSize = isRelativeToUnixEpoch ? '12px' : '';
+		const timestampWhiteSpace = isRelativeToUnixEpoch ? 'pre' : '';
+		const timestampTextAlign = isRelativeToUnixEpoch ? 'center' : '';
+		currentTimeElement.style.fontSize = timestampFontSize;
+		currentTimeElement.style.whiteSpace = timestampWhiteSpace;
+		currentTimeElement.style.textAlign = timestampTextAlign;
+		durationElement.style.fontSize = timestampFontSize;
+		durationElement.style.whiteSpace = timestampWhiteSpace;
+		durationElement.style.textAlign = timestampTextAlign;
+		durationElement.textContent = formatTimestamp(endTimestamp);
+
 		let problemMessage = '';
 
 		if (videoTrack) {
-			if (videoTrack.codec === null) {
+			if (await videoTrack.getCodec() === null) {
 				problemMessage += 'Unsupported video codec. ';
 				videoTrack = null;
 			} else if (!(await videoTrack.canDecode())) {
@@ -111,7 +156,7 @@ const initMediaPlayer = async (file: File) => {
 		}
 
 		if (audioTrack) {
-			if (audioTrack.codec === null) {
+			if (await audioTrack.getCodec() === null) {
 				problemMessage += 'Unsupported audio codec. ';
 				audioTrack = null;
 			} else if (!(await audioTrack.canDecode())) {
@@ -137,22 +182,32 @@ const initMediaPlayer = async (file: File) => {
 
 		// We must create the audio context with the matching sample rate for correct acoustic results
 		// (especially for low-sample rate files)
-		audioContext = new AudioContext({ sampleRate: audioTrack?.sampleRate });
+		audioContext = new AudioContext({ sampleRate: await audioTrack?.getSampleRate() });
 		gainNode = audioContext.createGain();
 		gainNode.connect(audioContext.destination);
 		updateVolume();
 
+		const videoCanBeTransparent = videoTrack
+			? await videoTrack.canBeTransparent()
+			: false;
+
+		playerContainer.style.background = videoCanBeTransparent ? 'transparent' : '';
+
 		// For video, let's use a CanvasSink as it handles rotation and closing video samples for us.
 		// Pool size of 2: We'll only ever have the current and the next frame around, so we only need two canvases.
-		videoSink = videoTrack && new CanvasSink(videoTrack, { poolSize: 2 });
+		videoSink = videoTrack && new CanvasSink(videoTrack, {
+			poolSize: 2,
+			fit: 'contain', // In case the video changes dimensions over time
+			alpha: videoCanBeTransparent,
+		});
 		// For audio, we'll use an AudioBufferSink to directly retrieve AudioBuffers compatible with the Web Audio API
 		audioSink = audioTrack && new AudioBufferSink(audioTrack);
 
 		// Show the canvas if there's a video track, otherwise hide it
 		if (videoTrack) {
 			canvas.style.display = '';
-			canvas.width = videoTrack.displayWidth;
-			canvas.height = videoTrack.displayHeight;
+			canvas.width = await videoTrack.getDisplayWidth();
+			canvas.height = await videoTrack.getDisplayHeight();
 		} else {
 			canvas.style.display = 'none';
 		}
@@ -172,20 +227,55 @@ const initMediaPlayer = async (file: File) => {
 
 		if (audioContext.state === 'running') {
 			// Start playback automatically if the audio context permits
-			await play();
+			// await play();
 		}
 
+		loadingElement.style.display = 'none';
 		playerContainer.style.display = '';
 
 		if (!videoSink) {
 			// If there's only an audio track, always show the controls
 			controlsElement.style.opacity = '1';
+			controlsElement.style.pointerEvents = '';
 			playerContainer.style.cursor = '';
+		}
+
+		const refreshIntervals = await Promise.all(tracks.map(t => t.getLiveRefreshInterval()));
+		const nonNullIntervals = refreshIntervals.filter(x => x !== null);
+
+		if (nonNullIntervals.length > 0) {
+			// At least one track is live! This means that we'll need to continually refresh the end timestamp of the
+			// media to allow continuous live playback.
+
+			const interval = Math.min(...nonNullIntervals);
+			liveDot.style.display = '';
+			liveDot.onclick = () => {
+				void seekToTime(endTimestamp - 2 * interval);
+			};
+
+			const scheduleLiveRefresh = () => {
+				// eslint-disable-next-line @typescript-eslint/no-misused-promises
+				liveRefreshIntervalId = window.setTimeout(async () => {
+					endTimestamp = await input.getDurationFromMetadata(tracks, { skipLiveWait: true })
+						?? await input.computeDuration(tracks, { skipLiveWait: true });
+					durationElement.textContent = formatTimestamp(endTimestamp);
+
+					// Check if we're still live
+					const stillLive = await Promise.all(tracks.map(t => t.isLive()));
+					if (stillLive.every(live => !live)) {
+						liveDot.style.display = 'none';
+					} else {
+						scheduleLiveRefresh();
+					}
+				}, interval * 1000);
+			};
+			scheduleLiveRefresh();
 		}
 	} catch (error) {
 		console.error(error);
 
 		errorElement.textContent = String(error);
+		loadingElement.style.display = 'none';
 		playerContainer.style.display = 'none';
 	}
 };
@@ -213,6 +303,7 @@ const startVideoIterator = async () => {
 
 	if (firstFrame) {
 		// Draw the first frame
+		context.clearRect(0, 0, canvas.width, canvas.height);
 		context.drawImage(firstFrame.canvas, 0, 0);
 	}
 };
@@ -221,14 +312,15 @@ const startVideoIterator = async () => {
 const render = (requestFrame = true) => {
 	if (fileLoaded) {
 		const playbackTime = getPlaybackTime();
-		if (playbackTime >= totalDuration) {
+		if (playbackTime >= endTimestamp) {
 			// Pause playback once the end is reached
 			pause();
-			playbackTimeAtStart = totalDuration;
+			playbackTimeAtStart = endTimestamp;
 		}
 
 		// Check if the current playback time has caught up to the next frame
 		if (nextFrame && nextFrame.timestamp <= playbackTime) {
+			context.clearRect(0, 0, canvas.width, canvas.height);
 			context.drawImage(nextFrame.canvas, 0, 0);
 			nextFrame = null;
 
@@ -268,6 +360,7 @@ const updateNextFrame = async () => {
 		const playbackTime = getPlaybackTime();
 		if (newNextFrame.timestamp <= playbackTime) {
 			// Draw it immediately
+			context.clearRect(0, 0, canvas.width, canvas.height);
 			context.drawImage(newNextFrame.canvas, 0, 0);
 		} else {
 			// Save it for later
@@ -292,7 +385,9 @@ const runAudioIterator = async () => {
 		node.buffer = buffer;
 		node.connect(gainNode!);
 
-		const startTimestamp = audioContextStartTime! + timestamp - playbackTimeAtStart;
+		let startTimestamp = audioContextStartTime! + timestamp - playbackTimeAtStart;
+		// Round timestamp to the context's sample boundaries to prevent subsample audio glitches
+		startTimestamp = Math.round(audioContext!.sampleRate * startTimestamp) / audioContext!.sampleRate;
 
 		// Two cases: Either, the audio starts in the future or in the past
 		if (startTimestamp >= audioContext!.currentTime) {
@@ -341,9 +436,9 @@ const play = async () => {
 		await audioContext!.resume();
 	}
 
-	if (getPlaybackTime() === totalDuration) {
+	if (getPlaybackTime() === endTimestamp) {
 		// If we're at the end, let's snap back to the start
-		playbackTimeAtStart = 0;
+		playbackTimeAtStart = firstTimestamp;
 		await startVideoIterator();
 	}
 
@@ -398,7 +493,7 @@ const seekToTime = async (seconds: number) => {
 
 	await startVideoIterator();
 
-	if (wasPlaying && playbackTimeAtStart < totalDuration) {
+	if (wasPlaying && playbackTimeAtStart < endTimestamp) {
 		void play();
 	}
 };
@@ -406,33 +501,38 @@ const seekToTime = async (seconds: number) => {
 /** === PROGRESS BAR LOGIC === */
 
 const updateProgressBarTime = (seconds: number) => {
-	currentTimeElement.textContent = formatSeconds(seconds);
-	progressBar.style.width = `${(seconds / totalDuration) * 100}%`;
+	currentTimeElement.textContent = formatTimestamp(seconds);
+	progressBar.style.width = `${((seconds - firstTimestamp) / (endTimestamp - firstTimestamp)) * 100}%`;
 };
 
 progressBarContainer.addEventListener('pointerdown', (event) => {
 	draggingProgressBar = true;
+	progressBarContainer.setPointerCapture(event.pointerId);
 
 	const rect = progressBarContainer.getBoundingClientRect();
 	const completion = Math.max(Math.min((event.clientX - rect.left) / rect.width, 1), 0);
-	updateProgressBarTime(completion * totalDuration);
+	updateProgressBarTime(firstTimestamp + completion * (endTimestamp - firstTimestamp));
+
+	clearTimeout(hideControlsTimeout);
 
 	window.addEventListener('pointerup', (event) => {
 		draggingProgressBar = false;
+		progressBarContainer.releasePointerCapture(event.pointerId);
 
 		const rect = progressBarContainer.getBoundingClientRect();
 		const completion = Math.max(Math.min((event.clientX - rect.left) / rect.width, 1), 0);
-		const newTime = completion * totalDuration;
+		const newTime = firstTimestamp + completion * (endTimestamp - firstTimestamp);
 
 		void seekToTime(newTime);
+		showControlsTemporarily();
 	}, { once: true });
 });
 
-window.addEventListener('pointermove', (event) => {
+progressBarContainer.addEventListener('pointermove', (event) => {
 	if (draggingProgressBar) {
 		const rect = progressBarContainer.getBoundingClientRect();
 		const completion = Math.max(Math.min((event.clientX - rect.left) / rect.width, 1), 0);
-		updateProgressBarTime(completion * totalDuration);
+		updateProgressBarTime(firstTimestamp + completion * (endTimestamp - firstTimestamp));
 	}
 });
 
@@ -453,18 +553,24 @@ const updateVolume = () => {
 
 volumeBarContainer.addEventListener('pointerdown', (event) => {
 	draggingVolumeBar = true;
+	volumeBarContainer.setPointerCapture(event.pointerId);
 
 	const rect = volumeBarContainer.getBoundingClientRect();
 	volume = Math.max(Math.min((event.clientX - rect.left) / rect.width, 1), 0);
 	volumeMuted = false;
 	updateVolume();
 
+	clearTimeout(hideControlsTimeout);
+
 	window.addEventListener('pointerup', (event) => {
 		draggingVolumeBar = false;
+		volumeBarContainer.releasePointerCapture(event.pointerId);
 
 		const rect = volumeBarContainer.getBoundingClientRect();
 		volume = Math.max(Math.min((event.clientX - rect.left) / rect.width, 1), 0);
 		updateVolume();
+
+		showControlsTemporarily();
 	}, { once: true });
 });
 
@@ -473,7 +579,7 @@ volumeButton.addEventListener('click', () => {
 	updateVolume();
 });
 
-window.addEventListener('pointermove', (event) => {
+volumeBarContainer.addEventListener('pointermove', (event) => {
 	if (draggingVolumeBar) {
 		const rect = volumeBarContainer.getBoundingClientRect();
 		volume = Math.max(Math.min((event.clientX - rect.left) / rect.width, 1), 0);
@@ -490,26 +596,43 @@ const showControlsTemporarily = () => {
 	}
 
 	controlsElement.style.opacity = '1';
+	controlsElement.style.pointerEvents = '';
 	playerContainer.style.cursor = '';
 
 	clearTimeout(hideControlsTimeout);
 	hideControlsTimeout = window.setTimeout(() => {
-		controlsElement.style.opacity = '0';
+		if (draggingProgressBar) {
+			return;
+		}
+
+		hideControls();
 		playerContainer.style.cursor = 'none';
 	}, 2000);
 };
 
+const hideControls = () => {
+	controlsElement.style.opacity = '0';
+	controlsElement.style.pointerEvents = 'none';
+};
+hideControls();
+
 let hideControlsTimeout = -1;
-playerContainer.addEventListener('pointermove', () => {
-	showControlsTemporarily();
+playerContainer.addEventListener('pointermove', (event) => {
+	if (event.pointerType !== 'touch') {
+		showControlsTemporarily();
+	}
 });
-playerContainer.addEventListener('pointerleave', () => {
+playerContainer.addEventListener('pointerleave', (event) => {
 	if (!videoSink) {
 		// Shouldn't run if there's only an audio track
 		return;
 	}
 
-	controlsElement.style.opacity = '0';
+	if (draggingProgressBar || draggingVolumeBar || event.pointerType === 'touch') {
+		return;
+	}
+
+	hideControls();
 	clearTimeout(hideControlsTimeout);
 });
 
@@ -526,10 +649,10 @@ window.addEventListener('keydown', (e) => {
 	} else if (e.code === 'KeyF') {
 		fullscreenButton.click();
 	} else if (e.code === 'ArrowLeft') {
-		const newTime = Math.max(getPlaybackTime() - 5, 0);
+		const newTime = Math.max(getPlaybackTime() - 5, firstTimestamp);
 		void seekToTime(newTime);
 	} else if (e.code === 'ArrowRight') {
-		const newTime = Math.min(getPlaybackTime() + 5, totalDuration);
+		const newTime = Math.min(getPlaybackTime() + 5, endTimestamp);
 		void seekToTime(newTime);
 	} else if (e.code === 'KeyM') {
 		volumeButton.click();
@@ -551,17 +674,42 @@ fullscreenButton.addEventListener('click', () => {
 	}
 });
 
+// I'm sorry for this
+const isTouchDevice = () => {
+	return 'ontouchstart' in window;
+};
+
 playerContainer.addEventListener('click', () => {
-	togglePlay();
+	if (isTouchDevice()) {
+		if (controlsElement.style.opacity === '1') {
+			hideControls();
+		} else {
+			showControlsTemporarily();
+		}
+	} else {
+		togglePlay();
+	}
 });
 controlsElement.addEventListener('click', (event) => {
 	// Make sure this does NOT toggle play
 	event.stopPropagation();
+	showControlsTemporarily();
 });
 
 /** === UTILS === */
 
+const formatTimestamp = (seconds: number) => {
+	if (isRelativeToUnixEpoch) {
+		const iso = new Date(seconds * 1000).toISOString();
+		return iso.replace('T', '\n');
+	}
+
+	return formatSeconds(seconds);
+};
+
 const formatSeconds = (seconds: number) => {
+	const showMilliseconds = window.innerWidth >= 640;
+
 	seconds = Math.round(seconds * 1000) / 1000; // Round to milliseconds
 
 	const hours = Math.floor(seconds / 3600);
@@ -569,19 +717,34 @@ const formatSeconds = (seconds: number) => {
 	const remainingSeconds = Math.floor(seconds % 60);
 	const millisecs = Math.floor(1000 * seconds % 1000).toString().padStart(3, '0');
 
+	let result: string;
 	if (hours > 0) {
-		return `${hours}:${minutes.toString().padStart(2, '0')}`
-			+ `:${remainingSeconds.toString().padStart(2, '0')}.${millisecs}`;
+		result = `${hours}:${minutes.toString().padStart(2, '0')}`
+			+ `:${remainingSeconds.toString().padStart(2, '0')}`;
+	} else {
+		result = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 	}
-	return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}.${millisecs}`;
+
+	if (showMilliseconds) {
+		result += `.${millisecs}`;
+	}
+
+	return result;
 };
+
+window.addEventListener('resize', () => {
+	if (endTimestamp) {
+		updateProgressBarTime(getPlaybackTime());
+		durationElement.textContent = formatTimestamp(endTimestamp);
+	}
+});
 
 /** === FILE SELECTION LOGIC === */
 
 selectMediaButton.addEventListener('click', () => {
 	const fileInput = document.createElement('input');
 	fileInput.type = 'file';
-	fileInput.accept = 'video/*,video/x-matroska,audio/*,audio/aac';
+	fileInput.accept = 'video/*,video/x-matroska,video/mp2t,.mkv,.ts,audio/*,audio/aac,.aac';
 	fileInput.addEventListener('change', () => {
 		const file = fileInput.files?.[0];
 		if (!file) {
@@ -592,6 +755,19 @@ selectMediaButton.addEventListener('click', () => {
 	});
 
 	fileInput.click();
+});
+
+loadUrlButton.addEventListener('click', () => {
+	const url = prompt(
+		'Please enter a URL of a media file. Note that it must be HTTPS and support cross-origin requests, so have the'
+		+ ' right CORS headers set.',
+		'https://mediabunny.dev/big-buck-bunny.mp4',
+	);
+	if (!url) {
+		return;
+	}
+
+	void initMediaPlayer(url);
 });
 
 document.addEventListener('dragover', (event) => {

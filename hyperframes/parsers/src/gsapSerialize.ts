@@ -66,6 +66,12 @@ export interface GsapAnimation {
   ease?: string;
   /** Non-editable GSAP config (stagger, yoyo, repeat, etc.) preserved for round-trips. */
   extras?: Record<string, unknown>;
+  inspectionTiming?: {
+    repeat: number | null;
+    repeatDelay: number | null;
+    delay: number | null;
+    stagger: { each: number } | { amount: number } | null;
+  };
   /** Native GSAP keyframes data — present when the tween uses keyframes: { ... }. */
   keyframes?: GsapKeyframesData;
   /** Arc motion path config — present when the tween uses motionPath for curved position interpolation. */
@@ -139,6 +145,19 @@ export function mergePercentageKeyframes(
     if (keyframe.auto !== undefined) existing.auto = keyframe.auto;
   }
   return [...byPercentage.values()].sort((a, b) => a.percentage - b.percentage);
+}
+
+export function distributeArrayKeyframes(
+  channels: ReadonlyMap<string, readonly (number | string)[]>,
+): GsapPercentageKeyframe[] {
+  return mergePercentageKeyframes(
+    [...channels].flatMap(([key, values]) =>
+      values.map((value, index) => ({
+        percentage: values.length > 1 ? Math.round((index / (values.length - 1)) * 100) : 0,
+        properties: { [key]: value },
+      })),
+    ),
+  );
 }
 
 export type GsapKeyframeFormat = "percentage" | "object-array" | "simple-array";
@@ -239,7 +258,12 @@ export interface SplitAnimationsResult {
 export function serializeGsapAnimations(
   animations: GsapAnimation[],
   timelineVar = "tl",
-  options?: { includeMediaSync?: boolean; preamble?: string; postamble?: string },
+  options?: {
+    includeMediaSync?: boolean;
+    mediaElementLeadSeconds?: number;
+    preamble?: string;
+    postamble?: string;
+  },
 ): string {
   const sorted = [...animations].sort((a, b) => {
     const aNum =
@@ -293,7 +317,7 @@ export function serializeGsapAnimations(
         const mediaTime = time - start;
         if (time >= start && time < end) {
           if (Math.abs(media.currentTime - mediaTime) > 0.1) {
-            media.currentTime = mediaTime;
+            media.currentTime = mediaTime + ${Number(options.mediaElementLeadSeconds ?? 0)};
           }
           if (media.paused && !${timelineVar}.paused()) {
             media.play().catch(function() {});

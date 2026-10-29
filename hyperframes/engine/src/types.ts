@@ -4,9 +4,12 @@
  * The engine's page contract. Any web page that wants to be rendered
  * as video must expose `window.__hf` implementing the HfProtocol interface.
  */
+import type { AudioFailureDiagnostic } from "./services/audioMixer.types.js";
 import type { Fps } from "@hyperframes/core";
 import type { ChromeMemoryStats } from "./services/chromeMemorySampler.js";
 import type { MotionBlurOptions } from "./services/motionBlur.js";
+
+export type PageMotionBlurOff = "off" | "hdr-render" | "layered-composite" | "distributed-render";
 
 /**
  * Outcome of waiting for a sub-composition's GSAP timelines to register.
@@ -16,11 +19,12 @@ import type { MotionBlurOptions } from "./services/motionBlur.js";
 export type SubTimelineWaitOutcome = "ready" | "timeout" | "script_failure";
 
 /**
- * Shared by every capture session of one render: composition ids whose timeline
- * wait already timed out, so later sessions report the timeout without waiting again.
+ * Shared by every capture session of one render: timeline waits that already timed out
+ * (so later sessions skip the wait), and scene callback errors the render log already shows.
  */
 export interface SubTimelineWaitMemo {
   unregisteredIds?: readonly string[];
+  loggedSceneCallbackErrors?: string[];
 }
 
 export type CaptureWarningCode =
@@ -29,6 +33,7 @@ export type CaptureWarningCode =
   | "audio_processing_failed"
   | "sub_timeline_readiness_timeout"
   | "sub_timeline_script_failure"
+  | "script_error_isolated"
   | "vfx_failure"
   | "live_map_detected";
 
@@ -40,7 +45,9 @@ export interface CaptureWarning {
     mediaType?: "image" | "video" | "audio";
     sources?: string[];
     pendingCompositionIds?: string[];
+    isolatedElements?: Array<{ compositionId: string; elementId: string | null }>;
     timeoutMs?: number;
+    audioFailures?: AudioFailureDiagnostic[];
     failureReasons?: string[];
     failureStages?: string[];
     failureOwner?: "user" | "system";
@@ -162,6 +169,7 @@ export interface CaptureOptions {
    */
   fps: Fps;
   format?: "jpeg" | "png";
+  transparent?: boolean;
   quality?: number;
   /**
    * Opt into sub-frame multi-sample motion blur (issue #4010). Absent means off and the
@@ -169,6 +177,8 @@ export interface CaptureOptions {
    * screenshot capture mode; see `services/motionBlur.ts`.
    */
   motionBlur?: MotionBlurOptions;
+  /** Why the page's capture motion blur stands down: the preview could not blur, or the route cannot host it. */
+  pageMotionBlur?: PageMotionBlurOff;
   deviceScaleFactor?: number;
   /**
    * Opt into Chrome's capture-beyond-viewport screenshot path. Leave undefined
@@ -232,6 +242,7 @@ export interface CaptureOptions {
    * Clamped to 0..8 like the env knob; HF_DE_VERIFY, when set, still wins.
    */
   deVerifySamples?: number;
+  deFrameFallback?: boolean;
 }
 
 export interface CaptureVideoMetadataHint {
@@ -408,6 +419,7 @@ export interface CapturePerfSummary {
   deVerifyInitMs: number;
   /** Clip-cut boundary frames routed to per-frame screenshot (Lim 6). */
   deBoundaryFrames: number;
+  deRiskFrames: number;
   /** Per-frame "No cached paint record" screenshot fallbacks during capture. */
   deNcprFallbacks: number;
   /**

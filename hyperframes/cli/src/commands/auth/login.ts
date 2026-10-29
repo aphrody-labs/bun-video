@@ -23,7 +23,7 @@ import { envFlagEnabled, isAttendedTerminal } from "../../utils/attendedTerminal
  *     the transient-blip rationale.
  */
 
-import { defineCommand } from "citty";
+import { defineCommand } from "../../utils/defineCommand.js";
 import { stdin as input } from "node:process";
 import {
   AuthClient,
@@ -468,7 +468,7 @@ async function readAllWithTimeout(
 }
 
 async function promptForKey(): Promise<string> {
-  const clack = await import("@clack/prompts");
+  const clack = await import("../../ui/prompts.js");
   const value = await clack.password({
     message: "Enter HeyGen API key",
     validate: (v) => {

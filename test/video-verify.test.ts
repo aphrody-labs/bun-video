@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Video } from "../src/native-video";
 import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +9,7 @@ import { UnifiedVideoPipeline } from "../src/video-workflow";
 const root = join(import.meta.dir, "../hyperframes");
 const reference = join(root, "player/tests/perf/fixtures/10-video-grid/sample.mp4");
 const other = join(root, "cli/src/commands/__fixtures__/silent.mp4");
-const nativeVideo = (Bun as unknown as { Video?: { available: boolean } }).Video;
+const nativeVideo = Video;
 
 describe.skipIf(!nativeVideo?.available)("render verification against watch evidence", () => {
   test("passes an identical render, fails a different one, and records both", async () => {

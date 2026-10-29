@@ -2,6 +2,14 @@ import { afterAll, describe, expect, it, mock } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { RateSpec } from "@hyperframes/core";
+import { parseAudioElements, videoAudioId } from "../../../../../engine/src/services/audioMixer.js";
+import {
+  parseVideoElements,
+  parseImageElements,
+} from "../../../../../engine/src/services/videoFrameExtractor.js";
+import { resolveReferencedStart } from "../../../../../engine/src/services/referenceResolver.js";
+import { collectRenderMedia } from "../../renderMediaCollector.js";
 
 const workDir = mkdtempSync(join(tmpdir(), "hf-stage-test-"));
 afterAll(() => rmSync(workDir, { recursive: true, force: true }));
@@ -99,6 +107,11 @@ mock.module("../../assetMediaType.js", () => ({
 }));
 
 mock.module("@hyperframes/engine", () => ({
+  parseAudioElements,
+  parseVideoElements,
+  parseImageElements,
+  resolveReferencedStart,
+  videoAudioId,
   createCaptureSession: async (
     _url: string,
     _dir: string,
@@ -271,6 +284,7 @@ function makeProbeInput(overrides: {
       videos: [],
       audios: [],
       images: [],
+      droppedMediaIds: new Set<string>(),
       unresolvedCompositions: [],
       externalAssets: new Map(),
       width: 1920,
@@ -363,6 +377,22 @@ describe("hasVariableBoundMedia", () => {
     expect(hasVariableBoundMedia(audio, { title: "Row 02" })).toBe(false);
     expect(hasVariableBoundMedia(image, { hero_src: "row-02.png" })).toBe(true);
   });
+
+  it("requires a browser probe when the mount sets the variable, with no render variables", () => {
+    const mount = (values: string) =>
+      `<div data-composition-id="clip" data-variable-values='${values}'>` +
+      `<video id="v" src="placeholder.mp4" data-var-src="src"></video></div>`;
+
+    expect(hasVariableBoundMedia(mount('{"src":"clip.mp4"}'), undefined)).toBe(true);
+    expect(hasVariableBoundMedia(mount('{"title":"Row 02"}'), undefined)).toBe(false);
+  });
+
+  it("requires a browser probe when the variable has a declared default", () => {
+    const declared = `<html data-composition-variables='[{"id":"src","type":"string","default":"clip.mp4"}]'><body>`;
+    const video = `<video id="v" src="placeholder.mp4" data-var-src="src"></video>`;
+
+    expect(hasVariableBoundMedia(`${declared}${video}</body></html>`, undefined)).toBe(true);
+  });
 });
 
 describe("runProbeStage — forceScreenshot threading", () => {
@@ -409,6 +439,342 @@ describe("runProbeStage — forceScreenshot threading", () => {
     expect(input.composition.images[0]?.start).toBe(4);
     expect(input.composition.images[0]?.end).toBe(6);
     expect(mediaPreflightComposition).toBe(input.composition);
+  });
+
+  it("preserves browser-discovered loops on audio and audible video tracks", async () => {
+    resetRetryMocks();
+    const timing = {
+      start: 0,
+      end: 5,
+      duration: 5,
+      mediaStart: 0,
+      loop: true,
+      volume: 1,
+      muted: false,
+    };
+    browserMediaResults = [
+      { id: "existing", tagName: "audio", src: "tone.wav", hasAudio: false, ...timing },
+      { id: "inserted", tagName: "audio", src: "other.wav", hasAudio: false, ...timing },
+      { id: "muted", tagName: "audio", src: "muted.wav", hasAudio: false, ...timing, muted: true },
+      { id: "clip", tagName: "video", src: "clip.mp4", hasAudio: true, ...timing },
+    ];
+    const { runProbeStage } = await import("./probeStage.js");
+    const input = makeProbeInput({});
+    input.compiled.html = '<script>new Audio("other.wav")</script>';
+    input.composition.duration = 5;
+    input.composition.audios.push(
+      { id: "existing", src: "tone.wav", start: 0, end: 5, mediaStart: 0, layer: 0, type: "audio" },
+      {
+        id: "clip-audio",
+        src: "clip.mp4",
+        start: 0,
+        end: 5,
+        mediaStart: 0,
+        layer: 0,
+        type: "video",
+      },
+    );
+    input.composition.videos.push({
+      id: "clip",
+      src: "clip.mp4",
+      start: 0,
+      end: 5,
+      mediaStart: 0,
+      loop: false,
+      hasAudio: true,
+    });
+    await runProbeStage(input);
+    expect(input.composition.audios.map((audio) => ({ id: audio.id, loop: audio.loop }))).toEqual([
+      { id: "existing", loop: true },
+      { id: "clip-audio", loop: true },
+      { id: "inserted", loop: true },
+    ]);
+  });
+
+  // Scene in-point 5 and clip trim 1: the collector starts picture and sound at source 6.
+  const runtimeRates = [
+    1.5,
+    {
+      target: "rate",
+      points: [
+        { t: 0, v: 1 },
+        { t: 3, v: 2 },
+      ],
+    } satisfies RateSpec,
+  ];
+  it.each(
+    runtimeRates.flatMap((playbackRate) => [
+      { tagName: "video", existing: false, playbackRate },
+      { tagName: "audio", existing: false, playbackRate },
+      { tagName: "video", existing: true, playbackRate },
+      { tagName: "audio", existing: true, playbackRate },
+    ]),
+  )(
+    "retains a runtime $tagName rate (existing: $existing, rate: $playbackRate)",
+    async ({ tagName, existing, playbackRate }) => {
+      resetRetryMocks();
+      browserMediaResults = [
+        {
+          id: "clip",
+          tagName,
+          src: "clip.mp4",
+          start: 0,
+          end: 3,
+          duration: 3,
+          mediaStart: 0.5,
+          playbackRate,
+          loop: false,
+          hasAudio: true,
+          volume: 1,
+          muted: false,
+        },
+      ];
+      const { runProbeStage } = await import("./probeStage.js");
+      const input = makeProbeInput({});
+      const clip = {
+        id: "clip",
+        src: "clip.mp4",
+        start: 0,
+        end: 3,
+        mediaStart: 0.5,
+        playbackRate: 1,
+      };
+      if (existing && tagName === "video") {
+        input.composition.videos.push({ ...clip, loop: false, hasAudio: true });
+        input.composition.audios.push({ ...clip, id: "clip-audio", layer: 0, type: "video" });
+      }
+      if (existing && tagName === "audio") {
+        input.composition.audios.push({ ...clip, layer: 0, type: "audio" });
+      }
+
+      await runProbeStage(input);
+
+      const media = tagName === "video" ? input.composition.videos : input.composition.audios;
+      expect(media[0]).toMatchObject({ playbackRate, mediaStart: 0.5 });
+      if (existing && tagName === "video") {
+        expect(input.composition.audios[0]).toMatchObject({ playbackRate, mediaStart: 0.5 });
+      }
+    },
+  );
+
+  it.each([
+    { tagName: "video", pageStart: 1, expected: 3 },
+    { tagName: "video", pageStart: 3, expected: 5 },
+    { tagName: "audio", pageStart: 1, expected: 3 },
+    { tagName: "audio", pageStart: 3, expected: 5 },
+  ])(
+    "applies a scene trim when adopting a runtime $tagName lane (page start $pageStart)",
+    async ({ tagName, pageStart, expected }) => {
+      resetRetryMocks();
+      const playbackRate = {
+        target: "rate",
+        points: [
+          { t: 0, v: 1 },
+          { t: 2, v: 1 },
+          { t: 4, v: 2 },
+        ],
+      } satisfies RateSpec;
+      browserMediaResults = [
+        {
+          id: "clip",
+          tagName,
+          src: "clip.mp4",
+          start: 0,
+          end: 5,
+          duration: 5,
+          mediaStart: pageStart,
+          playbackRate,
+          loop: false,
+          hasAudio: true,
+          volume: 1,
+          muted: false,
+        },
+      ];
+      const { runProbeStage } = await import("./probeStage.js");
+      const input = makeProbeInput({});
+      input.compiled.html = `<div data-composition-id="scene" data-start="5" data-duration="3" data-playback-start="2">
+        <${tagName} id="clip" src="clip.mp4" data-start="0" data-duration="5" data-playback-start="1" data-playback-rate="2" data-has-audio="true"></${tagName}>
+      </div>`;
+      const collected = collectRenderMedia(input.compiled.html);
+      input.composition.videos = collected.videos;
+      input.composition.audios = collected.audios;
+      const before = tagName === "video" ? collected.videos : collected.audios;
+      expect(before[0]).toMatchObject({ start: 5, end: 8, mediaStart: 5, playbackRate: 2 });
+
+      await runProbeStage(input);
+
+      const shiftedRate = {
+        target: "rate",
+        points: [
+          { t: 0, v: 1 },
+          { t: 2, v: 2 },
+        ],
+      };
+      const media = tagName === "video" ? input.composition.videos : input.composition.audios;
+      expect(media[0]).toMatchObject({
+        start: 5,
+        end: 8,
+        mediaStart: expected,
+        playbackRate: shiftedRate,
+      });
+      if (tagName === "video") {
+        expect(input.composition.audios[0]).toMatchObject({
+          mediaStart: expected,
+          playbackRate: shiftedRate,
+        });
+      }
+    },
+  );
+
+  it.each(
+    runtimeRates.flatMap((playbackRate) => [
+      { tagName: "video", playbackRate },
+      { tagName: "audio", playbackRate },
+    ]),
+  )(
+    "preserves a collected $tagName speed ramp during reconciliation (browser rate: $playbackRate)",
+    async ({ tagName, playbackRate }) => {
+      resetRetryMocks();
+      browserMediaResults = [
+        {
+          id: "clip",
+          tagName,
+          src: "clip.mp4",
+          start: 0,
+          end: 5,
+          duration: 5,
+          mediaStart: 1,
+          playbackRate,
+          loop: false,
+          hasAudio: true,
+          volume: 1,
+          muted: false,
+        },
+      ];
+      const { runProbeStage } = await import("./probeStage.js");
+      const input = makeProbeInput({});
+      const authoredRate = {
+        target: "rate",
+        points: [
+          { t: 0, v: 1 },
+          { t: 2, v: 1 },
+          { t: 4, v: 2 },
+        ],
+      } satisfies RateSpec;
+      input.compiled.html = `<div data-composition-id="scene" data-start="5" data-duration="3" data-playback-start="2">
+        <${tagName} id="clip" src="clip.mp4" data-start="0" data-duration="5" data-playback-start="1" data-has-audio="true" data-automation='${JSON.stringify({ version: 1, lanes: [authoredRate] })}'></${tagName}>
+      </div>`;
+      const collected = collectRenderMedia(input.compiled.html);
+      input.composition.videos = collected.videos;
+      input.composition.audios = collected.audios;
+      const before = structuredClone({ videos: collected.videos, audios: collected.audios });
+      const media = tagName === "video" ? collected.videos : collected.audios;
+      expect(media[0]).toMatchObject({ mediaStart: 3 });
+
+      await runProbeStage(input);
+
+      expect(input.composition.videos).toEqual(before.videos);
+      expect(input.composition.audios).toEqual(before.audios);
+    },
+  );
+
+  it.each([
+    { pageStart: 1, expected: 6 },
+    { pageStart: 3, expected: 8 },
+  ])(
+    "keeps a trimmed clip's picture and sound together inside a trimmed scene (page start $pageStart)",
+    async ({ pageStart, expected }) => {
+      resetRetryMocks();
+      browserMediaResults = [
+        {
+          id: "a",
+          tagName: "video",
+          src: "a.mp4",
+          start: 0,
+          end: 18,
+          duration: 18,
+          mediaStart: pageStart,
+          loop: false,
+          hasAudio: true,
+          volume: 1,
+          muted: false,
+        },
+      ];
+      const { runProbeStage } = await import("./probeStage.js");
+      const input = makeProbeInput({});
+      const window = { src: "a.mp4", start: 0, end: 6, mediaStart: 6 };
+      input.composition.videos.push({ id: "a", ...window, loop: false, hasAudio: true });
+      input.composition.audios.push({ id: "a-audio", ...window, layer: 0, type: "video" });
+      input.compiled.html = `<div data-composition-id="scene" data-start="0" data-duration="6" data-playback-start="5">
+        <video id="a" src="a.mp4" data-start="0" data-duration="18" data-playback-start="1" data-has-audio="true"></video>
+      </div>`;
+
+      await runProbeStage(input);
+
+      expect(input.composition.videos[0]?.mediaStart).toBe(expected);
+      expect(input.composition.audios[0]?.mediaStart).toBe(expected);
+    },
+  );
+
+  it("does not add back clips the collector dropped", async () => {
+    resetRetryMocks();
+    const common = { start: 1, end: 4, duration: 3, mediaStart: 0, volume: 1, muted: false };
+    browserMediaResults = [
+      { ...common, id: "early", tagName: "audio", src: "early.m4a" },
+      { ...common, id: "early__hf2", tagName: "audio", src: "early.m4a" },
+      { ...common, id: "clip__hf2", tagName: "video", src: "clip.mp4" },
+      { ...common, id: "pic__hf2", tagName: "image", src: "pic.png" },
+    ];
+    const { runProbeStage } = await import("./probeStage.js");
+    const input = makeProbeInput({});
+    input.composition.audios.push({
+      id: "early",
+      src: "early.m4a",
+      start: 1,
+      end: 4,
+      mediaStart: 0,
+      layer: 0,
+      type: "audio",
+    });
+    input.compiled.droppedMediaIds = new Set(["early__hf2", "clip__hf2", "pic__hf2"]);
+
+    await runProbeStage(input);
+
+    expect(input.composition.audios.map((audio) => audio.id)).toEqual(["early"]);
+    expect(input.composition.videos).toEqual([]);
+    expect(input.composition.images).toEqual([]);
+  });
+
+  it("moves an audio's start without moving a video track that shares its id", async () => {
+    resetRetryMocks();
+    browserMediaResults = [
+      {
+        id: "v-audio",
+        tagName: "audio",
+        src: "a.m4a",
+        start: 0,
+        end: 6,
+        duration: 6,
+        mediaStart: 4,
+        loop: false,
+        hasAudio: false,
+        volume: 1,
+        muted: false,
+      },
+    ];
+    const { runProbeStage } = await import("./probeStage.js");
+    const input = makeProbeInput({});
+    input.composition.audios.push(
+      { id: "v-audio", src: "a.m4a", start: 0, end: 6, mediaStart: 2, layer: 0, type: "audio" },
+      { id: "v-audio", src: "v.mp4", start: 0, end: 6, mediaStart: 0, layer: 0, type: "video" },
+    );
+    input.compiled.html =
+      `<video id="v" src="v.mp4" data-start="0" data-duration="6" data-has-audio="true"></video>` +
+      `<audio id="v-audio" src="a.m4a" data-start="0" data-duration="6" data-playback-start="2"></audio>`;
+
+    await runProbeStage(input);
+
+    expect(input.composition.audios.map((audio) => audio.mediaStart)).toEqual([4, 0]);
   });
 
   it("reconciles a nested source's selected runtime URL before media-type preflight", async () => {
@@ -684,6 +1050,45 @@ describe("runProbeStage — forceScreenshot threading", () => {
     expect(mediaPreflightComposition).toBe(input.composition);
   });
 
+  it("probes a video source write after an inner binding shadows its variable", async () => {
+    resetRetryMocks();
+    capturedCfgs.length = 0;
+    const { runProbeStage } = await import("./probeStage.js");
+    const input = makeProbeInput({});
+    input.composition.duration = 5;
+    input.composition.videos.push({
+      id: "clip",
+      src: "a.mp4",
+      start: 0,
+      end: 5,
+      mediaStart: 0,
+      loop: false,
+      hasAudio: false,
+    });
+    input.compiled.html = `<video id="clip" src="a.mp4"></video><img id="poster" src="a.png">
+      <script>const target = document.getElementById("clip");
+      { const target = document.getElementById("poster"); target.src = "b.png"; }
+      target.src = "b.mp4";</script>`;
+    browserMediaResults = [
+      {
+        id: "clip",
+        tagName: "video",
+        src: "b.mp4",
+        start: 0,
+        end: 5,
+        duration: 5,
+        mediaStart: 0,
+        loop: false,
+        hasAudio: false,
+        volume: 1,
+        muted: true,
+      },
+    ];
+    await runProbeStage(input);
+    expect(capturedCfgs.length).toBeGreaterThan(0);
+    expect(input.composition.videos[0]?.src).toBe("b.mp4");
+  });
+
   it("does not probe for img or script src mutations", async () => {
     resetRetryMocks();
     capturedCfgs.length = 0;
@@ -824,6 +1229,49 @@ describe("runProbeStage — render variable threading", () => {
       variables: { short: true, sceneCount: 2 },
     });
   });
+});
+
+describe("runProbeStage — page motion blur", () => {
+  // The probe session is reused for capture, so it must carry the render's "off" like any session.
+  it("passes pageMotionBlur to the probe session so a reused session installs the off global", async () => {
+    capturedOptions.length = 0;
+    const { runProbeStage } = await import("./probeStage.js");
+    const input = makeProbeInput({ stageForceScreenshot: false });
+    input.job.config.pageMotionBlur = "off";
+
+    await runProbeStage(input);
+
+    expect(capturedOptions[0]).toMatchObject({ pageMotionBlur: "off" });
+  });
+
+  it("leaves pageMotionBlur unset when the render does not ask for off", async () => {
+    capturedOptions.length = 0;
+    const { runProbeStage } = await import("./probeStage.js");
+
+    await runProbeStage(makeProbeInput({ stageForceScreenshot: false }));
+
+    expect(capturedOptions[0]).not.toHaveProperty("pageMotionBlur", "off");
+  });
+});
+
+describe("runProbeStage — capture jpeg quality", () => {
+  // A sequential disk render reuses this session for every frame, so its quality is the render's.
+  for (const [preset, expected] of [
+    ["draft", 80],
+    ["standard", 100],
+    ["high", 100],
+  ] as const) {
+    it(`captures ${preset} renders at jpeg quality ${expected}`, async () => {
+      capturedOptions.length = 0;
+      const { runProbeStage } = await import("./probeStage.js");
+      const input = makeProbeInput({ stageForceScreenshot: false });
+      input.job.config.quality = preset;
+
+      await runProbeStage(input);
+
+      expect(capturedOptions[0]).toMatchObject({ format: "jpeg", quality: expected });
+    });
+  }
 });
 
 describe("runProbeStage — decimal duration frame count", () => {

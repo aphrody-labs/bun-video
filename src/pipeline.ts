@@ -1,3 +1,4 @@
+import { Video } from "./native-video";
 import type { YtDlpOptions, YtDlpResult } from "./ytdlp";
 import type { GpuRuntime, GpuReport } from "@aphrody/bun-runtime-sdk/gpu";
 import type { MpvClient } from "./mpv";
@@ -9,16 +10,16 @@ import { materializeVideoSource, resolveVideoSource, type VideoSource } from "./
 export async function createVideo(
   source: VideoSource,
   options: { readonly maxPixels?: number; readonly signal?: AbortSignal } = {},
-): Promise<Bun.Video> {
+): Promise<Video> {
   options.signal?.throwIfAborted();
-  if (typeof Bun.Video !== "function") throw new Error("This runtime does not expose the native Bun.Video owner");
+  if (typeof Video !== "function" || !Video.available) throw new Error("No video provider: install FFmpeg/FFprobe (BUN_VIDEO_FFMPEG, BUN_VIDEO_FFPROBE) or run a runtime that provides Bun.Video");
   const constructorOptions = options.maxPixels === undefined ? undefined : { maxPixels: options.maxPixels };
-  if (source instanceof Blob || source instanceof ArrayBuffer) return new Bun.Video(source, constructorOptions);
+  if (source instanceof Blob || source instanceof ArrayBuffer) return new Video(source, constructorOptions);
   if (ArrayBuffer.isView(source))
-    return new Bun.Video(new Uint8Array(source.buffer, source.byteOffset, source.byteLength), constructorOptions);
+    return new Video(new Uint8Array(source.buffer, source.byteOffset, source.byteLength), constructorOptions);
   if (typeof source === "string" || source instanceof URL) {
     const resolved = resolveVideoSource(source);
-    if (resolved.kind === "file") return new Bun.Video(resolved.path, constructorOptions);
+    if (resolved.kind === "file") return new Video(resolved.path, constructorOptions);
     if (resolved.kind !== "remote" || !/^https?:\/\//i.test(resolved.url))
       throw new TypeError("Bun.Video URL ingestion requires HTTP(S); other protocols use the explicit media pipeline");
     source = new Request(resolved.url);
@@ -26,7 +27,7 @@ export async function createVideo(
   const resolved = await materializeVideoSource(source, options.signal, 256 * 1024 * 1024);
   options.signal?.throwIfAborted();
   if (resolved.kind !== "bytes") throw new TypeError("Bun.Video ingestion did not produce a bounded byte source");
-  return new Bun.Video(resolved.data, constructorOptions);
+  return new Video(resolved.data, constructorOptions);
 }
 
 export interface VideoPipelineOptions {

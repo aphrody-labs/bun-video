@@ -9,7 +9,7 @@ signatures; development/master documentation supplies supporting context only.
 | ----------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | `bitmovin-player` | 8.279.0                  | Official Bitmovin Web SDK, browser DOM required; integration and bundling are not a native decoder rewrite.                     |
 | `dashjs`          | 5.2.1                    | Browser MPEG-DASH player with MSE/EME; modern ESM import and UMD browser asset are separate export targets.                     |
-| `hls.js`          | 1.7.3                    | Browser HLS/MSE player; the SDK lifecycle adapter accepts its constructor, config and worker.                                   |
+| `hls.js`          | 1.7.4                    | Browser HLS/MSE player; the SDK lifecycle adapter accepts its constructor, config and worker.                                   |
 | `fast-xml-parser` | 5.11.2                   | Native Bun XML inspection uses its published ESM parser and validator.                                                          |
 | `crunchyroll.js`  | 1.1.1 migration baseline | Community MIT client API migrated to fetch; not an official Crunchyroll SDK or proof of current service endpoint compatibility. |
 

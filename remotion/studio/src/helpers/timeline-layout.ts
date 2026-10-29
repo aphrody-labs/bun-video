@@ -82,7 +82,6 @@ export type TimelineTreeNode =
 			readonly nodePathInfo: SequenceNodePathInfo;
 			readonly label: string;
 			readonly field: AnySchemaFieldInfo | null;
-			readonly runtimeValue: unknown;
 			readonly runtimeValueStore: RuntimeValueStore | null;
 	  };
 
@@ -94,6 +93,7 @@ export const buildTimelineTree = ({
 	propStatuses,
 	includeTextContent,
 	includeSourceControls,
+	includeInspectorOnlyFields,
 	runtimeValues,
 }: {
 	sequence: TSequence;
@@ -103,6 +103,7 @@ export const buildTimelineTree = ({
 	propStatuses: PropStatuses;
 	includeTextContent: boolean;
 	includeSourceControls: boolean;
+	includeInspectorOnlyFields: boolean;
 	runtimeValues: Readonly<Record<string, unknown>> | null;
 }): TimelineTreeNode[] => {
 	const roots: TimelineTreeNode[] = [];
@@ -138,8 +139,7 @@ export const buildTimelineTree = ({
 				},
 				label: f.description ?? f.key,
 				field: f,
-				runtimeValue: runtimeValues?.[f.key],
-				runtimeValueStore: null,
+				runtimeValueStore: sequence.controls!.runtimeValues,
 			});
 		}
 	}
@@ -163,7 +163,13 @@ export const buildTimelineTree = ({
 					nodePath: sequenceSubscriptionKey,
 					propStatuses,
 					getEffectDragOverrides,
-				});
+				}).filter(
+					// The Curves inspector preserves input order; the generic array editor cannot.
+					(field) =>
+						includeInspectorOnlyFields ||
+						effect.type !== 'remotion/curves' ||
+						field.key !== 'points',
+				);
 				return {
 					kind: 'group',
 					nodePathInfo: {
@@ -179,20 +185,26 @@ export const buildTimelineTree = ({
 						effectSchema: effect.schema,
 						documentationLink: effect.documentationLink ?? null,
 					},
-					children: effectFields.map((f): TimelineTreeNode => ({
-						kind: 'field',
-						nodePathInfo: {
-							sequenceSubscriptionKey,
-							auxiliaryKeys: [...auxiliaryKeys, 'effects', i.toString(), f.key],
-							index,
-							numberOfSequencesWithThisNodePath: 0,
-							supportsEffects,
-						},
-						label: f.description ?? f.key,
-						field: f,
-						runtimeValue: null,
-						runtimeValueStore: sequence.effectRuntimeValues?.[i] ?? null,
-					})),
+					children: effectFields.map(
+						(f): TimelineTreeNode => ({
+							kind: 'field',
+							nodePathInfo: {
+								sequenceSubscriptionKey,
+								auxiliaryKeys: [
+									...auxiliaryKeys,
+									'effects',
+									i.toString(),
+									f.key,
+								],
+								index,
+								numberOfSequencesWithThisNodePath: 0,
+								supportsEffects,
+							},
+							label: f.description ?? f.key,
+							field: f,
+							runtimeValueStore: sequence.effectRuntimeValues?.[i] ?? null,
+						}),
+					),
 				};
 			}),
 		});
@@ -260,6 +272,7 @@ export const getExpandedTrackHeight = ({
 		propStatuses,
 		includeTextContent: false,
 		includeSourceControls: false,
+		includeInspectorOnlyFields: false,
 		runtimeValues: null,
 	});
 	const flat = flattenVisibleTreeNodes({nodes: tree, getIsExpanded});
@@ -283,6 +296,7 @@ export const TIMELINE_LAYER_HEIGHT_VIDEO =
 	TIMELINE_LAYER_FILMSTRIP_HEIGHT + TIMELINE_VIDEO_INFO_WAVEFORM_HEIGHT;
 
 export const TIMELINE_LAYER_HEIGHT_AUDIO = 34;
+export const TIMELINE_LAYER_HEIGHT_IMAGE = 34;
 export const TIMELINE_LAYER_HEIGHT_DEFAULT = 21;
 // The horizontal row inside a timeline list item (eye + arrow + label).
 export const TIMELINE_LIST_ITEM_ROW_HEIGHT = 21;
@@ -296,6 +310,10 @@ export const getTimelineLayerHeight = (
 
 	if (type === 'audio') {
 		return TIMELINE_LAYER_HEIGHT_AUDIO;
+	}
+
+	if (type === 'image') {
+		return TIMELINE_LAYER_HEIGHT_IMAGE;
 	}
 
 	return TIMELINE_LAYER_HEIGHT_DEFAULT;

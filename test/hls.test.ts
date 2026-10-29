@@ -58,7 +58,7 @@ test("HLS package serves its pinned decoder and rejects server playback", async 
   expect(path.replaceAll("\\", "/")).toEndWith("/hls.min.js");
   expect(await Bun.file(path).exists()).toBe(true);
   const assets = await getHlsPublicAssets();
-  expect(assets.version).toBe("1.7.3");
+  expect(assets.version).toBe("1.7.4");
   expect(await Bun.file(assets.worker).exists()).toBe(true);
   expect(await Bun.file(assets.license).text()).toContain("2017 Dailymotion");
   await expect(

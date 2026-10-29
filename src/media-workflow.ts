@@ -1,3 +1,4 @@
+import { Video } from "./native-video";
 import { basename, extname, isAbsolute, resolve } from "node:path";
 import { mkdir, rm } from "node:fs/promises";
 import { normalizeXVideoUrl, XVideoSource } from "./x-source";
@@ -120,15 +121,9 @@ interface NativeVideoInstance {
   remux(output: string): Promise<void>;
 }
 
-interface NativeVideoConstructor {
-  readonly available: boolean;
-  new (source: string): NativeVideoInstance;
-}
-
 function openNativeVideo(input: string): NativeVideoInstance {
-  const Video = (Bun as unknown as { Video?: NativeVideoConstructor }).Video;
-  if (!Video?.available) throw new Error("Native Bun.Video provider is unavailable");
-  return new Video(input);
+  if (!Video.available) throw new Error("No video provider: install FFmpeg/FFprobe or run a runtime that provides Bun.Video");
+  return new Video(input) as unknown as NativeVideoInstance;
 }
 
 function validateMediaRange(start: number, duration: number, total: number, maximum: number): void {

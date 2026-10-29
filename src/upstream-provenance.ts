@@ -1,13 +1,13 @@
 export const remotion = {
   repository: "https://github.com/remotion-dev/remotion",
-  commit: "32af7e8f8ac67493ef81498d311af3dc9ca953a6",
-  version: "4.0.534",
+  commit: "e50b41a410933aa807515335d1c04dbba1b8b93f",
+  version: "4.0.539",
   distribution: "Official npm dependencies; repository-relative upstream source is not packaged",
 } as const;
 export const hyperframes = {
   repository: "https://github.com/heygen-com/hyperframes",
-  commit: "063c2f8d61b4e989274b6526b370edc588b37e4a",
-  version: "0.8.144",
+  commit: "4719543e972548a261b8354f0a8dada479ae5d93",
+  version: "0.8.214",
   license: "Apache-2.0",
   distribution: "Official npm dependencies with the local native capture adapter",
 } as const;

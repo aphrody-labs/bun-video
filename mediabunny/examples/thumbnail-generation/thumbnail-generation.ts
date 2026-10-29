@@ -1,9 +1,19 @@
-import { Input, ALL_FORMATS, BlobSource, CanvasSink } from 'mediabunny';
+import { Input, ALL_FORMATS, BlobSource, UrlSource, CanvasSink } from 'mediabunny';
+import { registerAc3Decoder } from '@mediabunny/ac3';
+import { registerDtsDecoder } from '@mediabunny/dts';
+import { registerProresDecoder } from '@mediabunny/prores';
 
 import SampleFileUrl from '../../docs/assets/big-buck-bunny-trimmed.mp4';
+
+// Enable codecs that aren't natively supported by WebCodecs.
+registerAc3Decoder();
+registerDtsDecoder();
+registerProresDecoder();
+
 (document.querySelector('#sample-file-download') as HTMLAnchorElement).href = SampleFileUrl;
 
-const selectMediaButton = document.querySelector('button') as HTMLButtonElement;
+const selectMediaButton = document.querySelector('#select-file') as HTMLButtonElement;
+const loadUrlButton = document.querySelector('#load-url') as HTMLButtonElement;
 const fileNameElement = document.querySelector('#file-name') as HTMLParagraphElement;
 const horizontalRule = document.querySelector('hr') as HTMLHRElement;
 const thumbnailContainer = document.querySelector('#thumbnail-container') as HTMLDivElement;
@@ -12,16 +22,19 @@ const errorElement = document.querySelector('#error-element') as HTMLParagraphEl
 const THUMBNAIL_COUNT = 16;
 const THUMBNAIL_SIZE = 200;
 
-const generateThumbnails = async (file: File) => {
-	fileNameElement.textContent = file.name;
+const generateThumbnails = async (resource: File | string) => {
+	fileNameElement.textContent = resource instanceof File ? resource.name : resource;
 	horizontalRule.style.display = '';
 	errorElement.textContent = '';
 	thumbnailContainer.innerHTML = '';
 
 	try {
-		// Create a new input from the file
+		// Create a new input from the resource
+		const source = resource instanceof File
+			? new BlobSource(resource)
+			: new UrlSource(resource);
 		const input = new Input({
-			source: new BlobSource(file),
+			source,
 			formats: ALL_FORMATS, // Accept all formats
 		});
 
@@ -30,7 +43,7 @@ const generateThumbnails = async (file: File) => {
 			throw new Error('File has no video track.');
 		}
 
-		if (videoTrack.codec === null) {
+		if (await videoTrack.getCodec() === null) {
 			throw new Error('Unsupported video codec.');
 		}
 
@@ -39,12 +52,14 @@ const generateThumbnails = async (file: File) => {
 		}
 
 		// Compute width and height of the thumbnails such that the larger dimension is equal to THUMBNAIL_SIZE
-		const width = videoTrack.displayWidth > videoTrack.displayHeight
+		const displayWidth = await videoTrack.getDisplayWidth();
+		const displayHeight = await videoTrack.getDisplayHeight();
+		const width = displayWidth > displayHeight
 			? THUMBNAIL_SIZE
-			: Math.floor(THUMBNAIL_SIZE * videoTrack.displayWidth / videoTrack.displayHeight);
-		const height = videoTrack.displayHeight > videoTrack.displayWidth
+			: Math.floor(THUMBNAIL_SIZE * displayWidth / displayHeight);
+		const height = displayHeight > displayWidth
 			? THUMBNAIL_SIZE
-			: Math.floor(THUMBNAIL_SIZE * videoTrack.displayHeight / videoTrack.displayWidth);
+			: Math.floor(THUMBNAIL_SIZE * displayHeight / displayWidth);
 
 		// Create thumbnail elements
 		const thumbnailElements = [];
@@ -92,6 +107,13 @@ const generateThumbnails = async (file: File) => {
 				timestampElement.className
                     = 'absolute bottom-0 right-0 bg-black/30 text-white px-1 py-0.5 text-[11px] rounded-tl-lg';
 				container.append(timestampElement);
+			} else {
+				// Add something to indicate that the thumbnail is missing
+				const p = document.createElement('p');
+				p.textContent = '?';
+				p.className = 'absolute inset-0 flex items-center justify-center text-3xl opacity-50';
+
+				container.append(p);
 			}
 
 			i++;
@@ -109,7 +131,7 @@ const generateThumbnails = async (file: File) => {
 selectMediaButton.addEventListener('click', () => {
 	const fileInput = document.createElement('input');
 	fileInput.type = 'file';
-	fileInput.accept = 'video/*,video/x-matroska,audio/*,audio/aac';
+	fileInput.accept = 'video/*,video/x-matroska,video/mp2t,.mkv,.ts,audio/*,audio/aac,.aac';
 	fileInput.addEventListener('change', () => {
 		const file = fileInput.files?.[0];
 		if (!file) {
@@ -120,6 +142,19 @@ selectMediaButton.addEventListener('click', () => {
 	});
 
 	fileInput.click();
+});
+
+loadUrlButton.addEventListener('click', () => {
+	const url = prompt(
+		'Please enter a URL of a media file. Note that it must be HTTPS and support cross-origin requests, so have the'
+		+ ' right CORS headers set.',
+		'https://mediabunny.dev/big-buck-bunny.mp4',
+	);
+	if (!url) {
+		return;
+	}
+
+	void generateThumbnails(url);
 });
 
 document.addEventListener('dragover', (event) => {

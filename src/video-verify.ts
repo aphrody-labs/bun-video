@@ -1,3 +1,5 @@
+import { Video } from "./native-video";
+import "./image-compat";
 import { dirname, join } from "node:path";
 import { compareRGBAFrames, type PixelComparison } from "./pixel-verify";
 import type { QualificationStatus, VideoCatalog, VideoJob } from "./video-catalog";
@@ -52,18 +54,15 @@ export async function verifyRenderAgainstWatch(
   catalog: VerifyCatalog,
   options: VerifyRenderOptions,
 ): Promise<VerifyRenderReport> {
-  const { Video, Image } = Bun as unknown as {
-    Video?: new (input: string) => NativeVideo;
-    Image: new (input: Uint8Array) => NativeImage;
-  };
-  if (!Video) throw new Error("Native Bun.Video provider unavailable in this runtime");
+  const Image = Bun.Image as unknown as new (input: Uint8Array) => NativeImage;
+  if (!Video.available) throw new Error("No video provider: install FFmpeg/FFprobe or run a runtime that provides Bun.Video");
   if (!(await Bun.file(options.render).exists())) throw new Error("Rendered video does not exist");
   const job = await catalog.getJob(options.watchJobId);
   if (!job || job.engine !== "watch") throw new Error("Reference job is not a watch job");
   const evidence = await watchEvidence(catalog, options.watchJobId);
   if (!evidence.frames.length) throw new Error("The watch job has no reference frames");
 
-  const video = new Video(options.render);
+  const video = new Video(options.render) as unknown as NativeVideo;
   const duration = (await video.metadata()).duration;
   const frames: VerifyRenderReport["frames"] = [];
   const skipped: VerifyRenderReport["skipped"] = [];

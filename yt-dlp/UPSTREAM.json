@@ -1,1 +1,1 @@
-{"repository":"https://github.com/yt-dlp/yt-dlp","tag":"2026.08.19","commit":"3a08beaf031ab68f966401ead017ac81fe8486cf","license":"Unlicense","runtime":"bun:python via BUV"}
+{"repository":"https://github.com/yt-dlp/yt-dlp","tag":"2026.10.26","commit":"f264a6cbd1f630894da0f368df00f8aae50140e0","license":"Unlicense","runtime":"python (uv); executed as a subprocess, not in-runtime","merged":"2026-10-29","base":{"tag":"2026.08.19","commit":"3a08beaf031ab68f966401ead017ac81fe8486cf"}}

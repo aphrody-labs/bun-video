@@ -1,1 +1,1 @@
-{"repository":"https://github.com/Vanilagy/mediabunny","tag":"v1.9.3","commit":"bb9554df6060004405dfd9e9ade1283242cbc05f","license":"MPL-2.0","n2b":{"mode":"aggressive","report":"C:/bun/tmp/mediabunny-n2b.json"}}
+{"repository":"https://github.com/Vanilagy/mediabunny","tag":"v1.63.0","commit":"0f80f47e617b576737ffd4ce39a626eb7c7e934e","license":"MPL-2.0","merged":"2026-10-29","base":{"tag":"v1.9.3","commit":"bb9554df6060004405dfd9e9ade1283242cbc05f"},"localChanges":["Symbol.asyncDispose on async iterators (src/media-sink.ts, src/misc.ts)"]}

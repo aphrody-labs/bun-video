@@ -1,11 +1,12 @@
 /*!
- * Copyright (c) 2025-present, Vanilagy and contributors
+ * Copyright (c) 2026-present, Vanilagy and contributors
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+import { textEncoder } from '../misc';
 import { Writer } from '../writer';
 
 export class RiffWriter {
@@ -31,6 +32,6 @@ export class RiffWriter {
 	}
 
 	writeAscii(text: string) {
-		this.writer.write(new TextEncoder().encode(text));
+		this.writer.write(textEncoder.encode(text));
 	}
 }

@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2025-present, Vanilagy and contributors
+ * Copyright (c) 2026-present, Vanilagy and contributors
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,15 +9,23 @@
 import {
 	toUint8Array,
 	assert,
+	isI32,
 	isU32,
 	last,
 	TransformationMatrix,
+	IDENTITY_MATRIX,
+	centeredTransformationMatrix,
+	multiplyMatrices,
+	rotationMatrix,
+	scaleMatrix,
 	textEncoder,
 	COLOR_PRIMARIES_MAP,
 	TRANSFER_CHARACTERISTICS_MAP,
 	MATRIX_COEFFICIENTS_MAP,
-	colorSpaceIsComplete,
+	colorSpaceIsEmpty,
 	UNDETERMINED_LANGUAGE,
+	assertNever,
+	keyValueIterator,
 } from '../misc';
 import {
 	AudioCodec,
@@ -31,15 +39,27 @@ import {
 import { formatSubtitleTimestamp } from '../subtitles';
 import { Writer } from '../writer';
 import {
+	getTrackMetadata,
 	GLOBAL_TIMESCALE,
 	intoTimescale,
 	IsobmffAudioTrackData,
+	IsobmffMuxer,
 	IsobmffSubtitleTrackData,
 	IsobmffTrackData,
 	IsobmffVideoTrackData,
+	presentationSpan,
 	Sample,
 } from './isobmff-muxer';
-import { parseOpusIdentificationHeader } from '../codec-data';
+import {
+	buildDtsSpecificBox,
+	parseAc3SyncFrame,
+	parseDtsFrame,
+	parseEac3SyncFrame,
+	parseOpusIdentificationHeader,
+} from '../codec-data';
+import { MetadataTags, RichImageData } from '../metadata';
+import { Bitstream } from '../../shared/bitstream';
+import { VERSIONED_NAME } from '../version';
 
 export class IsobmffBoxWriter {
 	private helper = new Uint8Array(8);
@@ -51,7 +71,7 @@ export class IsobmffBoxWriter {
 	 */
 	offsets = new WeakMap<Box, number>();
 
-	constructor(private writer: Writer) {}
+	constructor(public writer: Writer) {}
 
 	writeU32(value: number) {
 		this.helperView.setUint32(0, value, false);
@@ -130,8 +150,8 @@ export class IsobmffBoxWriter {
 	}
 }
 
-const bytes = new Uint8Array(8);
-const view = new DataView(bytes.buffer);
+const bytes = /* #__PURE__ */ new Uint8Array(8);
+const view = /* #__PURE__ */ new DataView(bytes.buffer);
 
 const u8 = (value: number) => {
 	return [(value % 0x100 + 0x100) % 0x100];
@@ -164,6 +184,12 @@ const i32 = (value: number) => {
 
 const u64 = (value: number) => {
 	view.setUint32(0, Math.floor(value / 2 ** 32), false);
+	view.setUint32(4, value, false);
+	return [bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]] as number[];
+};
+
+const i64 = (value: number) => {
+	view.setInt32(0, Math.floor(value / 2 ** 32), false);
 	view.setUint32(4, value, false);
 	return [bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]] as number[];
 };
@@ -214,32 +240,6 @@ const ascii = (text: string, nullTerminated = false) => {
 	return bytes;
 };
 
-const lastPresentedSample = (samples: Sample[]) => {
-	let result: Sample | null = null;
-
-	for (const sample of samples) {
-		if (!result || sample.timestamp > result.timestamp) {
-			result = sample;
-		}
-	}
-
-	return result;
-};
-
-const rotationMatrix = (rotationInDegrees: number): TransformationMatrix => {
-	const theta = rotationInDegrees * (Math.PI / 180);
-	const cosTheta = Math.round(Math.cos(theta));
-	const sinTheta = Math.round(Math.sin(theta));
-
-	// Matrices are post-multiplied in ISOBMFF, meaning this is the transpose of your typical rotation matrix
-	return [
-		cosTheta, sinTheta, 0,
-		-sinTheta, cosTheta, 0,
-		0, 0, 1,
-	];
-};
-const IDENTITY_MATRIX = rotationMatrix(0);
-
 const matrixToBytes = (matrix: TransformationMatrix) => {
 	return [
 		fixed_16_16(matrix[0]), fixed_16_16(matrix[1]), fixed_2_30(matrix[2]),
@@ -285,6 +285,7 @@ export const ftyp = (details: {
 	isQuickTime: boolean;
 	holdsAvc: boolean;
 	fragmented: boolean;
+	cmaf: boolean;
 }) => {
 	// You can find the full logic for this at
 	// https://github.com/FFmpeg/FFmpeg/blob/de2fb43e785773738c660cdafb9309b1ef1bc80d/libavformat/movenc.c#L5518
@@ -302,14 +303,27 @@ export const ftyp = (details: {
 	}
 
 	if (details.fragmented) {
-		return box('ftyp', [
-			ascii('iso5'), // Major brand
-			u32(minorVersion), // Minor version
-			// Compatible brands
-			ascii('iso5'),
-			ascii('iso6'),
-			ascii('mp41'),
-		]);
+		if (details.cmaf) {
+			return box('ftyp', [
+				ascii('iso5'), // Major brand
+				u32(minorVersion), // Minor version
+				// Compatible brands
+				ascii('iso5'),
+				ascii('iso6'),
+				ascii('mp41'),
+				ascii('cmfc'),
+				ascii('dash'),
+			]);
+		} else {
+			return box('ftyp', [
+				ascii('iso5'), // Major brand
+				u32(minorVersion), // Minor version
+				// Compatible brands
+				ascii('iso5'),
+				ascii('iso6'),
+				ascii('mp41'),
+			]);
+		}
 	}
 
 	return box('ftyp', [
@@ -322,37 +336,75 @@ export const ftyp = (details: {
 	]);
 };
 
+/** Segment Type Box */
+export const styp = () => box('styp', [
+	ascii('iso5'), // Major brand
+	u32(0), // Minor version
+	// Compatible brands
+	ascii('iso5'),
+	ascii('iso6'),
+	ascii('mp41'),
+	ascii('cmfc'),
+	ascii('dash'),
+]);
+
+/** Segment Index Box */
+export const sidx = (muxer: IsobmffMuxer, referencedSize: number) => {
+	const earliestPresentationTime = Math.max(0, muxer.minWrittenTimestamp);
+	let duration = Math.max(0, muxer.maxWrittenEndTimestamp - earliestPresentationTime);
+	if (!Number.isFinite(duration)) {
+		duration = 0;
+	}
+
+	return fullBox('sidx', 1, 0, [
+		u32(1), // Reference ID
+		u32(GLOBAL_TIMESCALE), // Timescale
+		u64(intoTimescale(earliestPresentationTime, GLOBAL_TIMESCALE)), // Earliest presentation time
+		u64(0), // First offset
+		u16(0), // Reserved
+		u16(1), // Reference count
+		u32(referencedSize & 0x7fffffff), // Reference type (0) + referenced size
+		u32(intoTimescale(duration, GLOBAL_TIMESCALE)), // Subsegment duration
+		u32(0), // Starts with SAP + SAP type + SAP delta time (no information provided)
+	]);
+};
+
 /** Movie Sample Data Box. Contains the actual frames/samples of the media. */
 export const mdat = (reserveLargeSize: boolean): Box => ({ type: 'mdat', largeSize: reserveLargeSize });
+
+/** Free Space Box: A box that designates unused space in the movie data file. */
+export const free = (size: number): Box => ({ type: 'free', size });
 
 /**
  * Movie Box: Used to specify the information that defines a movie - that is, the information that allows
  * an application to interpret the sample data that is stored elsewhere.
  */
-export const moov = (
-	trackDatas: IsobmffTrackData[],
-	creationTime: number,
-	fragmented = false,
-) => box('moov', undefined, [
-	mvhd(creationTime, trackDatas),
-	...trackDatas.map(x => trak(x, creationTime)),
-	fragmented ? mvex(trackDatas) : null,
-]);
+export const moov = (muxer: IsobmffMuxer) => {
+	return box('moov', undefined, [
+		mvhd(muxer.creationTime, muxer.trackDatas),
+		...muxer.trackDatas.map(x => trak(x, muxer.creationTime)),
+		muxer.isFragmented ? mvex(muxer.trackDatas) : null,
+		udta(muxer),
+	]);
+};
 
 /** Movie Header Box: Used to specify the characteristics of the entire movie, such as timescale and duration. */
 export const mvhd = (
 	creationTime: number,
 	trackDatas: IsobmffTrackData[],
 ) => {
-	const duration = intoTimescale(Math.max(
+	const duration = Math.max(
 		0,
 		...trackDatas
-			.filter(x => x.samples.length > 0)
-			.map((x) => {
-				const lastSample = lastPresentedSample(x.samples)!;
-				return lastSample.timestamp + lastSample.duration;
-			}),
-	), GLOBAL_TIMESCALE);
+			.map(trackData => (
+				// Round separately to match the edit list
+				Math.max(
+					0,
+					intoTimescale(presentationSpan(trackData), GLOBAL_TIMESCALE)
+					+ intoTimescale(trackData.startTimestampOffset ?? 0, GLOBAL_TIMESCALE),
+				)
+			)),
+	);
 	const nextTrackId = Math.max(0, ...trackDatas.map(x => x.track.id)) + 1;
 
 	// Conditionally use u64 if u32 isn't enough
@@ -378,34 +430,73 @@ export const mvhd = (
  * independent of the other tracks in the movie and carries its own temporal and spatial information. Each Track Box
  * contains its associated Media Box.
  */
-export const trak = (trackData: IsobmffTrackData, creationTime: number) => box('trak', undefined, [
-	tkhd(trackData, creationTime),
-	mdia(trackData, creationTime),
-]);
+export const trak = (trackData: IsobmffTrackData, creationTime: number) => {
+	const trackMetadata = getTrackMetadata(trackData);
+	const needsEditList = trackData.startTimestampOffset !== null && trackData.startTimestampOffset !== 0;
+
+	return box('trak', undefined, [
+		tkhd(trackData, creationTime),
+		needsEditList ? edts(trackData) : null,
+		mdia(trackData, creationTime),
+		trackMetadata.name !== undefined
+			? box('udta', undefined, [
+					box('name', [ // VLC (and Mediabunny) also recognize ©nam
+						...textEncoder.encode(trackMetadata.name),
+					]),
+				])
+			: null,
+	]);
+};
 
 /** Track Header Box: Specifies the characteristics of a single track within a movie. */
 export const tkhd = (
 	trackData: IsobmffTrackData,
 	creationTime: number,
 ) => {
-	const lastSample = lastPresentedSample(trackData.samples);
-	const durationInGlobalTimescale = intoTimescale(
-		lastSample ? lastSample.timestamp + lastSample.duration : 0,
-		GLOBAL_TIMESCALE,
+	// Round separately to match the edit list
+	const durationInGlobalTimescale = Math.max(
+		0,
+		intoTimescale(presentationSpan(trackData), GLOBAL_TIMESCALE)
+		+ intoTimescale(trackData.startTimestampOffset ?? 0, GLOBAL_TIMESCALE),
 	);
 
 	const needsU64 = !isU32(creationTime) || !isU32(durationInGlobalTimescale);
 	const u32OrU64 = needsU64 ? u64 : u32;
 
 	let matrix: TransformationMatrix;
-	if (trackData.type === 'video') {
-		const rotation = trackData.track.metadata.rotation;
-		matrix = rotationMatrix(rotation ?? 0);
+	if (trackData.type === 'video' && trackData.track.metadata.transformationMatrix) {
+		matrix = trackData.track.metadata.transformationMatrix;
+	} else if (trackData.type === 'video') {
+		const { rotation, flip } = trackData.track.metadata;
+
+		// Rotation is applied before flipping
+		const linear = multiplyMatrices(
+			rotationMatrix(rotation ?? 0),
+			scaleMatrix(flip ? -1 : 1, 1),
+		);
+
+		matrix = centeredTransformationMatrix(linear, trackData.info.width, trackData.info.height);
 	} else {
 		matrix = IDENTITY_MATRIX;
 	}
 
-	return fullBox('tkhd', +needsU64, 3, [
+	let flags = 0x2; // Track in movie
+	if (trackData.track.metadata.disposition?.default !== false) {
+		flags |= 0x1; // Track enabled
+	}
+
+	// Set the alternate group based on the track type; this mirror's how FFmpeg does it. A more advanced version would
+	// determine the alternate groups based on the actual track pairability graph. Note that it appears important that
+	// video get assigned to group 0, see https://github.com/Vanilagy/mediabunny/issues/454.
+	const alternateGroup = trackData.type === 'video'
+		? 0
+		: trackData.type === 'audio'
+			? 1
+			: trackData.type === 'subtitle'
+				? 2
+				: assertNever(trackData);
+
+	return fullBox('tkhd', +needsU64, flags, [
 		u32OrU64(creationTime), // Creation time
 		u32OrU64(creationTime), // Modification time
 		u32(trackData.track.id), // Track ID
@@ -413,7 +504,7 @@ export const tkhd = (
 		u32OrU64(durationInGlobalTimescale), // Duration
 		Array(8).fill(0), // Reserved
 		u16(0), // Layer
-		u16(trackData.track.id), // Alternate group
+		u16(alternateGroup), // Alternate group
 		fixed_8_8(trackData.type === 'audio' ? 1 : 0), // Volume
 		u16(0), // Reserved
 		matrixToBytes(matrix), // Matrix
@@ -422,10 +513,70 @@ export const tkhd = (
 	]);
 };
 
+/** Edit Box: Specifies edits to the track's media. */
+export const edts = (trackData: IsobmffTrackData) => {
+	const offset = trackData.startTimestampOffset;
+	assert(offset !== null);
+
+	if (offset > 0) {
+		// Positive offset: empty segment at the start, then the full media afterwards
+
+		const startOffset = intoTimescale(offset, GLOBAL_TIMESCALE);
+		const mediaDuration = intoTimescale(presentationSpan(trackData), GLOBAL_TIMESCALE);
+
+		const needs64Bits = !isU32(startOffset) || !isU32(mediaDuration);
+		const u32OrU64 = needs64Bits ? u64 : u32;
+		const i32OrI64 = needs64Bits ? i64 : i32;
+
+		return box('edts', undefined, [
+			fullBox('elst', needs64Bits ? 1 : 0, 0, [
+				u32(2), // Entry count
+
+				// #1
+				u32OrU64(startOffset), // Segment duration
+				i32OrI64(-1), // Media time
+				fixed_16_16(1), // Media rate
+
+				// #2
+				u32OrU64(mediaDuration), // Segment duration
+				i32OrI64(0), // Media time
+				fixed_16_16(1), // Media rate
+			]),
+		]);
+	} else {
+		// Negative offset: the negative section of the media is trimmed off
+
+		const mediaTime = intoTimescale(-offset, trackData.timescale);
+		// Not the entire media is visible.
+		// For fragmented files, this value is zero, which simply means "unknown duration" in this case. Spec:
+		// "the segment_duration of this edit may be zero"
+		const mediaDuration = Math.max(
+			0,
+			intoTimescale(presentationSpan(trackData), GLOBAL_TIMESCALE)
+			+ intoTimescale(offset, GLOBAL_TIMESCALE),
+		);
+
+		const needs64Bits = !isI32(mediaTime) || !isU32(mediaDuration);
+		const u32OrU64 = needs64Bits ? u64 : u32;
+		const i32OrI64 = needs64Bits ? i64 : i32;
+
+		return box('edts', undefined, [
+			fullBox('elst', needs64Bits ? 1 : 0, 0, [
+				u32(1), // Entry count
+
+				// #1
+				u32OrU64(mediaDuration), // Segment duration
+				i32OrI64(mediaTime), // Media time
+				fixed_16_16(1), // Media rate
+			]),
+		]);
+	}
+};
+
 /** Media Box: Describes and define a track's media type and sample data. */
 export const mdia = (trackData: IsobmffTrackData, creationTime: number) => box('mdia', undefined, [
 	mdhd(trackData, creationTime),
-	hdlr(trackData),
+	hdlr(true, TRACK_TYPE_TO_COMPONENT_SUBTYPE[trackData.type], TRACK_TYPE_TO_HANDLER_NAME[trackData.type]),
 	minf(trackData),
 ]);
 
@@ -434,27 +585,21 @@ export const mdhd = (
 	trackData: IsobmffTrackData,
 	creationTime: number,
 ) => {
-	const lastSample = lastPresentedSample(trackData.samples);
+	// Since _this_ duration represents the raw media duration, edit list offsets are not taken into account here
 	const localDuration = intoTimescale(
-		lastSample ? lastSample.timestamp + lastSample.duration : 0,
+		presentationSpan(trackData),
 		trackData.timescale,
 	);
 
 	const needsU64 = !isU32(creationTime) || !isU32(localDuration);
 	const u32OrU64 = needsU64 ? u64 : u32;
 
-	let language = 0;
-	for (const character of (trackData.track.metadata.languageCode ?? UNDETERMINED_LANGUAGE)) {
-		language <<= 5;
-		language += character.charCodeAt(0) - 0x60;
-	}
-
 	return fullBox('mdhd', +needsU64, 0, [
 		u32OrU64(creationTime), // Creation time
 		u32OrU64(creationTime), // Modification time
 		u32(trackData.timescale), // Timescale
 		u32OrU64(localDuration), // Duration
-		u16(language), // Language
+		u16(getLanguageCodeInt(trackData.track.metadata.languageCode ?? UNDETERMINED_LANGUAGE)), // Language
 		u16(0), // Quality
 	]);
 };
@@ -471,14 +616,19 @@ const TRACK_TYPE_TO_HANDLER_NAME: Record<IsobmffTrackData['type'], string> = {
 	subtitle: 'MediabunnyTextHandler',
 };
 
-/** Handler Reference Box: Specifies the media handler component that is to be used to interpret the media's data. */
-export const hdlr = (trackData: IsobmffTrackData) => fullBox('hdlr', 0, 0, [
-	ascii('mhlr'), // Component type
-	ascii(TRACK_TYPE_TO_COMPONENT_SUBTYPE[trackData.type]), // Component subtype
-	u32(0), // Component manufacturer
+/** Handler Reference Box. */
+export const hdlr = (
+	hasComponentType: boolean,
+	handlerType: string,
+	name: string,
+	manufacturer = '\0\0\0\0',
+) => fullBox('hdlr', 0, 0, [
+	hasComponentType ? ascii('mhlr') : u32(0), // Component type
+	ascii(handlerType), // Component subtype
+	ascii(manufacturer), // Component manufacturer
 	u32(0), // Component flags
 	u32(0), // Component flags mask
-	ascii(TRACK_TYPE_TO_HANDLER_NAME[trackData.type], true), // Component name
+	ascii(name, true), // Component name
 ]);
 
 /**
@@ -550,6 +700,7 @@ export const stbl = (trackData: IsobmffTrackData) => {
 		stsz(trackData),
 		stco(trackData),
 		stss(trackData),
+		...sgpdAndSbgp(trackData.samples, false),
 	]);
 };
 
@@ -562,11 +713,15 @@ export const stsd = (trackData: IsobmffTrackData) => {
 
 	if (trackData.type === 'video') {
 		sampleDescription = videoSampleDescription(
-			VIDEO_CODEC_TO_BOX_NAME[trackData.track.source._codec],
+			videoCodecToBoxName(trackData.track.source._codec, trackData.info.decoderConfig.codec),
 			trackData,
 		);
 	} else if (trackData.type === 'audio') {
-		const boxName = audioCodecToBoxName(trackData.track.source._codec, trackData.muxer.isQuickTime);
+		const boxName = audioCodecToBoxName(
+			trackData.track.source._codec,
+			trackData.info.decoderConfig.codec,
+			trackData.muxer.isQuickTime,
+		);
 		assert(boxName);
 
 		sampleDescription = soundSampleDescription(
@@ -605,22 +760,71 @@ export const videoSampleDescription = (
 	u32(0x00480000), // Vertical resolution
 	u32(0), // Reserved
 	u16(1), // Frame count
-	Array(32).fill(0), // Compressor name
-	u16(0x0018), // Depth
+
+	// Compressor name
+	u8(VERSIONED_NAME.length), // Weird Pascal-style string
+	ascii(VERSIONED_NAME),
+	Array(31 - VERSIONED_NAME.length).fill(0),
+
+	u16(trackData.info.hasAlphaChannel ? 32 : 24), // Depth
 	i16(0xffff), // Pre-defined
 ], [
-	VIDEO_CODEC_TO_CONFIGURATION_BOX[trackData.track.source._codec](trackData),
-	colorSpaceIsComplete(trackData.info.decoderConfig.colorSpace) ? colr(trackData) : null,
+	VIDEO_CODEC_TO_CONFIGURATION_BOX[trackData.track.source._codec]?.(trackData) ?? null,
+	pasp(trackData),
+	colorSpaceIsEmpty(trackData.info.decoderConfig.colorSpace)
+		? null
+		: colr(trackData),
+	btrt(trackData),
 ]);
 
+/** Bit Rate Box: Signals the average and peak bitrate of the track. */
+export const btrt = (trackData: IsobmffTrackData) => {
+	if (trackData.avgBitrate === 0 && trackData.maxBitrate === 0) {
+		return null;
+	}
+
+	return box('btrt', [
+		u32(0), // Decoding buffer size (unknown)
+		u32(trackData.maxBitrate), // Max bitrate
+		u32(trackData.avgBitrate), // Average bitrate
+	]);
+};
+
+/** Pixel Aspect Ratio Box: Specifies pixel width:height spacing for non-square pixels. */
+export const pasp = (trackData: IsobmffVideoTrackData) => {
+	if (trackData.info.pixelAspectRatio.num === trackData.info.pixelAspectRatio.den) {
+		return null;
+	}
+
+	return box('pasp', [
+		u32(trackData.info.pixelAspectRatio.num),
+		u32(trackData.info.pixelAspectRatio.den),
+	]);
+};
+
 /** Colour Information Box: Specifies the color space of the video. */
-export const colr = (trackData: IsobmffVideoTrackData) => box('colr', [
-	ascii('nclx'), // Colour type
-	u16(COLOR_PRIMARIES_MAP[trackData.info.decoderConfig.colorSpace!.primaries!]), // Colour primaries
-	u16(TRANSFER_CHARACTERISTICS_MAP[trackData.info.decoderConfig.colorSpace!.transfer!]), // Transfer characteristics
-	u16(MATRIX_COEFFICIENTS_MAP[trackData.info.decoderConfig.colorSpace!.matrix!]), // Matrix coefficients
-	u8((trackData.info.decoderConfig.colorSpace!.fullRange ? 1 : 0) << 7), // Full range flag
-]);
+export const colr = (trackData: IsobmffVideoTrackData) => {
+	const colorSpace = trackData.info.decoderConfig.colorSpace;
+
+	return box('colr', [
+		// Colour type
+		ascii(trackData.muxer.isQuickTime ? 'nclc' : 'nclx'),
+
+		// Colour primaries
+		u16(colorSpace?.primaries != null ? COLOR_PRIMARIES_MAP[colorSpace.primaries] : 2),
+
+		// Transfer characteristics
+		u16(colorSpace?.transfer != null ? TRANSFER_CHARACTERISTICS_MAP[colorSpace.transfer] : 2),
+
+		// Matrix coefficients
+		u16(colorSpace?.matrix != null ? MATRIX_COEFFICIENTS_MAP[colorSpace.matrix] : 2),
+
+		// Full range flag
+		trackData.muxer.isQuickTime
+			? [] // Doesn't have it
+			: u8((colorSpace?.fullRange ? 1 : 0) << 7),
+	]);
+};
 
 /** AVC Configuration Box: Provides additional information to the decoder. */
 export const avcC = (trackData: IsobmffVideoTrackData) => trackData.info.decoderConfig && box('avcC', [
@@ -657,17 +861,17 @@ export const vpcC = (trackData: IsobmffVideoTrackData) => {
 		? Number(parts[5])
 		: decoderConfig.colorSpace?.primaries
 			? COLOR_PRIMARIES_MAP[decoderConfig.colorSpace.primaries]
-			: 2; // Default to undetermined
+			: 1;
 	const transferCharacteristics = parts[6]
 		? Number(parts[6])
 		: decoderConfig.colorSpace?.transfer
 			? TRANSFER_CHARACTERISTICS_MAP[decoderConfig.colorSpace.transfer]
-			: 2;
+			: 1;
 	const matrixCoefficients = parts[7]
 		? Number(parts[7])
 		: decoderConfig.colorSpace?.matrix
 			? MATRIX_COEFFICIENTS_MAP[decoderConfig.colorSpace.matrix]
-			: 2;
+			: 1;
 
 	return fullBox('vpcC', 1, 0, [
 		u8(profile), // Profile
@@ -692,9 +896,10 @@ export const soundSampleDescription = (
 ) => {
 	let version = 0;
 	let contents: NestedNumberArray;
-
 	let sampleSizeInBits = 16;
-	if ((PCM_AUDIO_CODECS as readonly AudioCodec[]).includes(trackData.track.source._codec)) {
+
+	const isPcmCodec = (PCM_AUDIO_CODECS as readonly AudioCodec[]).includes(trackData.track.source._codec);
+	if (isPcmCodec) {
 		const codec = trackData.track.source._codec as PcmAudioCodec;
 		const { sampleSize } = parsePcmCodec(codec);
 		sampleSizeInBits = 8 * sampleSize;
@@ -702,6 +907,10 @@ export const soundSampleDescription = (
 		if (sampleSizeInBits > 16) {
 			version = 1;
 		}
+	}
+
+	if (trackData.muxer.isQuickTime) {
+		version = 1;
 	}
 
 	if (version === 0) {
@@ -719,6 +928,8 @@ export const soundSampleDescription = (
 			u16(0), // Sample rate (lower)
 		];
 	} else {
+		const compressionId = isPcmCodec ? 0 : -2;
+
 		contents = [
 			Array(6).fill(0), // Reserved
 			u16(1), // Data reference index
@@ -727,19 +938,28 @@ export const soundSampleDescription = (
 			u32(0), // Vendor
 			u16(trackData.info.numberOfChannels), // Number of channels
 			u16(Math.min(sampleSizeInBits, 16)), // Sample size (bits)
-			u16(0), // Compression ID
+			i16(compressionId), // Compression ID
 			u16(0), // Packet size
 			u16(trackData.info.sampleRate < 2 ** 16 ? trackData.info.sampleRate : 0), // Sample rate (upper)
 			u16(0), // Sample rate (lower)
-			u32(1), // Samples per packet (must be 1 for uncompressed formats)
-			u32(sampleSizeInBits / 8), // Bytes per packet
-			u32(trackData.info.numberOfChannels * sampleSizeInBits / 8), // Bytes per frame
+			isPcmCodec
+				? [
+						u32(1), // Samples per packet (must be 1 for uncompressed formats)
+						u32(sampleSizeInBits / 8), // Bytes per packet
+						u32(trackData.info.numberOfChannels * sampleSizeInBits / 8), // Bytes per frame
+					]
+				: [
+						u32(0), // Samples per packet (don't bother, still works with 0)
+						u32(0), // Bytes per packet (variable)
+						u32(0), // Bytes per frame (variable)
+					],
 			u32(2), // Bytes per sample (constant in FFmpeg)
 		];
 	}
 
 	return box(compressionType, contents, [
 		audioCodecToConfigurationBox(trackData.track.source._codec, trackData.muxer.isQuickTime)?.(trackData) ?? null,
+		btrt(trackData),
 	]);
 };
 
@@ -765,8 +985,8 @@ export const esds = (trackData: IsobmffAudioTrackData) => {
 		...u8(objectTypeIndication), // Object type indication
 		...u8(0x15), // stream type(6bits)=5 audio, flags(2bits)=1
 		...u24(0), // 24bit buffer size
-		...u32(0), // max bitrate
-		...u32(0), // avg bitrate
+		...u32(trackData.maxBitrate), // max bitrate
+		...u32(trackData.avgBitrate), // avg bitrate
 	];
 	if (trackData.info.decoderConfig.description) {
 		const description = toUint8Array(trackData.info.decoderConfig.description);
@@ -809,7 +1029,11 @@ export const wave = (trackData: IsobmffAudioTrackData) => {
 
 export const frma = (trackData: IsobmffAudioTrackData) => {
 	return box('frma', [
-		ascii(audioCodecToBoxName(trackData.track.source._codec, trackData.muxer.isQuickTime)),
+		ascii(audioCodecToBoxName(
+			trackData.track.source._codec,
+			trackData.info.decoderConfig.codec,
+			trackData.muxer.isQuickTime,
+		)),
 	]);
 };
 
@@ -825,12 +1049,11 @@ export const enda = (trackData: IsobmffAudioTrackData) => {
 /** Opus Specific Box. */
 export const dOps = (trackData: IsobmffAudioTrackData) => {
 	let outputChannelCount = trackData.info.numberOfChannels;
-	// Default PreSkip, should be at least 80 milliseconds worth of playback, measured in 48000 Hz samples
-	let preSkip = 3840;
+	let preSkip = 312; // Default
 	let inputSampleRate = trackData.info.sampleRate;
 	let outputGain = 0;
 	let channelMappingFamily = 0;
-	let channelMappingTable: Uint8Array = new Uint8Array(0);
+	let channelMappingTable: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
 
 	// Read preskip and from codec private data from the encoder
 	// https://www.rfc-editor.org/rfc/rfc7845#section-5
@@ -887,6 +1110,98 @@ const pcmC = (trackData: IsobmffAudioTrackData) => {
 	]);
 };
 
+/** AC3SpecificBox */
+const dac3 = (trackData: IsobmffAudioTrackData) => {
+	assert(trackData.info.primingPacket);
+
+	const frameInfo = parseAc3SyncFrame(trackData.info.primingPacket.data);
+	if (!frameInfo) {
+		throw new Error(
+			'Couldn\'t extract AC-3 frame info from the audio packet. '
+			+ 'Ensure the packets contain valid AC-3 sync frames (as specified in ETSI TS 102 366).',
+		);
+	}
+
+	const bytes = new Uint8Array(3);
+	const bitstream = new Bitstream(bytes);
+
+	bitstream.writeBits(2, frameInfo.fscod);
+	bitstream.writeBits(5, frameInfo.bsid);
+	bitstream.writeBits(3, frameInfo.bsmod);
+	bitstream.writeBits(3, frameInfo.acmod);
+	bitstream.writeBits(1, frameInfo.lfeon);
+	bitstream.writeBits(5, frameInfo.bitRateCode);
+	bitstream.writeBits(5, 0); // reserved
+
+	return box('dac3', [...bytes]);
+};
+
+/** EC3SpecificBox */
+const dec3 = (trackData: IsobmffAudioTrackData) => {
+	assert(trackData.info.primingPacket);
+
+	const frameInfo = parseEac3SyncFrame(trackData.info.primingPacket.data);
+	if (!frameInfo) {
+		throw new Error(
+			'Couldn\'t extract E-AC-3 frame info from the audio packet. '
+			+ 'Ensure the packets contain valid E-AC-3 sync frames (as specified in ETSI TS 102 366).',
+		);
+	}
+
+	// Calculate size
+	let totalBits = 16; // header: data_rate (13) + num_ind_sub (3)
+	for (const sub of frameInfo.substreams) {
+		totalBits += 23; // fixed fields per substream
+		if (sub.numDepSub > 0) {
+			totalBits += 9; // chan_loc
+		} else {
+			totalBits += 1; // reserved
+		}
+	}
+	const size = Math.ceil(totalBits / 8);
+
+	const bytes = new Uint8Array(size);
+	const bitstream = new Bitstream(bytes);
+
+	bitstream.writeBits(13, frameInfo.dataRate);
+	bitstream.writeBits(3, frameInfo.substreams.length - 1); // num_ind_sub
+
+	for (const sub of frameInfo.substreams) {
+		bitstream.writeBits(2, sub.fscod);
+		bitstream.writeBits(5, sub.bsid);
+		bitstream.writeBits(1, 0); // reserved
+		bitstream.writeBits(1, 0); // asvc = 0
+		bitstream.writeBits(3, sub.bsmod);
+		bitstream.writeBits(3, sub.acmod);
+		bitstream.writeBits(1, sub.lfeon);
+		bitstream.writeBits(3, 0); // reserved
+		bitstream.writeBits(4, sub.numDepSub);
+
+		if (sub.numDepSub > 0) {
+			bitstream.writeBits(9, sub.chanLoc);
+		} else {
+			bitstream.writeBits(1, 0); // reserved
+		}
+	}
+
+	return box('dec3', [...bytes]);
+};
+
+/** DTSSpecificBox */
+const ddts = (trackData: IsobmffAudioTrackData) => {
+	assert(trackData.info.primingPacket);
+
+	const frameInfo = parseDtsFrame(trackData.info.primingPacket.data);
+	if (!frameInfo) {
+		throw new Error(
+			'Couldn\'t extract DTS frame info from the audio packet. '
+			+ 'Ensure the packets contain valid DTS frames as specified in ETSI TS 102 114.',
+		);
+	}
+
+	return box('ddts', [...buildDtsSpecificBox(frameInfo)]);
+};
+
 export const subtitleSampleDescription = (
 	compressionType: string,
 	trackData: IsobmffSubtitleTrackData,
@@ -895,6 +1210,7 @@ export const subtitleSampleDescription = (
 	u16(1), // Data reference index
 ], [
 	SUBTITLE_CODEC_TO_CONFIGURATION_BOX[trackData.track.source._codec](trackData),
+	btrt(trackData),
 ]);
 
 export const vttC = (trackData: IsobmffSubtitleTrackData) => box('vttC', [
@@ -1046,6 +1362,57 @@ export const cslg = (trackData: IsobmffTrackData) => {
 	]);
 };
 
+const sgpdAndSbgp = (samples: Sample[], inTrackFragment: boolean) => {
+	const entries: {
+		sampleCount: number;
+		prerollSamples: number;
+	}[] = [];
+
+	for (const sample of samples) {
+		if (entries.length === 0) {
+			entries.push({
+				sampleCount: 1,
+				prerollSamples: sample.prerollSamples,
+			});
+		} else {
+			const lastEntry = entries[entries.length - 1]!;
+
+			if (lastEntry.prerollSamples === sample.prerollSamples) {
+				lastEntry.sampleCount++;
+			} else {
+				entries.push({
+					sampleCount: 1,
+					prerollSamples: sample.prerollSamples,
+				});
+			}
+		}
+	}
+
+	const rollEntries = entries.filter(x => x.prerollSamples !== 0);
+	if (rollEntries.length === 0) {
+		return [];
+	}
+
+	let nextGroupIndex = inTrackFragment ? 0x10001 : 1;
+
+	return [
+		fullBox('sgpd', 1, 0, [
+			ascii('roll'), // Grouping type
+			u32(2), // Default length
+			u32(rollEntries.length), // Entry count
+			...rollEntries.map(x => i16(x.prerollSamples)),
+		]),
+		fullBox('sbgp', 0, 0, [
+			ascii('roll'), // Grouping type
+			u32(entries.length), // Entry count
+			...entries.map(x => [
+				u32(x.sampleCount), // Sample count
+				u32(x.prerollSamples !== 0 ? nextGroupIndex++ : 0), // Samples with no preroll belong to no group
+			]),
+		]),
+	];
+};
+
 /**
  * Movie Extends Box: This box signals to readers that the file is fragmented. Contains a single Track Extends Box
  * for each track in the movie.
@@ -1108,6 +1475,7 @@ export const traf = (trackData: IsobmffTrackData) => {
 		tfhd(trackData),
 		tfdt(trackData),
 		trun(trackData),
+		...sgpdAndSbgp(trackData.currentChunk!.samples, true),
 	]);
 };
 
@@ -1205,20 +1573,34 @@ export const mfra = (trackDatas: IsobmffTrackData[]) => {
 };
 
 /** Track Fragment Random Access Box: Provides pointers to sync samples within the file for random access. */
-export const tfra = (trackData: IsobmffTrackData, trackIndex: number) => {
+export const tfra = (trackData: IsobmffTrackData) => {
 	const version = 1; // Using this version allows us to use 64-bit time and offset values
+
+	const entries: NestedNumberArray[] = [];
+	for (const chunk of trackData.finalizedChunks) {
+		const sampleIndex = chunk.samples.findIndex(sample => sample.type === 'key');
+		if (sampleIndex === -1) {
+			// tfra must point to sync samples, so continue here. This should never happen in practice since all
+			// fragments begin with a sync sample for every track anyways.
+			continue;
+		}
+
+		const sample = chunk.samples[sampleIndex]!;
+
+		entries.push([
+			u64(intoTimescale(sample.timestamp, trackData.timescale)), // Time (in presentation time)
+			u64(chunk.moofOffset!), // moof offset
+			u32(chunk.trafIndex! + 1), // traf number
+			u32(1), // trun number
+			u32(sampleIndex + 1), // Sample number
+		]);
+	}
 
 	return fullBox('tfra', version, 0, [
 		u32(trackData.track.id), // Track ID
 		u32(0b111111), // This specifies that traf number, trun number and sample number are 32-bit ints
-		u32(trackData.finalizedChunks.length), // Number of entries
-		trackData.finalizedChunks.map(chunk => [
-			u64(intoTimescale(chunk.samples[0]!.timestamp, trackData.timescale)), // Time (in presentation time)
-			u64(chunk.moofOffset!), // moof offset
-			u32(trackIndex + 1), // traf number
-			u32(1), // trun number
-			u32(1), // Sample number
-		]),
+		u32(entries.length), // Number of entries
+		entries,
 	]);
 };
 
@@ -1255,23 +1637,343 @@ export const vttc = (
 /** VTT Additional Text Box */
 export const vtta = (notes: string) => box('vtta', [...textEncoder.encode(notes)]);
 
-const VIDEO_CODEC_TO_BOX_NAME: Record<VideoCodec, string> = {
-	avc: 'avc1',
-	hevc: 'hvc1',
-	vp8: 'vp08',
-	vp9: 'vp09',
-	av1: 'av01',
+/** User Data Box */
+const udta = (muxer: IsobmffMuxer) => {
+	const boxes: Box[] = [];
+
+	const metadataFormat = muxer.format._options.metadataFormat ?? 'auto';
+	const metadataTags = muxer.output._metadataTags;
+
+	// Depending on the format, metadata tags are written differently
+	if (metadataFormat === 'mdir' || (metadataFormat === 'auto' && !muxer.isQuickTime)) {
+		const metaBox = metaMdir(metadataTags);
+		if (metaBox) boxes.push(metaBox);
+	} else if (metadataFormat === 'mdta') {
+		const metaBox = metaMdta(metadataTags);
+		if (metaBox) boxes.push(metaBox);
+	} else if (metadataFormat === 'udta' || (metadataFormat === 'auto' && muxer.isQuickTime)) {
+		addQuickTimeMetadataTagBoxes(boxes, muxer.output._metadataTags);
+	}
+
+	if (boxes.length === 0) {
+		return null;
+	}
+
+	return box('udta', undefined, boxes);
 };
 
-const VIDEO_CODEC_TO_CONFIGURATION_BOX: Record<VideoCodec, (trackData: IsobmffVideoTrackData) => Box | null> = {
+const addQuickTimeMetadataTagBoxes = (boxes: Box[], tags: MetadataTags) => {
+	// https://exiftool.org/TagNames/QuickTime.html (QuickTime UserData Tags)
+	// For QuickTime files, metadata tags are dumped into the udta box
+
+	for (const { key, value } of keyValueIterator(tags)) {
+		switch (key) {
+			case 'title': {
+				boxes.push(metadataTagStringBoxShort('©nam', value));
+			}; break;
+
+			case 'description': {
+				boxes.push(metadataTagStringBoxShort('©des', value));
+			}; break;
+
+			case 'artist': {
+				boxes.push(metadataTagStringBoxShort('©ART', value));
+			}; break;
+
+			case 'album': {
+				boxes.push(metadataTagStringBoxShort('©alb', value));
+			}; break;
+
+			case 'albumArtist': {
+				boxes.push(metadataTagStringBoxShort('albr', value));
+			}; break;
+
+			case 'genre': {
+				boxes.push(metadataTagStringBoxShort('©gen', value));
+			}; break;
+
+			case 'date': {
+				boxes.push(metadataTagStringBoxShort('©day', value.toISOString().slice(0, 10)));
+			}; break;
+
+			case 'comment': {
+				boxes.push(metadataTagStringBoxShort('©cmt', value));
+			}; break;
+
+			case 'lyrics': {
+				boxes.push(metadataTagStringBoxShort('©lyr', value));
+			}; break;
+
+			case 'raw': {
+				// Handled later
+			}; break;
+
+			case 'discNumber':
+			case 'discsTotal':
+			case 'trackNumber':
+			case 'tracksTotal':
+			case 'beatsPerMinute':
+			case 'images': {
+				// Not written for QuickTime (common Apple L)
+			}; break;
+
+			default: assertNever(key);
+		}
+	}
+
+	if (tags.raw) {
+		for (const key in tags.raw) {
+			const value = tags.raw[key];
+			if (value == null || key.length !== 4 || boxes.some(x => x.type === key)) {
+				continue;
+			}
+
+			if (typeof value === 'string') {
+				boxes.push(metadataTagStringBoxShort(key, value));
+			} else if (value instanceof Uint8Array) {
+				boxes.push(box(key, Array.from(value)));
+			}
+		}
+	}
+};
+
+const metadataTagStringBoxShort = (name: string, value: string) => {
+	const encoded = textEncoder.encode(value);
+
+	return box(name, [
+		u16(encoded.length),
+		u16(getLanguageCodeInt('und')),
+		Array.from(encoded),
+	]);
+};
+
+const DATA_BOX_MIME_TYPE_MAP: Record<string, number> = {
+	'image/jpeg': 13,
+	'image/png': 14,
+	'image/bmp': 27,
+};
+
+/**
+ * Generates key-value metadata for inclusion in the "meta" box.
+ */
+const generateMetadataPairs = (tags: MetadataTags, isMdta: boolean) => {
+	const pairs: {
+		key: string;
+		value: Box;
+	}[] = [];
+
+	// https://exiftool.org/TagNames/QuickTime.html (QuickTime ItemList Tags)
+	// This is the metadata format used for MP4 files
+
+	for (const { key, value } of keyValueIterator(tags)) {
+		switch (key) {
+			case 'title': {
+				pairs.push({ key: isMdta ? 'title' : '©nam', value: dataStringBoxLong(value) });
+			}; break;
+
+			case 'description': {
+				pairs.push({ key: isMdta ? 'description' : '©des', value: dataStringBoxLong(value) });
+			}; break;
+
+			case 'artist': {
+				pairs.push({ key: isMdta ? 'artist' : '©ART', value: dataStringBoxLong(value) });
+			}; break;
+
+			case 'album': {
+				pairs.push({ key: isMdta ? 'album' : '©alb', value: dataStringBoxLong(value) });
+			}; break;
+
+			case 'albumArtist': {
+				pairs.push({ key: isMdta ? 'album_artist' : 'aART', value: dataStringBoxLong(value) });
+			}; break;
+
+			case 'comment': {
+				pairs.push({ key: isMdta ? 'comment' : '©cmt', value: dataStringBoxLong(value) });
+			}; break;
+
+			case 'genre': {
+				pairs.push({ key: isMdta ? 'genre' : '©gen', value: dataStringBoxLong(value) });
+			}; break;
+
+			case 'beatsPerMinute': {
+				if (!isMdta) {
+					pairs.push({ key: 'tmpo', value: box('data', [
+						u32(21), // Type indicator
+						u32(0), // Locale indicator
+						u16(value),
+					]) });
+				}
+			}; break;
+
+			case 'lyrics': {
+				pairs.push({ key: isMdta ? 'lyrics' : '©lyr', value: dataStringBoxLong(value) });
+			}; break;
+
+			case 'date': {
+				pairs.push({
+					key: isMdta ? 'date' : '©day',
+					value: dataStringBoxLong(value.toISOString().slice(0, 10)),
+				});
+			}; break;
+
+			case 'images': {
+				for (const image of value) {
+					if (image.kind !== 'coverFront') {
+						continue;
+					}
+
+					pairs.push({ key: 'covr', value: box('data', [
+						u32(DATA_BOX_MIME_TYPE_MAP[image.mimeType] ?? 0), // Type indicator
+						u32(0), // Locale indicator
+						Array.from(image.data), // Kinda slow, hopefully temp
+					]) });
+				}
+			}; break;
+
+			case 'trackNumber': {
+				if (isMdta) {
+					const string = tags.tracksTotal !== undefined
+						? `${value}/${tags.tracksTotal}`
+						: value.toString();
+
+					pairs.push({ key: 'track', value: dataStringBoxLong(string) });
+				} else {
+					pairs.push({ key: 'trkn', value: box('data', [
+						u32(0), // 8 bytes empty
+						u32(0),
+						u16(0), // Empty
+						u16(value),
+						u16(tags.tracksTotal ?? 0),
+						u16(0), // Empty
+					]) });
+				}
+			}; break;
+
+			case 'discNumber': {
+				if (!isMdta) {
+					// Only written for mdir
+					pairs.push({ key: 'disc', value: box('data', [
+						u32(0), // 8 bytes empty
+						u32(0),
+						u16(0), // Empty
+						u16(value),
+						u16(tags.discsTotal ?? 0),
+						u16(0), // Empty
+					]) });
+				}
+			}; break;
+
+			case 'tracksTotal':
+			case 'discsTotal':{
+				// These are included with 'trackNumber' and 'discNumber' respectively
+			}; break;
+
+			case 'raw': {
+				// Handled later
+			}; break;
+
+			default: assertNever(key);
+		}
+	}
+
+	if (tags.raw) {
+		for (const key in tags.raw) {
+			const value = tags.raw[key];
+			if (value == null || (!isMdta && key.length !== 4) || pairs.some(x => x.key === key)) {
+				continue;
+			}
+
+			if (typeof value === 'string') {
+				pairs.push({ key, value: dataStringBoxLong(value) });
+			} else if (value instanceof Uint8Array) {
+				pairs.push({ key, value: box('data', [
+					u32(0), // Type indicator
+					u32(0), // Locale indicator
+					Array.from(value),
+				]) });
+			} else if (value instanceof RichImageData) {
+				pairs.push({ key, value: box('data', [
+					u32(DATA_BOX_MIME_TYPE_MAP[value.mimeType] ?? 0), // Type indicator
+					u32(0), // Locale indicator
+					Array.from(value.data), // Kinda slow, hopefully temp
+				]) });
+			}
+		}
+	}
+
+	return pairs;
+};
+
+/** Metadata Box (mdir format) */
+const metaMdir = (tags: MetadataTags) => {
+	const pairs = generateMetadataPairs(tags, false);
+
+	if (pairs.length === 0) {
+		return null;
+	}
+
+	// fullBox format
+	return fullBox('meta', 0, 0, undefined, [
+		hdlr(false, 'mdir', '', 'appl'), // mdir handler
+		box('ilst', undefined, pairs.map(pair => box(pair.key, undefined, [pair.value]))), // Item list without keys box
+	]);
+};
+
+/** Metadata Box (mdta format with keys box) */
+const metaMdta = (tags: MetadataTags) => {
+	const pairs = generateMetadataPairs(tags, true);
+
+	if (pairs.length === 0) {
+		return null;
+	}
+
+	// box without version and flags
+	return box('meta', undefined, [
+		hdlr(false, 'mdta', ''), // mdta handler
+		fullBox('keys', 0, 0, [
+			u32(pairs.length),
+		], pairs.map(pair => box('mdta', [ // Hacky since these aren't boxes technically, but if not box why box-shaped?
+			...textEncoder.encode(pair.key),
+		]))),
+		box('ilst', undefined, pairs.map((pair, i) => {
+			const boxName = String.fromCharCode(...u32(i + 1));
+			return box(boxName, undefined, [pair.value]);
+		})),
+	]);
+};
+
+const dataStringBoxLong = (value: string) => {
+	return box('data', [
+		u32(1), // Type indicator (UTF-8)
+		u32(0), // Locale indicator
+		...textEncoder.encode(value),
+	]);
+};
+
+const videoCodecToBoxName = (codec: VideoCodec, fullCodecString: string) => {
+	switch (codec) {
+		case 'avc': return fullCodecString.startsWith('avc3') ? 'avc3' : 'avc1';
+		case 'hevc': return 'hvc1';
+		case 'vp8': return 'vp08';
+		case 'vp9': return 'vp09';
+		case 'av1': return 'av01';
+		case 'prores': return fullCodecString;
+	}
+};
+
+const VIDEO_CODEC_TO_CONFIGURATION_BOX: Record<
+	VideoCodec,
+	((trackData: IsobmffVideoTrackData) => Box | null) | null
+> = {
 	avc: avcC,
 	hevc: hvcC,
 	vp8: vpcC,
 	vp9: vpcC,
 	av1: av1C,
+	prores: null,
 };
 
-const audioCodecToBoxName = (codec: AudioCodec, isQuickTime: boolean): string => {
+const audioCodecToBoxName = (codec: AudioCodec, fullCodecString: string, isQuickTime: boolean): string => {
 	switch (codec) {
 		case 'aac': return 'mp4a';
 		case 'mp3': return 'mp4a';
@@ -1282,6 +1984,9 @@ const audioCodecToBoxName = (codec: AudioCodec, isQuickTime: boolean): string =>
 		case 'alaw': return 'alaw';
 		case 'pcm-u8': return 'raw ';
 		case 'pcm-s8': return 'sowt';
+		case 'ac3': return 'ac-3';
+		case 'eac3': return 'ec-3';
+		case 'dts': return fullCodecString;
 	}
 
 	// Logic diverges here
@@ -1321,6 +2026,9 @@ const audioCodecToConfigurationBox = (codec: AudioCodec, isQuickTime: boolean) =
 		case 'opus': return dOps;
 		case 'vorbis': return esds;
 		case 'flac': return dfLa;
+		case 'ac3': return dac3;
+		case 'eac3': return dec3;
+		case 'dts': return ddts;
 	}
 
 	// Logic diverges here
@@ -1362,4 +2070,16 @@ const SUBTITLE_CODEC_TO_CONFIGURATION_BOX: Record<
 	(trackData: IsobmffSubtitleTrackData) => Box | null
 > = {
 	webvtt: vttC,
+};
+
+const getLanguageCodeInt = (code: string) => {
+	assert(code.length === 3); ;
+
+	let language = 0;
+	for (let i = 0; i < 3; i++) {
+		language <<= 5;
+		language += code.charCodeAt(i) - 0x60;
+	}
+
+	return language;
 };

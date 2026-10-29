@@ -120,6 +120,7 @@ class HyperframesPlayer extends HTMLElement {
 
   private shadow: ShadowRoot;
   private container: HTMLDivElement;
+  private readonly sizer = document.createElement("div");
   private iframe: HTMLIFrameElement;
   private posterEl: HTMLImageElement | null = null;
   private controlsApi: ReturnType<typeof setupControls> | null = null;
@@ -169,6 +170,8 @@ class HyperframesPlayer extends HTMLElement {
 
     adoptShadowStyles(this.shadow, PLAYER_STYLES);
     ({ container: this.container, iframe: this.iframe } = createCompositionIframe());
+    this.sizer.className = "hfp-sizer";
+    this.shadow.appendChild(this.sizer);
     this.shadow.appendChild(this.container);
 
     const loaderElements = createShaderLoader();
@@ -206,6 +209,7 @@ class HyperframesPlayer extends HTMLElement {
 
     this.probe = new CompositionProbe(this.iframe, {
       resolveRuntimeUrl: () => runtimeSrcFromElement(this),
+      hostOwnsDeadline: () => this.hasAttribute("no-load-timeout"),
       onReady: (result) => this._onProbeReady(result),
       onError: (message) => this._emit(new CustomEvent("error", { detail: { message } })),
     });
@@ -1387,7 +1391,7 @@ class HyperframesPlayer extends HTMLElement {
     });
     const win = doc.defaultView as (Window & { __renderReady?: boolean }) | null;
     console.warn(
-      `[hyperframes-player] assets-loading timed out after ${ASSETS_READY_TIMEOUT_MS}ms — playing anyway`,
+      `[hyperframes-player] assets-loading timed out after ${ASSETS_READY_TIMEOUT_MS}ms, playing anyway`,
       {
         stuckMedia: pendingMedia.map(
           (el) => el.currentSrc || el.getAttribute("src") || `<${el.tagName.toLowerCase()}>`,
@@ -1485,6 +1489,7 @@ class HyperframesPlayer extends HTMLElement {
     const changed = width !== this._compositionWidth || height !== this._compositionHeight;
     this._compositionWidth = width;
     this._compositionHeight = height;
+    this.sizer.style.aspectRatio = `${width} / ${height}`;
     this._rescale();
     if (!changed) return;
     const detail = { compositionWidth: width, compositionHeight: height };
@@ -1550,7 +1555,7 @@ class HyperframesPlayer extends HTMLElement {
     if (applied) this._sendDisplayScale();
     if (!applied && this._ready && !this._rescaleWarned) {
       this._rescaleWarned = true;
-      console.warn("[hyperframes-player] rescale no-op after ready — zero-size player element", {
+      console.warn("[hyperframes-player] rescale no-op after ready: zero-size player element", {
         src: this.getAttribute("src"),
         offsetWidth: this.offsetWidth,
         offsetHeight: this.offsetHeight,
@@ -1609,6 +1614,9 @@ class HyperframesPlayer extends HTMLElement {
       },
       this._isAudioLocked(),
     );
+    this.controlsApi.updateTime(this._currentTime, this._duration);
+    this.controlsApi.updatePlaying(!this._paused);
+    this.controlsApi.updateSpeed(this.playbackRate);
   }
 
   // Test-instrumentation pass-throughs (match original field names).

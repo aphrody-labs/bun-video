@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Video } from "../src/native-video";
 import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +7,7 @@ import { loadCatalogue, watchCatalogue } from "../src/watch-catalogue";
 import { readCaptionFile } from "../src/watch";
 
 const fixture = join(import.meta.dir, "../hyperframes/player/tests/perf/fixtures/10-video-grid/sample.mp4");
-const nativeVideo = (Bun as unknown as { Video?: { available: boolean } }).Video;
+const nativeVideo = Video;
 
 async function withRoot<T>(run: (root: string) => Promise<T>): Promise<T> {
   const root = await mkdtemp(join(tmpdir(), "watch-catalogue-"));

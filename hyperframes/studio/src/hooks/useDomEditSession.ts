@@ -122,7 +122,6 @@ export function useDomEditSession({
     buildDomSelectionForTimelineElement,
     handleTimelineElementSelect,
     refreshDomEditSelectionFromPreview,
-    refreshDomEditGroupSelectionsFromPreview,
     applyMarqueeSelection,
   } = useDomSelection({
     projectId,
@@ -340,7 +339,7 @@ export function useDomEditSession({
     if (members.some((m) => isAudioDomElement(m.element))) {
       showToast(
         members.every((m) => isAudioDomElement(m.element))
-          ? "Audio clips group into a bus — use FX on the track header"
+          ? "Audio clips group into a bus. Use FX on the track header"
           : "Can't group audio clips with layout elements",
         "info",
       );
@@ -394,8 +393,7 @@ export function useDomEditSession({
     activeCompPath,
     domEditSelection,
     domEditSelectionRef,
-    domEditGroupSelectionsRef,
-    refreshDomEditGroupSelectionsFromPreview,
+    refreshDomEditSelectionFromPreview,
     previewIframeRef,
     previewIframe,
     captionEditMode: previewCaptionEditMode,
@@ -406,8 +404,6 @@ export function useDomEditSession({
     refreshPreviewDocumentVersion,
     syncPreviewHotkeys,
     applyStudioManualEditsToPreviewRef,
-    applyDomSelection,
-    buildDomSelectionFromTarget,
     openSourceForSelection,
     ...gsapScriptEdits,
     handleDomManualEditsReset,

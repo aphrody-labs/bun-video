@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { Video } from "../src/native-video";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -6,12 +7,12 @@ import { executeMediaJob } from "../src/media-workflow";
 
 const source = resolve(import.meta.dir, "../hyperframes/cli/src/commands/__fixtures__/silent.mp4");
 
-test.skipIf(!Bun.Video.available)(
+test.skipIf(!Video.available)(
   "native media workflow extracts, batches, remuxes and encodes without an external tool",
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "bun-video-media-workflow-"));
     try {
-      const metadata = await new Bun.Video(source).metadata();
+      const metadata = await new Video(source).metadata();
       const duration = metadata.duration;
       if (duration === null) throw new Error("Fixture video has no duration metadata");
       expect(duration).toBeGreaterThan(0);
@@ -49,7 +50,7 @@ test.skipIf(!Bun.Video.available)(
       const remuxPath = join(directory, "copy.mp4");
       const remux = await executeMediaJob({ action: "remux", input: source, output: remuxPath });
       expect(remux.bytes).toBeGreaterThan(0);
-      const remuxDuration = (await new Bun.Video(remuxPath).metadata()).duration;
+      const remuxDuration = (await new Video(remuxPath).metadata()).duration;
       if (remuxDuration === null) throw new Error("Remuxed fixture has no duration metadata");
       expect(remuxDuration).toBeCloseTo(duration, 1);
 

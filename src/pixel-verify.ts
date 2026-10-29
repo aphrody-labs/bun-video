@@ -1,3 +1,10 @@
+import { Video } from "./native-video";
+import "./image-compat";
+
+interface PixelSource {
+  metadata(): Promise<{ width: number; height: number }>;
+  rgba(): Promise<{ width: number; height: number; channels: number; data: Uint8Array }>;
+}
 import { frameOperationSignal } from "./frame-plan";
 
 export interface PixelComparison {
@@ -98,10 +105,10 @@ async function decodeFrame(
       header.length >= 12 &&
       new TextDecoder("ascii").decode(header.subarray(4, 8)) === "ftyp" &&
       !stillBrands.includes(brand));
-  if (isVideo && typeof Bun.Video !== "function") throw new Error("Bun.Video is required to compare video frames");
-  const source = isVideo
-    ? new Bun.Video(path, { maxPixels: 7680 * 4320, autoOrient: false }).frame(0)
-    : new Bun.Image(path, { maxPixels: 7680 * 4320, autoOrient: false });
+  if (isVideo && !Video.available) throw new Error("A video provider is required to compare video frames");
+  const source: PixelSource = isVideo
+    ? new Video(path, { maxPixels: 7680 * 4320, autoOrient: false }).frame(0)
+    : new Bun.Image(path, { maxPixels: 7680 * 4320, autoOrient: false }) as unknown as PixelSource;
   const metadata = await frameOperation<{ width: number; height: number }>(() => source.metadata(), signal);
   if (metadata.width !== options.width || metadata.height !== options.height)
     throw new Error("Frame dimensions differ from the reference; resizing is not a pixel comparison");

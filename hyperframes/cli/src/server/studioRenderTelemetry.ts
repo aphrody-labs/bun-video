@@ -16,18 +16,15 @@ import {
   renderObservabilityTelemetryPayload,
 } from "../telemetry/renderObservability.js";
 import { bytesToMb } from "../telemetry/system.js";
+import type { RenderCpuTelemetryPayload } from "../telemetry/renderCpu.js";
 
 export interface StudioRenderOpts {
   fps: Fps;
   quality: string;
-  /** Output container format; Studio requests are constrained to these three. */
-  format?: "mp4" | "webm" | "mov";
+  format?: "mp4" | "webm" | "mov" | "gif";
   /** Named canvas preset the Studio request asked for; undefined renders at the composition's native dimensions. */
   outputResolution?: CanvasResolution;
-  // gif_fps_capped/hdr_mode/video_frame_format are deliberately absent: Studio
-  // has no gif/png-sequence option and createRenderJob never receives an
-  // hdrMode or videoFrameFormat from the Studio request type, so there is no
-  // per-request value: see the PR description for the full reasoning.
+  useGpu?: boolean;
   // Telemetry id of the browser user who triggered the render, so the render
   // outcome joins their studio_session_start / studio_render_start events.
   // Undefined for older studio clients → falls back to the install anonymousId.
@@ -117,6 +114,7 @@ export function emitStudioRenderError(
   failedStage: string | undefined,
   err: unknown,
   job: RenderJob | undefined,
+  cpuUsage: RenderCpuTelemetryPayload = {},
 ): void {
   // `workers` is intentionally omitted: studio renders don't accept a
   // user-supplied worker count (the producer picks its default), so on early
@@ -127,6 +125,7 @@ export function emitStudioRenderError(
     fps: fpsToNumber(opts.fps),
     quality: opts.quality,
     docker: false,
+    gpu: opts.useGpu === true,
     source: "studio",
     failedStage,
     errorMessage: err instanceof Error ? err.message : String(err),
@@ -136,6 +135,7 @@ export function emitStudioRenderError(
     distinctId: opts.distinctId,
     ...renderJobObservabilityTelemetryPayload(job),
     ...memSnapshot(),
+    ...cpuUsage,
   });
 }
 
@@ -143,6 +143,7 @@ export function emitStudioRenderComplete(
   opts: StudioRenderOpts,
   elapsedMs: number,
   perf: RenderPerfSummary | undefined,
+  cpuUsage: RenderCpuTelemetryPayload = {},
 ): void {
   if (opts.telemetryOptOut === true) return;
   trackRenderComplete({
@@ -150,12 +151,13 @@ export function emitStudioRenderComplete(
     fps: fpsToNumber(opts.fps),
     quality: opts.quality,
     docker: false,
-    gpu: false,
+    gpu: opts.useGpu === true,
     source: "studio",
     outputFormat: opts.format,
     outputResolutionPreset: opts.outputResolution,
     distinctId: opts.distinctId,
     ...perfPayload(perf, elapsedMs),
     ...memSnapshot(),
+    ...cpuUsage,
   });
 }

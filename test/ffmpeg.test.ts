@@ -77,13 +77,14 @@ test("source normalization preserves paths and byte view boundaries", () => {
   expect(() => resolveVideoSource("javascript:alert(1)")).toThrow("Unsupported video source protocol");
 });
 
-test.skipIf(typeof Bun.Video !== "function")(
+// Legacy fork only: this asserts the fork-native Bun.Video fluent state, which unmodified Bun does not have.
+test.skipIf(typeof (Bun as unknown as { Video?: unknown }).Video !== "function")(
   "native Video facade ingests a Response and delegates fluent state without opening media",
   async () => {
     const { createVideo } = await import("../src/pipeline");
     const source = new Uint8Array([1, 2, 3]);
     const video = await createVideo(new Response(source), { maxPixels: 4 });
-    expect(video).toBeInstanceOf(Bun.Video);
+    expect(video).toBeInstanceOf((Bun as unknown as { Video: new () => object }).Video);
     expect(video.frame(0).resize(2, 2).png()).toBe(video);
     expect(video.width).toBe(-1);
     expect(video.height).toBe(-1);

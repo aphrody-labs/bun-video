@@ -1,4 +1,6 @@
 import { isAbsolute, join, relative, resolve } from "node:path";
+import "./image-compat";
+import { decodePngToRgba } from "./png-decode";
 import { parseSubtitle, renderSubtitle, type SubtitleCue } from "../scripts/episode-subtitles";
 import type { FrameAnalysisOptions, FrameAnalysis } from "./frame-analysis";
 
@@ -60,10 +62,9 @@ interface CaptionRecord {
   [field: string]: unknown;
 }
 
-/** Decode bounded thumbnails with the native image owner; no PNG parser or inflater here. */
+/** Decode bounded thumbnails: Bun.Image validates the header, `png-decode` (node:zlib inflate) yields RGBA8. */
 export async function thumbnailPixels(png: Uint8Array): Promise<{ width: number; height: number; rgba: Uint8Array }> {
   if (png.byteLength < 33 || png.byteLength > 1024 * 1024) throw new Error("Invalid bounded thumbnail payload");
-  if (typeof Bun.Image.prototype.rgba !== "function") throw new Error("Qualified native Bun.Image.rgba is required");
   const image = new Bun.Image(png, { maxPixels: 256 * 256, autoOrient: false });
   const metadata = await image.metadata();
   if (
@@ -74,7 +75,7 @@ export async function thumbnailPixels(png: Uint8Array): Promise<{ width: number;
     metadata.height > 256
   )
     throw new Error("Require a bounded thumbnail PNG at most 256x256");
-  const pixels = await image.rgba();
+  const pixels = decodePngToRgba(png, 256 * 256);
   if (
     pixels.width !== metadata.width ||
     pixels.height !== metadata.height ||

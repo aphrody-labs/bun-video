@@ -4,6 +4,7 @@ import {
   refreshSvgSelectorAliases,
 } from "../compiler/svgSelectorAliases";
 import {
+  countPageRoot,
   planCompositionAssembly,
   extractedCompositionAssets,
 } from "../compiler/compositionAssembly";
@@ -19,6 +20,7 @@ import {
   rewriteSvgIdReferencesInCss,
 } from "../compiler/svgIdNamespacing";
 import { waitForFonts } from "./afterFonts";
+import { applyTextBindings } from "./applyVariableBindings";
 import { parseLayoutDimension } from "./compositionDimension";
 import { markFlattenedInnerRoot } from "./flattenedRoot";
 import {
@@ -300,6 +302,7 @@ function countAuthoredCompositionIds(hosts: Element[]): Map<string, number> {
     if (!compId) continue;
     hostCountsByCompositionId.set(compId, (hostCountsByCompositionId.get(compId) || 0) + 1);
   }
+  countPageRoot(hostCountsByCompositionId, hosts);
   return hostCountsByCompositionId;
 }
 
@@ -603,6 +606,7 @@ async function mountCompositionContent(params: {
     runScripts: async () => {
       if (scriptPayloads.length > 0) await waitForFonts();
       if (!isCurrent()) return;
+      applyTextBindings(document, params.host);
       for (const scriptPayload of scriptPayloads) {
         const injectedScript = document.createElement("script");
         if (scriptPayload.type) {

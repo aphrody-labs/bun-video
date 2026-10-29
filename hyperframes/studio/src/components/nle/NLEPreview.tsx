@@ -209,8 +209,7 @@ export const NLEPreview = memo(function NLEPreview({
 
   const updateCompositionSizeFromPreview = useCallback(() => {
     const next = readPreviewCompositionSize(previewIframeRef.current);
-    // Pure updater — the parent notification happens in the effect below
-    // (updaters may run more than once under Strict Mode / concurrent React).
+    // Pure updater; the effect below notifies the parent (Strict Mode may run updaters twice).
     setCompositionSize((prev) =>
       prev?.width === next?.width && prev?.height === next?.height ? prev : next,
     );
@@ -507,7 +506,7 @@ export const NLEPreview = memo(function NLEPreview({
         >
           <div
             ref={stageRef}
-            className="relative shrink-0 pointer-events-auto"
+            className="relative shrink-0 pointer-events-auto shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_4px_32px_rgba(0,0,0,0.7)]"
             style={{
               width: `${stageSize.width}px`,
               height: `${stageSize.height}px`,
@@ -563,6 +562,7 @@ export const NLEPreview = memo(function NLEPreview({
                   onPreviewError={(message) => onShadowError(slot.gen, message)}
                   portrait={portrait}
                   suppressLoadingOverlay
+                  noLoadTimeout
                   style={SHADOW_IFRAME_STYLE}
                 />
               ),

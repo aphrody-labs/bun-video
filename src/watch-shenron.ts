@@ -1,3 +1,4 @@
+import { Video } from "./native-video";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { controlCharacters, publicURL, type ShenronEpisodeVideoDelivery } from "./shenron-episode";
@@ -94,9 +95,8 @@ export async function exportShenronAssets(report: WatchReport, options: ShenronA
   const source = await hashFile(report.localMedia);
   if (source.bytes < 1 || source.bytes > MAX_SOURCE_BYTES) throw new Error("Invalid qualified source size");
 
-  const Video = (Bun as unknown as { Video?: new (input: string) => PngVideo }).Video;
-  if (!Video) throw new Error("Native Bun.Video provider unavailable in this runtime");
-  const video = new Video(report.localMedia);
+  if (!Video.available) throw new Error("No video provider: install FFmpeg/FFprobe or run a runtime that provides Bun.Video");
+  const video = new Video(report.localMedia) as unknown as PngVideo;
   const root = resolve(options.outDir);
   await mkdir(join(root, "frames"), { recursive: true });
 

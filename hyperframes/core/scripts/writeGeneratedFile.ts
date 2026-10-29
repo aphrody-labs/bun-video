@@ -25,6 +25,8 @@
  * has to travel with the package, or the image build fails on a missing module.
  */
 
+import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, extname } from "node:path";
@@ -46,24 +48,26 @@ export function writeGeneratedFile(outPath: string, contents: string): boolean {
 }
 
 /**
- * Runs the generated source through Bun's native formatter before publication.
- * Formatting the file after publishing it would rewrite it in place and
- * reopen the very window the atomic rename closes.
+ * Runs the generated source through oxfmt's stdin so it is published already
+ * formatted. Formatting the file after publishing it would rewrite it in place and
+ * reopen the very window the atomic rename closes. Use the installed formatter with
+ * this runtime directly: Windows may only expose bun through shell-only shims.
+ * Fail before publication rather than dirtying tracked files with raw output.
  */
 export function formatGeneratedSource(source: string, outPath: string): string {
   // Native `bun fmt` formats files in place, so format a sibling copy that keeps
   // the target's extension and repository formatting configuration.
   const formatPath = `${outPath}.${process.pid}.${randomBytes(4).toString("hex")}.fmt${extname(outPath)}`;
   try {
-    writeFileSync(formatPath, source, "utf8");
-    const result = Bun.spawnSync([process.execPath, "fmt", formatPath], {
-      stdout: "ignore",
-      stderr: "pipe",
+    const formatter = createRequire(import.meta.url).resolve("oxfmt/bin/oxfmt");
+    return execFileSync(process.execPath, [formatter, `--stdin-filepath=${outPath}`], {
+      input: source,
+      encoding: "utf8",
     });
-    if (!result.success)
-      throw new Error(`bun fmt failed for ${outPath}: ${result.stderr.toString()}`);
-    return readFileSync(formatPath, "utf8");
-  } finally {
-    rmSync(formatPath, { force: true });
+  } catch (cause) {
+    throw new Error(
+      `Could not format generated source for ${outPath}; install the checkout dependencies and retry.`,
+      { cause },
+    );
   }
 }

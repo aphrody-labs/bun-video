@@ -6,14 +6,28 @@ type SwapWindow = Window & {
 const SCENES_SWAPPED = "hf-scenes-swapped";
 export const SCENE_SWAP_MS = 5000;
 
+const PREVIEW_DOCUMENT_LOADED = "hf-preview-document-loaded";
+
+export function announcePreviewDocumentLoaded(iframe: HTMLIFrameElement): void {
+  iframe.dispatchEvent(new Event(PREVIEW_DOCUMENT_LOADED));
+}
+
+export function onPreviewDocumentLoaded(
+  iframe: HTMLIFrameElement,
+  onLoaded: () => void,
+): () => void {
+  iframe.addEventListener(PREVIEW_DOCUMENT_LOADED, onLoaded);
+  return () => iframe.removeEventListener(PREVIEW_DOCUMENT_LOADED, onLoaded);
+}
+
 export function onPreviewContentReplaced(
   iframe: HTMLIFrameElement,
   onReplaced: () => void,
 ): () => void {
-  iframe.addEventListener("load", onReplaced);
+  const stopLoaded = onPreviewDocumentLoaded(iframe, onReplaced);
   iframe.addEventListener(SCENES_SWAPPED, onReplaced);
   return () => {
-    iframe.removeEventListener("load", onReplaced);
+    stopLoaded();
     iframe.removeEventListener(SCENES_SWAPPED, onReplaced);
   };
 }
@@ -57,6 +71,9 @@ export function markScenesStale(iframe: HTMLIFrameElement | null, files: readonl
   meta.content = JSON.stringify(parts);
 }
 
+export const supersededByNewerEdit = () =>
+  new DOMException("superseded by a newer edit", "AbortError");
+
 /** Null when the preview cannot swap; rejects when superseded, cancelled or a full reload is needed. */
 export function sceneSwapFor(
   iframe: HTMLIFrameElement,
@@ -71,7 +88,8 @@ export function sceneSwapFor(
       () => deadline.abort(new Error("the preview took too long to swap")),
       SCENE_SWAP_MS,
     );
-    cancel?.addEventListener("abort", () => deadline.abort(cancel.reason), { once: true });
+    const onCancel = () => deadline.abort(cancel?.reason);
+    cancel?.addEventListener("abort", onCancel, { once: true });
     const swapping = (async () => {
       const response = await studioApiFetch(url, { signal: deadline.signal });
       if (!response.ok) throw new Error(`preview request failed with ${response.status}`);
@@ -87,6 +105,7 @@ export function sceneSwapFor(
       await Promise.race([swapping, expired]);
     } finally {
       clearTimeout(timer);
+      cancel?.removeEventListener("abort", onCancel);
     }
     iframe.dispatchEvent(new Event(SCENES_SWAPPED));
   };

@@ -15,6 +15,7 @@ export default defineConfig({
     "helpers/sourceMutation": "src/helpers/sourceMutation.ts",
     "helpers/safePath": "src/helpers/safePath.ts",
     "helpers/hfIdPersist": "src/helpers/hfIdPersist.ts",
+    "helpers/encoderOptions": "src/helpers/encoderOptions.ts",
     "history/index": "src/history/index.ts",
   },
   format: ["esm"],
@@ -28,7 +29,8 @@ export default defineConfig({
   // With splitting off, each entry inlined its own copy and a pre-warm from
   // media-proxy-preview couldn't dedupe against a route's proxy-transcoder.
   splitting: true,
-  sourcemap: true,
   clean: true,
   dts: true,
+  // An optional dependency, so tsup would otherwise inline it.
+  external: ["sharp"],
 });

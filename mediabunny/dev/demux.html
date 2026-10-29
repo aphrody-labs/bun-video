@@ -1,22 +1,662 @@
 <!DOCTYPE html>
 
 <script src="../dist/bundles/mediabunny.cjs"></script>
+<script src="../packages/ac3/dist/bundles/mediabunny-ac3.js"></script>
 
 <script type="module">
+	MediabunnyAc3.registerAc3Decoder();
+
 	const fileInput = document.createElement('input');
 	fileInput.type = 'file';
 	document.body.append(fileInput);
 
 	fileInput.addEventListener('change', async () => {
 		const file = fileInput.files[0];
-		const source = new Mediabunny.BlobSource(file);
+		const input = new Mediabunny.Input({
+			formats: Mediabunny.ALL_FORMATS,
+			source: new Mediabunny.BlobSource(file),
+		});
+
+		const audioTrack = await input.getPrimaryAudioTrack();
+		const sink = new Mediabunny.AudioSampleSink(audioTrack);
+
+		console.log(await audioTrack.getPreRollDuration());
+
+		const iter = await sink.samples(10 - 0 / 48000);
+		//await iter.next();
+		const sample = (await iter.next()).value;
+		console.log(sample);
+		const buf = new Float32Array(new ArrayBuffer(sample.allocationSize({ format: 'f32-planar', planeIndex: 0 })));
+		sample.copyTo(buf, { format: 'f32-planar', planeIndex: 0 });
+
+		console.log(buf)
+
+		/*
+		const track = await input.getPrimaryVideoTrack();
+		if (!track) {
+			throw new Error('The synthetic file has no video track.');
+		}
+
+		for await (const packet of new Mediabunny.EncodedPacketSink(track).packets()) {
+			console.log(packet.timestamp)
+		}
+		*/
+
+		/*
+		const track = await input.getPrimaryVideoTrack();
+		const sink = new Mediabunny.EncodedPacketSink(track);
+
+		const packet = await sink.getFirstPacket();
+		console.log(packet);
+		*/
+		/*
+
+		for await (const packet of packetSink.packets()) {
+			//console.log(packet);
+			break;
+		}
+
+		const sink = new Mediabunny.AudioSampleSink(track);
+
+		let count = 0;
+		for await (const sample of sink.samples()) {
+			const buf = new Float32Array(new ArrayBuffer(sample.allocationSize({ format: 'f32-planar', planeIndex: 0 })));
+			sample.copyTo(buf, { format: 'f32-planar', planeIndex: 0 });
+			let max = Math.max(...buf.map(x => Math.abs(x)));
+
+			console.log(sample, buf, max)
+			
+			if (++count === 3) {
+				break;
+			}
+		}
+		*/
+
+		/*
+		const track = await input.getPrimaryAudioTrack();
+		const sink = new Mediabunny.EncodedPacketSink(track);
+		
+		for await (const packet of sink.packets()) {
+			console.log(packet);
+		}
+
+		const output = new Mediabunny.Output({
+			format: new Mediabunny.Mp4OutputFormat(),
+			target: new Mediabunny.BufferTarget(),
+		});
+
+		const conversion = await Mediabunny.Conversion.init({ input, output });
+		await conversion.execute();
+		
+		return;
+		
+		// Download it now
+		const blob = new Blob([output.target.buffer]);
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = file.name.replace(/\.\w+$/, '.mp4');
+		a.click();
+		URL.revokeObjectURL(url);
+		*/
+
+		/*
+		const track = await input.getPrimaryAudioTrack();
+		const sink = new Mediabunny.EncodedPacketSink(track);
+		
+		for await (const packet of sink.packets()) {
+			console.log(packet);
+		}
+
+		console.log("Done")
+		*/
+
+		/*
+		const input = new Mediabunny.Input({
+			source: new Mediabunny.UrlSource('https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine-hls/hls.m3u8'),
+			formats: Mediabunny.ALL_FORMATS,
+		});
+
+		const videoTrack = await input.getPrimaryVideoTrack();
+		const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+		console.log(await sink.getFirstPacket());
+		*/
+
+		/*
+		return
+		
+		const tracks = await manifest.getTracks();
+		console.log(tracks);
+		const [track] = tracks;
+		
+		window.kekw = () => {
+			console.log(track.getDurationFromMetadata())
+		};
+
+		return;
+		const ugh = new Mediabunny.EncodedPacketSink(audioTrack);
+
+		for await (const packet of ugh.packets()) {
+			console.log(packet);
+		}
+
+		//console.log(await manifest.getTracks());
+		return;
+
+		const videoTrack = await manifest.getPrimaryVideoTrack();
+		await videoTrack.hydrate();
+
+		console.log("Doing...")
+		console.log(await videoTrack.getDurationFromMetadata({skipLiveWait: true}));
+		return;
+
+		const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+		const firstTimestamp = await videoTrack.getFirstTimestamp();
+
+		console.log(await videoTrack.computeDuration({ skipLiveWait: true }));
+
+		manifest.dispose()
+		*/
+
+		/*
+		let last = -Infinity;
+		for await (const packet of sink.packets()) {
+			const rel = packet.timestamp - firstTimestamp;
+			console.log(rel, rel - last);
+
+			last = rel;
+
+			if (rel >= 10) {
+				break;
+			}
+		}
+		*/
+
+		/*
+		console.log("here")
+		const lastPacket = await sink.getPacket(Infinity, { skipLiveWait: true });
+		const other = await sink.getPacket(lastPacket.timestamp - 5);
+
+		for await (const packet of sink.packets(other)) {
+			console.log(packet.timestamp);
+		}
+
+		console.log("Done")
+		*/
+		
+
+		/*
+		const tracks = await manifest.getTracks();
+		//await input.hydrateAllTracks();
+		console.log(tracks, tracks.map(x => [x.getFirstTimestamp(), x.computeDuration()]));
+
+		return;
+		*/
+		/*
+		for await (using sample of sink.samples()) {
+			console.log(sample.timestamp);
+		}
+		*/
+
+		/*
+		const manifest = new Mediabunny.ManifestInput({
+			entryPath: 'https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8'
+			 	?? 'https://playertest.longtailvideo.com/adaptive/vod-with-mp3/manifest.m3u8'
+				?? 'https://playertest.longtailvideo.com/adaptive/aes-with-tracks/master.m3u8'
+				?? 'https://playertest.longtailvideo.com/adaptive/customIV/prog_index.m3u8'
+				?? 'https://playertest.longtailvideo.com/adaptive/issue666/playlists/cisq0gim60007xzvi505emlxx.m3u8'
+				?? 'https://test-streams.mux.dev/dai-discontinuity-deltatre/manifest.m3u8'
+				?? 'https://test-streams.mux.dev/x36xhzz/url_0/193039199_mp4_h264_aac_hd_7.m3u8'
+				?? 'https://test-streams.mux.dev/dai-discontinuity-deltatre/manifest.m3u8'
+				?? 'https://cdn.jwplayer.com/manifests/pZxWPRg4.m3u8'
+				?? 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8'
+				?? 'https://test-streams.mux.dev/x36xhzz/url_0/193039199_mp4_h264_aac_hd_7.m3u8',
+			getSource: path => new Mediabunny.UrlSource(path),
+			manifestFormats: Mediabunny.ALL_MANIFEST_FORMATS,
+			mediaFormats: Mediabunny.ALL_FORMATS,
+		});
+
+		const variants = await manifest.getVariants();
+		const variant = variants[0];
+		const firstSegment = await variant.getFirstSegment();
+		const input = await firstSegment.toInput();
+		const videoTrack = await input.getPrimaryVideoTrack();
+		const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+
+		for await (const packet of sink.packets()) {
+			console.log(packet.byteLength, packet.timestamp, packet.duration)
+		}
+		*/
+
+		/*
+		return;
+		const variant = variants[2];//variants.find(x => x.path.endsWith('aac/und/stream.m3u8'));
+		const input = variant.toInput();
+		const audioTrack = await input.getPrimaryAudioTrack();
+		const sink = new Mediabunny.EncodedPacketSink(audioTrack);
+
+		for await (const packet of sink.packets()) {
+			console.log(packet.timestamp, packet.duration)
+		}
+		*/
+
+		/*
+		const file = fileInput.files[0];
+		const input = new Mediabunny.Input({
+			formats: Mediabunny.ALL_FORMATS,
+			source: new Mediabunny.UrlSource('https://playertest.longtailvideo.com/adaptive/captions/130130211307_1.ts'),
+		});
+
+		const videoTrack = await input.getPrimaryVideoTrack();
+		const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+
+		for await (const packet of sink.packets()) {
+			console.log("Packet", packet.timestamp)
+			for (const thing of window.iterateNalUnitsInAnnexB(packet.data)) {
+				console.log(thing, "type", window.extractNalUnitTypeForAvc(packet.data[thing.offset]))
+			}
+		}
+		*/
+
+		/*
+		
+		//const secondPacket = await sink.getNextPacket(firstPacket);
+		//const thirdPacket = await sink.getNextPacket(secondPacket);
+		//const fourthPacket = await sink.getNextPacket(thirdPacket);
+		//const fifthPacket = await sink.getNextPacket(fourthPacket);
+		//const sixthPacket = await sink.getNextPacket(fifthPacket);
+		//const seventhPacket = await sink.getNextPacket(sixthPacket);
+		//const eighthPacket = await sink.getNextPacket(seventhPacket);
+		//const ninthPacket = await sink.getNextPacket(eighthPacket);
+		//const tenthPacket = await sink.getNextPacket(ninthPacket);
+
+		console.log(firstPacket, secondPacket, thirdPacket, fourthPacket, fifthPacket, sixthPacket, seventhPacket, eighthPacket, ninthPacket, tenthPacket);
+
+		const packets = [firstPacket, secondPacket, thirdPacket, fourthPacket, fifthPacket, sixthPacket, seventhPacket, eighthPacket, ninthPacket, tenthPacket];
+
+		const videoDecoder = new VideoDecoder({
+			output: (frame) => console.log(frame.timestamp, frame),
+			error: console.error,
+		});
+		videoDecoder.configure(await videoTrack.getDecoderConfig());
+
+		for (const packet of packets) {
+			//videoDecoder.decode(packet.toEncodedVideoChunk());
+		}
+		*/
+
+
+		/*
+		const videoTrack = await input.getPrimaryVideoTrack();
+		const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+
+		for await (const packet of sink.packets()) {
+			console.log(packet);
+		}
+		*/
+
+		/*
+		return;
+
+		const audioTrack = await input.getPrimaryAudioTrack();
+		const sink = new Mediabunny.EncodedPacketSink(audioTrack);
+
+		for await (const packet of sink.packets()) {
+			console.log(packet.timestamp, packet.duration, packet.type)
+		}
+		*/
+
+		/*
+		const audioTrack = await input.getPrimaryAudioTrack();
+		const sink = new Mediabunny.AudioSampleSink(audioTrack);
+
+		let lastEnd = 0;
+		for await (const sample of sink.samples()) {
+			if (sample.timestamp - lastEnd > 0) {
+				console.warn(sample.timestamp - lastEnd)
+				console.log(sample.timestamp, sample.duration, "diffie", sample.timestamp - lastEnd);
+			}
+
+			lastEnd = sample.timestamp + sample.duration;
+			sample.close();
+		}
+		*/
+		
+		/*
+		const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+
+		for await (const packet of sink.packets()) {
+			console.log(packet.timestamp, packet.duration, packet.timestamp + packet.duration);
+
+			if (packet.timestamp > 10) break;
+		}
+		*/
+
+		/*
+		const sink = new Mediabunny.VideoSampleSink(videoTrack);
+
+		for await (const sample of sink.samples()) {
+			console.log(sample.timestamp, sample.duration);
+			sample.close();
+		}
+		*/
+
+		/*
+		const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+
+		for await (const packet of sink.packets()) {
+			console.log(packet.timestamp, packet.timestamp + packet.duration);
+		}
+		*/
+
+
+		/*
+		const sink = new Mediabunny.VideoSampleSink(videoTrack);
+
+		console.log(await videoTrack.getDecoderConfig())
+
+		const sink2 = new Mediabunny.EncodedPacketSink(videoTrack);
+		for await (const packet of sink2.packets()) {
+			console.log(packet.data.join(', '))//, window.findNalUnitsInLengthPrefixed(packet.data, 4).map(x => window.extractNalUnitTypeForAvc(x)));
+			if (packet.timestamp > 1) break;
+		}
+
+		//return;
+
+		for await (const sample of sink.samples()) {
+			console.log(sample);
+		}
+		*/
+
+		/*
+		let total = 0;
+		input.source.onread = (start, end) => {
+			total += end - start;
+			//console.log(total / file.size, end - start);
+		}
+
+		const videoTrack = await input.getPrimaryVideoTrack();
+		const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+		*/
+
+		//console.log(await sink.getPacket(0));
+		/*
+		console.time()
+		console.log(await sink.getPacket(500));
+		console.timeEnd()
+
+		console.time()
+		console.log(await sink.getPacket(400));
+		console.timeEnd()
+		*/
+		//console.log(await sink.getPacket(50));
+		//console.log(await sink.getPacket(8000));
+
+
+
+		//const stats = await videoTrack.computePacketStats();
+		
+		/*
+		const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+		for await (const packet of sink.packets()) {
+			//console.log(packet)
+		}
+		*/
+		//console.log(await videoTrack.computeDuration());
+		//console.log("Done", stats, total, file.size)
+
+		//console.log(input);
+
+		/*
+		const videoTrack = await input.getPrimaryVideoTrack();
+		const sink = new Mediabunny.VideoSampleSink(videoTrack);
+
+		const sample = await sink.getSample(0);
+
+		console.log(sample);
+		*/
+
+		/*
+		const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+
+		for await (const packet of sink.packets()) {
+			console.log(packet.timestamp, packet.type, await videoTrack.determinePacketType(packet));
+		}
+		*/
+
+		/*
+		console.log(await input.computeDuration());
+		return;
+
+		const audioTrack = await input.getPrimaryAudioTrack();
+		const sink = new Mediabunny.EncodedPacketSink(audioTrack);
+
+		for await (const packet of sink.packets()) {
+			console.log(packet)
+		}
+
+		console.log("Done")
+		*/
+
+
+		/*
+
+		const videoTrack = await input.getPrimaryVideoTrack();
+		const sink = new Mediabunny.VideoSampleSink(videoTrack);
+		const sink2 = new Mediabunny.EncodedPacketSink(videoTrack);
+
+		for await (const packet of sink2.packets()) {
+			console.log(packet)//, await videoTrack.determinePacketType(packet));
+
+			if (packet.timestamp >= 1) {
+				break;
+			}
+		}
+
+		console.log(await sink.getSample(0))
+
+		return;
+
+		for await (const sample of sink.samples()) {
+			console.log(sample);
+
+			if (sample.timestamp >= 1) {
+				break;
+			}
+		}
+		*/
+
+		/*
+		const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+
+		for await (const packet of sink.packets()) {
+			console.log(packet)
+		}
+		*/
+
+		/*
+		for await (const sample of sink.samples(0.99)) {
+			console.log(sample);
+
+			if (sample.timestamp >= 2) {
+				break;
+			}
+			
+		}
+		*/
+		//console.log(await sink.getSample(1))
+
+		/*
+		const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+		const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+		const combinedStream = new MediaStream([
+			...screenStream.getTracks(),
+			...micStream.getTracks()
+		]);
+
+		const recorder = new MediaRecorder(combinedStream);
+
+		const { writable, readable } = new TransformStream({
+			async transform(chunk, controller) {
+				const arrayBuffer = await chunk.arrayBuffer();
+				controller.enqueue(new Uint8Array(arrayBuffer));
+			}
+		});
+		const writer = writable.getWriter();
+
+		const input = new Mediabunny.Input({
+			source: new Mediabunny.ReadableStreamSource(readable),
+			formats: Mediabunny.ALL_FORMATS,
+		});
+		(async () => {
+			const videoTrack = await input.getPrimaryVideoTrack();
+			const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+
+			for await (const packet of sink.packets()) {
+				console.log(packet);
+			}
+		})();
+
+		recorder.onerror = console.error;
+		recorder.onstart = () => console.log("yes")
+		recorder.ondataavailable = async e => {
+			writer.write(e.data);
+		};
+		recorder.onstop = (e) => {
+			writer.close();
+		};
+
+		recorder.start(1000);
+		
+
+		window.addEventListener('click', () => {
+			recorder.stop()
+		}, { once: true })
+		*/
+		/*
+
+		const transformStream = new TransformStream();
+
+		const file = fileInput.files[0];
+		const source = new Mediabunny.ReadableStreamSource(transformStream.readable);
+
+		file.stream().pipeThrough(transformStream);
+
+		const input = new Mediabunny.Input({
+			formats: Mediabunny.ALL_FORMATS,
+			source//: new Mediabunny.BlobSource(file),
+		});
+
+
+		const audioTrack = await input.getPrimaryAudioTrack();
+		console.log(audioTrack);
+
+		const sink = new Mediabunny.EncodedPacketSink(audioTrack);
+
+		
+		//console.log(await sink.getPacket(100))
+
+		console.log(await input.computeDuration())
+		*/
+
+		/*
+		const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+		const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+		const combinedStream = new MediaStream([
+			...screenStream.getTracks(),
+			...micStream.getTracks()
+		]);
+
+		const recorder = new MediaRecorder(combinedStream);
+
+		const { writable, readable } = new TransformStream({
+			async transform(chunk, controller) {
+				const arrayBuffer = await chunk.arrayBuffer();
+				controller.enqueue(new Uint8Array(arrayBuffer));
+			}
+		});
+		const writer = writable.getWriter();
+
+		const input = new Mediabunny.Input({
+			source: new Mediabunny.ReadableStreamSource(readable),
+			formats: Mediabunny.ALL_FORMATS,
+		});
+		(async () => {
+			const videoTrack = await input.getPrimaryVideoTrack();
+			const sink = new Mediabunny.EncodedPacketSink(videoTrack);
+
+			for await (const packet of sink.packets()) {
+				console.log(packet);
+			}
+		})();
+
+		recorder.onerror = console.error;
+		recorder.onstart = () => console.log("yes")
+		recorder.ondataavailable = async e => {
+			writer.write(e.data);
+		};
+		recorder.onstop = (e) => {
+			writer.close();
+		};
+
+		recorder.start(1000);
+
+		window.addEventListener('click', () => {
+			recorder.stop()
+		}, { once: true })
+
+		//setTimeout(() => recorder.stop(), 5000)
+		*/
+
+		/*
+		const transformStream = new TransformStream();
+
+		const file = fileInput.files[0];
+		const source = new Mediabunny.ReadableStreamSource(transformStream.readable);
+
+		file.stream().pipeTo(transformStream.writable);
 
 		const input = new Mediabunny.Input({
 			formats: Mediabunny.ALL_FORMATS,
 			source
 		});
 
+		const audioTrack = await input.getPrimaryAudioTrack();
+		console.log(audioTrack);
+
+		//return;
+
+		const sink = new Mediabunny.EncodedPacketSink(audioTrack);
+
+		for await (const packet of sink.packets()) {
+			console.log(packet);
+		}
+
+		console.log("done");
+		*/
+
+		//console.log(await sink.getPacket(1))
+
+		/*
 		const videoTrack = await input.getPrimaryVideoTrack();
+		console.log(await videoTrack.getFirstTimestamp(), await videoTrack.computeDuration());
+
+		console.log(videoTrack.name);
+		console.log(videoTrack.internalCodecId);
+		*/
+
+		/*
+
+		const sink = new Mediabunny.AudioSampleSink(await input.getPrimaryAudioTrack());
+		for await (const sample of sink.samples()) {
+			console.log(sample)
+			break;
+		}
+		*/
+
+		/*
 		const sink = new Mediabunny.EncodedPacketSink(videoTrack);
 
 		for await (const packet of sink.packets()) {
@@ -24,6 +664,7 @@
 
 			//if (packet.timestamp > 135) break;
 		}
+		*/
 
 		/*
 		const audioTrack = await input.getPrimaryAudioTrack();

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Video } from "../src/native-video";
 import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +7,7 @@ import { watchCatalogue } from "../src/watch-catalogue";
 import { createWatchDelivery, type ShenronAssets } from "../src/watch-shenron";
 
 const fixture = join(import.meta.dir, "../hyperframes/player/tests/perf/fixtures/10-video-grid/sample.mp4");
-const nativeVideo = (Bun as unknown as { Video?: { available: boolean } }).Video;
+const nativeVideo = Video;
 const hash = "a".repeat(64);
 const assets: ShenronAssets = {
   source: { sha256: hash, bytes: 10 },

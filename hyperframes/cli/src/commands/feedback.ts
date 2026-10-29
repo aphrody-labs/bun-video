@@ -1,9 +1,9 @@
-import { failCommand } from "../utils/commandResult.js";
+import { failUsage } from "../utils/commandResult.js";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import { defineCommand } from "citty";
-import * as clack from "@clack/prompts";
-import { openDefault } from "../utils/openBrowser.js";
+import { defineCommand } from "../utils/defineCommand.js";
+import * as clack from "../ui/prompts.js";
+import open from "open";
 import type { Example } from "./_examples.js";
 import {
   trackCatalogSearchMiss,
@@ -18,6 +18,7 @@ import { submitCatalogSearchMiss, submitFeedback } from "../utils/submitFeedback
 import { buildIssueUrl, HYPERFRAMES_REPO_URL } from "../utils/feedbackIssue.js";
 import { VERSION } from "../version.js";
 import { c } from "../ui/colors.js";
+import { isUnattended } from "../utils/attendedTerminal.js";
 import { parseFeedbackRating } from "../utils/feedbackRating.js";
 import { feedbackEmail, parseFeedbackSource } from "../utils/feedbackSource.js";
 import { lintFeedbackComment, type FeedbackLintInput } from "../utils/feedbackLint.js";
@@ -88,7 +89,7 @@ async function promptConfirm(): Promise<boolean> {
 async function confirmFileIssue(dir: string, yes: boolean): Promise<boolean> {
   printIssueConsent(dir);
   if (yes) return true;
-  if (!process.stdout.isTTY) {
+  if (isUnattended()) {
     console.log(`  ${c.dim("Re-run with --yes to publish the repro and file the issue.")}\n`);
     return false;
   }
@@ -173,15 +174,15 @@ function reportRating(
   const rating = raw === undefined ? undefined : parseFeedbackRating(raw);
   if (rating === null) {
     console.error(c.error("Rating must be an integer between 0 and 10"));
-    failCommand();
+    failUsage();
   }
   if (rating === undefined && !comment?.trim()) {
     console.error(c.error("Give a --rating (an integer from 0 to 10), a --comment, or both"));
-    failCommand();
+    failUsage();
   }
   if (rating === undefined && fileIssue) {
     console.error(c.error("--file-issue needs a --rating"));
-    failCommand();
+    failUsage();
   }
   return rating;
 }
@@ -278,7 +279,7 @@ export default defineCommand({
     const source = parseFeedbackSource(args.source);
     if (source === null) {
       console.error(c.error('Source must be "person" or "agent"'));
-      failCommand();
+      failUsage();
     }
 
     if (!shouldTrack()) {

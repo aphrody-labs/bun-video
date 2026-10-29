@@ -34,6 +34,13 @@ export {
   formatTime,
 } from "./player";
 export { usePreviewIframeStore } from "./player/store/previewIframeStore";
+export { PREVIEW_QUALITY_LEVELS, type PreviewQuality } from "@hyperframes/core/preview-quality";
+export type {
+  PlaybackHealth,
+  PreviewCopies,
+  PreviewFacts,
+  PreviewQualityChosenBy,
+} from "./player/store/previewQualitySlice";
 export {
   openAudioGainDialog,
   useAudioGainDialogStore,
@@ -202,6 +209,7 @@ export type { UseClipboardOptions } from "./hooks/useClipboard";
 export { useDomEditSession } from "./hooks/useDomEditSession";
 export type { UseDomEditSessionParams } from "./hooks/useDomEditSession";
 export { useLivePreviewIframe } from "./hooks/useLivePreviewIframe";
+export { announcePreviewDocumentLoaded } from "./player/sceneSwap";
 export type { PreviewPromotion } from "./player/sceneSwap";
 export { usePreviewPersistence } from "./hooks/usePreviewPersistence";
 export type { UsePreviewPersistenceParams } from "./hooks/usePreviewPersistence";

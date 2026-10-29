@@ -242,6 +242,40 @@ describe("runCompileStage — forceScreenshot snapshot", () => {
   });
 });
 
+const MASTER_CHAIN = '{"version":1,"nodes":[]}';
+const MASTER_BUS_HTML = `<!doctype html>
+<html>
+<head><meta charset="utf-8"></head>
+<body>
+  <div data-composition-id="root" data-width="1920" data-height="1080" data-duration="1" data-fx-chain='${MASTER_CHAIN}'>
+    <p>master bus composition</p>
+  </div>
+</body>
+</html>`;
+
+describe("runCompileStage — master bus", () => {
+  it("hands the root's chain to the composition metadata the audio stage reads", async () => {
+    const fixture = setupFixture(MASTER_BUS_HTML);
+    try {
+      const result = await runCompileStage({
+        projectDir: join(fixture.workDir, "project"),
+        workDir: fixture.workDir,
+        htmlPath: fixture.htmlPath,
+        entryFile: "index.html",
+        job: createJob(),
+        cfg: createCfg(),
+        needsAlpha: false,
+        log: noopLog,
+        assertNotAborted: () => {},
+      });
+      expect(result.compiled.masterFxChain).toBe(MASTER_CHAIN);
+      expect(result.composition.masterFxChain).toBe(MASTER_CHAIN);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+});
+
 describe("runCompileStage — font fetch cancellation", () => {
   let fixture: CompileFixture | null = null;
 
@@ -382,6 +416,19 @@ describe("runCompileStage — aspect-agnostic --resolution re-map", () => {
     expect(result.deviceScaleFactor).toBe(2);
     expect(result.outputWidth).toBe(2160);
     expect(result.outputHeight).toBe(3840);
+  });
+
+  it("custom 1922×1080 composition + aspect-agnostic `landscape-4k` → refused, never adapted to 480p", async () => {
+    // Only 480p's tolerance fits 1922×1080; the adaptation stays in the asked tier, so 4K is
+    // checked as asked and refused instead of rendering 854×480.
+    await expect(
+      runResolutionCase({
+        compWidth: 1922,
+        compHeight: 1080,
+        outputResolution: "landscape-4k",
+        aspectAgnostic: true,
+      }),
+    ).rejects.toThrow();
   });
 
   it("square composition + aspect-agnostic `landscape-4k` preset → re-maps to square-4k, preserves 4K tier", async () => {

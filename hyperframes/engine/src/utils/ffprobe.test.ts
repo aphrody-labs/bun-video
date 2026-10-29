@@ -1,16 +1,11 @@
 // fallow-ignore-file code-duplication
-import { EventEmitter } from "node:events";
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { basename, resolve } from "node:path";
-import { afterEach, describe, expect, it, vi } from "bun:test";
-import {
-  extractMediaMetadata,
-  extractPngMetadataFromBuffer,
-  parseFrameRate,
-  pixelFormatHasAlpha,
-} from "./ffprobe.js";
+import { EventEmitter } from "events";
+import { spawnSync } from "child_process";
+import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { basename, join, resolve } from "path";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
+import { extractMediaMetadata, extractPngMetadataFromBuffer, parseFrameRate } from "./ffprobe.js";
 
 function crc32(buf: Buffer): number {
   let crc = 0xffffffff;
@@ -80,6 +75,38 @@ describe("extractMediaMetadata", () => {
 describe("extractMediaMetadata nb_frames duration cross-check", () => {
   afterEach(() => {
     vi.resetModules();
+  });
+
+  it("never reads a non-PNG video's bytes looking for PNG colour metadata", async () => {
+    const { spawn } = createSpawnSpy([
+      {
+        kind: "exit",
+        code: 0,
+        stdout: JSON.stringify({
+          streams: [
+            {
+              codec_type: "video",
+              codec_name: "h264",
+              width: 16,
+              height: 16,
+              r_frame_rate: "30/1",
+              avg_frame_rate: "30/1",
+            },
+          ],
+          format: { duration: "1" },
+        }),
+      },
+    ]);
+    vi.resetModules();
+    vi.doMock("child_process", () => ({ spawn }));
+    const { extractMediaMetadata: mocked } = await import("./ffprobe.js");
+    // Bytes that carry PNG cICP, reported by ffprobe as an untagged H.264 stream.
+    const dir = mkdtempSync(`${tmpdir()}/hf-not-png-`);
+    const path = `${dir}/clip.mp4`;
+    writeFileSync(path, buildMinimalPng());
+    const meta = await mocked(path);
+    rmSync(dir, { recursive: true, force: true });
+    expect(meta.colorSpace).toBeNull();
   });
 
   it("uses nb_frames to bound video duration when stream duration is absent and audio is longer", async () => {
@@ -290,7 +317,7 @@ describe("probeMediaProfile", () => {
         kind: "exit",
         code: 0,
         stdout: JSON.stringify({
-          streams: [{ codec_type: "video" }, { codec_type: "audio" }],
+          streams: [{ codec_type: "video" }, { codec_type: "audio", codec_name: "opus" }],
           format: { format_name: "matroska,webm" },
         }),
       },
@@ -333,7 +360,7 @@ describe("probeMediaProfile", () => {
         stdout: JSON.stringify({
           streams: [
             { codec_type: "video", disposition: { attached_pic: 1 } },
-            { codec_type: "audio" },
+            { codec_type: "audio", codec_name: "mp3" },
           ],
           format: { format_name: "mp3" },
         }),
@@ -467,7 +494,7 @@ describe("probeMediaProfile", () => {
           streams: [
             { codec_type: "video", disposition: { attached_pic: 1 } },
             { codec_type: "video", codec_name: "h264" },
-            { codec_type: "audio" },
+            { codec_type: "audio", codec_name: "mp3" },
           ],
           format: { format_name: "mov,mp4,m4a,3gp,3g2,mj2" },
         }),
@@ -1176,6 +1203,39 @@ describe("ffprobe missing-binary fallback", () => {
     expect(meta.hasAlpha).toBe(true);
   });
 
+  it("leaves alphaPlaneDecoded absent when the untagged VP9 decode probe fails", async () => {
+    const { spawn, calls } = createSpawnSpy([
+      {
+        kind: "exit",
+        code: 0,
+        stdout: JSON.stringify({
+          streams: [
+            {
+              codec_type: "video",
+              codec_name: "vp9",
+              width: 320,
+              height: 180,
+              r_frame_rate: "30/1",
+              avg_frame_rate: "30/1",
+              pix_fmt: "yuv420p",
+            },
+          ],
+          format: { duration: "1.5" },
+        }),
+      },
+      { kind: "exit", code: 1, stderr: "decoder failed" },
+    ]);
+    vi.resetModules();
+    vi.doMock("child_process", () => ({ spawn }));
+
+    const { extractMediaMetadata: extractMediaMetadataMocked } = await import("./ffprobe.js");
+    const meta = await extractMediaMetadataMocked("/tmp/probe-fails.webm");
+
+    expect(calls[1]?.args).toEqual(expect.arrayContaining(["-c:v", "libvpx-vp9"]));
+    expect(meta.hasAlpha).toBe(false);
+    expect("alphaPlaneDecoded" in meta).toBe(false);
+  });
+
   it("extractMediaMetadata rethrows ffprobe-missing error for non-image files without fallback", async () => {
     const { spawn } = createSpawnSpy([{ kind: "missing" }]);
     hidePathBinaries();
@@ -1705,27 +1765,6 @@ describe("crc32 works on every runtime the package declares", () => {
   });
 });
 
-describe("pix_fmt alpha detection", () => {
-  // The old pattern's (^|[^a-z]) anchor bound to `yuva` alone, and the list
-  // omitted formats real files actually use.
-  const ALPHA = [
-    "yuva420p",
-    "rgba",
-    "argb",
-    "bgra",
-    "abgr",
-    "gbrap",
-    "ya8",
-    "ya16le",
-    "ayuv64le",
-    "yuva444p12le",
-  ];
-  const OPAQUE = ["yuv420p", "rgb24", "gray", "gbrp", "nv12", "yuv444p10le", "bgr0", "rgb0"];
-
-  it.each(ALPHA)("detects alpha in %s", (fmt) => expect(pixelFormatHasAlpha(fmt)).toBe(true));
-  it.each(OPAQUE)("reports %s as opaque", (fmt) => expect(pixelFormatHasAlpha(fmt)).toBe(false));
-});
-
 describe("audio duration decode probe never fails the call and needs no profile allowlist", () => {
   afterEach(() => {
     vi.resetModules();
@@ -1816,7 +1855,7 @@ describe("audio duration decode probe never fails the call and needs no profile 
       `/tmp/start-offset-${Object.keys(format).length}.ts`,
     );
     expect(meta.durationSeconds).toBe(600); // 601.3 + 0.1 - 1.4 is within the margin
-    expect(readInterval(calls)).toBe("600.4%");
+    expect(readInterval(calls)).toBe("600.4%+2147483647");
   });
 
   it.each([
@@ -1866,6 +1905,34 @@ describe.skipIf(!HAS_FFPROBE)(
 
       // Recovers the real duration — not the halved container summary.
       expect(lyingMeta.durationSeconds).toBeCloseTo(trueMeta.durationSeconds, 1);
+    });
+
+    // ffprobe reads an open interval's end from uninitialised heap; glibc's MALLOC_PERTURB_
+    // makes that garbage deterministic on Linux, as Windows' heap does at random.
+    it("decodes the tail in one pass when ffprobe's heap is dirty", async () => {
+      const real = await vi.importActual<typeof import("child_process")>("child_process");
+      const probes: string[][] = [];
+      vi.resetModules();
+      vi.doMock("child_process", () => ({
+        ...real,
+        spawn: (command: string, args: string[], options: object) => {
+          probes.push(args);
+          return real.spawn(command, args, options);
+        },
+      }));
+      const previous = process.env.MALLOC_PERTURB_;
+      process.env.MALLOC_PERTURB_ = "1";
+      try {
+        const { extractAudioMetadata } = await import("./ffprobe.js");
+        expect((await extractAudioMetadata(lyingPath)).durationSeconds).toBeCloseTo(4, 3);
+        // The container probe, then the tail decode; a third call is the full-scan fallback.
+        expect(probes).toHaveLength(2);
+      } finally {
+        if (previous === undefined) delete process.env.MALLOC_PERTURB_;
+        else process.env.MALLOC_PERTURB_ = previous;
+        vi.doUnmock("child_process");
+        vi.resetModules();
+      }
     });
 
     // 2 s of AAC in MPEG-TS starting at 1.4 s: last frame 3.448 + 1024/16000 - 1.4.
@@ -2100,5 +2167,71 @@ describe("runFfprobe process and stream handling", () => {
     await expect(extractMediaMetadata("/tmp/unbounded-output.mov")).rejects.toThrow(
       /exceeded 8000000 characters/,
     );
+  });
+});
+
+describe.skipIf(!HAS_FFPROBE)("VP8/VP9 decoded alpha plane probe on real files", () => {
+  let dir: string;
+  const encode = (name: string, args: string[]): string => {
+    const out = join(dir, name);
+    const res = spawnSync("ffmpeg", [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=red@0.5:s=64x64:d=1,format=rgba",
+      ...args,
+      "-y",
+      out,
+    ]);
+    expect(res.status).toBe(0);
+    return out;
+  };
+  let alpha: string;
+  let alphaVp8: string;
+  let opaqueVp9: string;
+  let opaqueVp8: string;
+  let mpeg4: string;
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), "hf-decoded-alpha-"));
+    alpha = encode("alpha.webm", ["-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p"]);
+    // libvpx refuses transparency with its default alt-ref frames.
+    alphaVp8 = encode("alpha-vp8.webm", [
+      "-c:v",
+      "libvpx",
+      "-auto-alt-ref",
+      "0",
+      "-pix_fmt",
+      "yuva420p",
+    ]);
+    opaqueVp9 = encode("opaque-vp9.webm", ["-c:v", "libvpx-vp9", "-pix_fmt", "yuv420p"]);
+    opaqueVp8 = encode("opaque-vp8.webm", ["-c:v", "libvpx", "-pix_fmt", "yuv420p"]);
+    mpeg4 = encode("opaque.mp4", ["-c:v", "mpeg4", "-pix_fmt", "yuv420p"]);
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("probeDecodedAlphaPlane sees the alpha plane only in the alpha stream", async () => {
+    const { probeDecodedAlphaPlane } = await import("./ffprobe.js");
+    expect(await probeDecodedAlphaPlane(alpha, "libvpx-vp9")).toBe(true);
+    expect(await probeDecodedAlphaPlane(alphaVp8, "libvpx")).toBe(true);
+    expect(await probeDecodedAlphaPlane(opaqueVp9, "libvpx-vp9")).toBe(false);
+    expect(await probeDecodedAlphaPlane(opaqueVp8, "libvpx")).toBe(false);
+    expect(await probeDecodedAlphaPlane(join(dir, "missing.webm"), "libvpx-vp9")).toBeUndefined();
+  });
+
+  it("extractMediaMetadata records alphaPlaneDecoded=false only for untagged VP8/VP9", async () => {
+    const { extractMediaMetadata } = await import("./ffprobe.js");
+    const vp9 = await extractMediaMetadata(opaqueVp9);
+    expect(vp9).toMatchObject({ videoCodec: "vp9", hasAlpha: false, alphaPlaneDecoded: false });
+    const vp8 = await extractMediaMetadata(opaqueVp8);
+    expect(vp8).toMatchObject({ videoCodec: "vp8", hasAlpha: false, alphaPlaneDecoded: false });
+    // Tagged alpha is already decided by hasAlpha, so it is not probed.
+    const tagged = await extractMediaMetadata(alpha);
+    expect(tagged.hasAlpha).toBe(true);
+    expect("alphaPlaneDecoded" in tagged).toBe(false);
+    const other = await extractMediaMetadata(mpeg4);
+    expect(other.videoCodec).toBe("mpeg4");
+    expect("alphaPlaneDecoded" in other).toBe(false);
   });
 });

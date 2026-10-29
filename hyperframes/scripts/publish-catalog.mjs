@@ -348,7 +348,7 @@ export function publish(root) {
     "\n",
   );
   const exists = refs.includes(`refs/heads/${BRANCH}`);
-  if (batches.length === 0) return clearObsoletePublication(repository, base, exists);
+  if (sameGenerated(root, base)) return clearObsoletePublication(repository, base, exists);
   const kept = keptSnapshotBase(root, exists);
   if (kept) {
     openPublishPr(repository, kept);

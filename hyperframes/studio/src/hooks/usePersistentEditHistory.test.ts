@@ -317,8 +317,12 @@ it("refuses a second press whose edit is undone once an edit was made after the 
     return run;
   };
   const press = () => hook().undo({ readFile, claimedAfter: atKey, serialize });
-  const presses = Promise.all([press(), press()]);
-  await vi.waitFor(() => expect(file()).toBe("B"));
+  const firstPress = press();
+  const secondPress = press();
+  // The first press must be over, not only its file written: the undo's closing sweep would take card.html
+  // into the undo, and the claim below would then hold nothing.
+  const first = await act(() => firstPress);
+  expect(file()).toBe("B");
   writeFileSync(join(dir, "card.html"), "Y");
   await act(() =>
     hook().recordEdit({
@@ -328,7 +332,7 @@ it("refuses a second press whose edit is undone once an edit was made after the 
   );
 
   open();
-  const [first, second] = await act(() => presses);
+  const second = await act(() => secondPress);
 
   expect(first).toMatchObject({ ok: true, label: "Undid: Moved Card" });
   expect(second).toMatchObject({ ok: false, reason: "content-mismatch" });
@@ -561,7 +565,9 @@ it("a claim the server refused is logged, and the write stays undoable as a chan
       files: { "index.html": { before: "A", after: "B" } },
     }),
   );
-  expect(logged).toHaveBeenCalledWith('"Moved Title" was not recorded as your edit: disk full');
+  expect(logged).toHaveBeenCalledWith(
+    '[history] 500: "Moved Title" was not recorded as your edit: disk full',
+  );
   restoreFetch();
   expect(await act(() => hook().undo({ readFile }))).toMatchObject({
     ok: true,
@@ -569,6 +575,46 @@ it("a claim the server refused is logged, and the write stays undoable as a chan
   });
   expect(file()).toBe("A");
 });
+
+it.each([
+  [
+    "the server refused",
+    409,
+    () => answer("/history/claim", 409, { error: "newer edit" }),
+    "newer edit",
+  ],
+  [
+    "could not reach the server",
+    0,
+    () => {
+      const real = globalThis.fetch;
+      vi.stubGlobal("fetch", (url: string, init?: RequestInit) =>
+        url.endsWith("/history/claim")
+          ? Promise.reject(new TypeError("fetch failed"))
+          : real(url, init),
+      );
+    },
+    "Studio could not reach its server.",
+  ],
+] as const)(
+  "a claim that %s logs under [history] with its status",
+  async (_, status, stub, reason) => {
+    const { hook, save } = await studio();
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    cleanup.push(() => logged.mockRestore());
+    stub();
+    save("B");
+    await act(() =>
+      hook().recordEdit({
+        label: "Moved Title",
+        files: { "index.html": { before: "A", after: "B" } },
+      }),
+    );
+    expect(logged).toHaveBeenCalledWith(
+      `[history] ${status}: "Moved Title" was not recorded as your edit: ${reason}`,
+    );
+  },
+);
 
 it("a step whose reply cannot be read says so, instead of throwing", async () => {
   const { hook, readFile } = await studio();
@@ -657,4 +703,24 @@ it("an undo taken before the view caught up with the edit still reports the prev
     ok: true,
     files: { "index.html": { previous: "B", restored: "A" } },
   });
+});
+
+it("stores DOM targets in existing history and retains them through undo and redo", async () => {
+  const { hook, save, readFile, history } = await studio();
+  save("B");
+  const targets = [{ file: "index.html", id: "title", selector: ".title", selectorIndex: 1 }];
+  await act(() =>
+    hook().recordEdit({
+      label: "Title",
+      targets,
+      files: { "index.html": { before: "A", after: "B" } },
+    }),
+  );
+  expect(history.list().at(-1)?.targets).toEqual(targets);
+  await vi.waitFor(() => expect(hook().canUndo).toBe(true));
+  await act(() => hook().undo({ readFile }));
+  expect(history.list().at(-1)?.targets).toEqual(targets);
+  await vi.waitFor(() => expect(hook().canRedo).toBe(true));
+  await act(() => hook().redo({ readFile }));
+  expect(history.list().at(-1)?.targets).toEqual(targets);
 });

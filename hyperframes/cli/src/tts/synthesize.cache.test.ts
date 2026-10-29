@@ -34,7 +34,7 @@ describe("synthesis script cache", () => {
     vi.clearAllMocks();
     paths.home = fs.mkdtempSync(join(tmpdir(), "hf-tts-cache-"));
     cacheDir = join(paths.home, ".cache", "hyperframes", "tts");
-    scriptPath = join(cacheDir, "synth-v3.py");
+    scriptPath = join(cacheDir, "synth-v4.py");
     outputPath = join(paths.home, "speech.wav");
     fs.mkdirSync(cacheDir, { recursive: true });
     vi.mocked(execFileSync).mockImplementation(() => {
@@ -51,6 +51,14 @@ describe("synthesis script cache", () => {
   afterEach(() => {
     expect(fs.readdirSync(cacheDir).filter((name) => name.startsWith(".hf-create-"))).toEqual([]);
     fs.rmSync(paths.home, { recursive: true, force: true });
+  });
+
+  it("turns off onnxruntime telemetry for the synthesis process", async () => {
+    const { synthesize } = await import("./synthesize.js");
+    await synthesize("Hello", outputPath);
+
+    const options = vi.mocked(execFileSync).mock.calls.at(-1)?.[2];
+    expect(options?.env?.ORT_DISABLE_TELEMETRY).toBe("1");
   });
 
   it("creates the script, removes only old script versions, and reuses the current cache", async () => {

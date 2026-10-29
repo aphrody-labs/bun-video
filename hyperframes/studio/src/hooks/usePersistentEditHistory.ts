@@ -154,7 +154,9 @@ function claimHeld(reply: Awaited<ReturnType<typeof post>>, label: string): stri
   if (reply.ok)
     return (reply.body as { claimed: { id: string } | null } | null)?.claimed?.id ?? null;
   if (reply.status !== 404)
-    console.error(`"${label}" was not recorded as your edit: ${reply.error}`);
+    console.error(
+      `[history] ${reply.status}: "${label}" was not recorded as your edit: ${reply.error}`,
+    );
   return null;
 }
 
@@ -238,13 +240,14 @@ export function usePersistentEditHistory({ projectId }: UsePersistentEditHistory
   }, [own]);
 
   const recordEdit = useCallback(
-    async ({ label, coalesceKey, coalesceMs, files, created = [] }: RecordEditInput) => {
+    async ({ label, coalesceKey, coalesceMs, files, targets, created = [] }: RecordEditInput) => {
       if (!projectId) return;
       const paths = [...Object.keys(files), ...created];
       own.overtake();
       const reply = await post(historyUrl(projectId, "/claim"), {
         label,
         paths,
+        ...(targets?.length && { targets }),
         overwrote: await overwroteVersions(files),
         ...(coalesceKey && {
           coalesceKey: claimKey(coalesceKey),

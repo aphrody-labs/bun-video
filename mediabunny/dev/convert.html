@@ -2,9 +2,13 @@
 
 <script src="../dist/bundles/mediabunny.cjs"></script>
 <script src="../packages/mp3-encoder/dist/bundles/mediabunny-mp3-encoder.js"></script>
+<script src="../packages/ac3/dist/bundles/mediabunny-ac3.js"></script>
+<script src="../packages/flac-encoder/dist/bundles/mediabunny-flac-encoder.js"></script>
 
 <script type="module">
-	MediabunnyMp3Encoder.registerMp3Encoder();
+	//MediabunnyMp3Encoder.registerMp3Encoder();
+	MediabunnyAc3.registerAc3Decoder();
+	MediabunnyFlacEncoder.registerFlacEncoder();
 
 	const fileInput = document.createElement('input');
 	fileInput.type = 'file';
@@ -15,52 +19,114 @@
 	document.body.append(progressElement);
 
 	fileInput.addEventListener('change', async () => {
-		const file = fileInput.files[0];
-
-		const source = new Mediabunny.BlobSource(file);
 		const target = new Mediabunny.BufferTarget() ?? new Mediabunny.StreamTarget(new WritableStream({
 			write: console.log
 		}), {
 			chunked: true,
 			chunkSize: 2**20
 		});
-		const outputFormat = new Mediabunny.Mp4OutputFormat({});
+		const outputFormat = new Mediabunny.Mp4OutputFormat();
 
+		const p = document.createElement('p');
+		p.textContent = 'Capturing...';
+		document.body.append(p);
+
+		/*
 		const button = document.createElement('button');
 		button.textContent = 'Cancel';
 		button.onclick = () => conversion.cancel();
 		document.body.append(button);
+		*/
 
-		const conversion = await Mediabunny.Conversion.init({
-			input: new Mediabunny.Input({
+		const yo = document.createElement('canvas');
+		yo.width = 512;
+		yo.height = 512;
+		const context = yo.getContext('2d', { alpha: false });
+		context.fillStyle = 'red';
+		context.fillRect(100, 100, 300, 300);
+		const blob = await new Promise(resolve => yo.toBlob(resolve, 'image/jpeg', 0.92));
+		const blobData = new Uint8Array(await blob.arrayBuffer());
+
+		const mh = new Blob([blobData], { type: 'image/jpeg' });
+		console.log(URL.createObjectURL(mh))
+
+		const output = new Mediabunny.Output({
+			format: outputFormat,
+			target,
+		});
+
+		let input;
+		const tracks = [];
+		let start = 0;
+
+		if (false) {
+			input = new Mediabunny.Input({
+				source: new Mediabunny.UrlSource('http://localhost:8080/playlist.m3u8'),
+				formats: Mediabunny.ALL_FORMATS,
+			});
+
+			/*
+			const videoTrack = await input.getPrimaryVideoTrack();
+			const audioTrack = await input.getPrimaryAudioTrack();
+
+			if (videoTrack) tracks.push(videoTrack);
+			if (audioTrack) tracks.push(audioTrack);
+
+			start = Math.min(...await Promise.all([
+				videoTrack.computeDuration({ skipLiveWait: true }),
+				audioTrack.computeDuration({ skipLiveWait: true }),
+			]));
+			*/
+		} else {
+			const file = fileInput.files[0];
+			const source = new Mediabunny.BlobSource(file);
+		
+			input = new Mediabunny.Input({
 				formats: Mediabunny.ALL_FORMATS,	
 				source
-			}),
-			output: new Mediabunny.Output({
-				format: outputFormat,
-				target
-			}),
+			});
+		}
+
+		//let last  = -Infinity;
+		//const primaryTrack = await input.getPrimaryVideoTrack();
+		//for await (const packet of new Mediabunny.EncodedPacketSink(primaryTrack).packets()) {
+		//	console.log(packet.timestamp, packet.duration, packet.timestamp - last)
+		//	last = packet.timestamp;
+		//}
+		//console.log("Done")
+		//return;
+
+		//const startTime = await primaryTrack.getFirstTimestamp();
+		//console.log(startTime)
+
+		const canvas = new OffscreenCanvas(1280, 720);
+		const ctx = canvas.getContext('2d');
+
+		//let ctx = null;
+		let conversion = await Mediabunny.Conversion.init({
+			input,
+			output,
 			audio: {
 				//discard: true,
-				//codec: 'opus',
-				//bitrate: 128000,
-				//numberOfChannels: 1,
-				//sampleRate: 4000
-				//discard: true
 				//forceTranscode: true,
+				//discard: true,
+				//codec: 'aac',
+				//forceTranscode: true,
+				//forceTranscode: true,
+				//sampleFormat: 's16',
 			},
 			/*
 			video: {
 				discard: true,
-				bitrate: Mediabunny.QUALITY_VERY_HIGH,
-				//bitrate: Mediabunny.QUALITY_VERY_HIGH
+				quality: new Mediabunny.Quality('very-high'),
+				//quality: new Mediabunny.Quality('very-high')
 				codec: 'av1',
 				//width: 800,
 				//fit: 'fill',
 				//rotate: 90,
 			},
 			audio: {
-				bitrate: Mediabunny.QUALITY_HIGH,
+				quality: new Mediabunny.Quality('high'),
 				codec: 'aac',
 			},
 			*/
@@ -73,32 +139,64 @@
 				bitrate: 320000
 			},
 			*/
-			video: () => ({
-				//frameRate: 27.123,
-				//width: 320,
+			video: {
 				//forceTranscode: true,
-				//codec: 'av1',
-				//discard: true,
-				//width: 1280,
-				//discard: true,
-				//width: 640
+				//width: 1920,
+				//height: 1080,
+				//fit: 'fill',
+				//codec: 'avc',
 				//forceTranscode: true,
-				//rotate: 90
-				//width: 720 ?? 2160,
-				//height: 1280 ?? 3840,
-				//fit: 'contain',
-				//rotate: 90,
-				//width: 512,
-				//height: 512,
-				//width: 200,
-				//height: 100,
-			}),
-			trim: {
-				//start: 0,
-				//end: 20
+				//flip: true,
+				//forceTranscode: true,
+				//height: 320,
+				//codec: 'avc',
+				//bitrate: new Mediabunny.Quality({
+				//	quality: Infinity,
+				//}),
+				//forceTranscode: true,
+				//process: (sample) => {
+				//	sample.draw(ctx, 0, 0, 1280, 720);
+				//	return new Mediabunny.VideoSample(canvas, { timestamp: sample.timestamp, duration: sample.duration });
+				//},
 			},
+			tags: {} ?? {
+				title: 'Bigggy',
+				artist: 'Buck Bunny',
+				images: [{
+					data: blobData,
+					kind: 'coverFront',
+					mimeType: 'image/jpeg'
+				}],
+				trackNumber: 4,
+				tracksTotal: 10,
+				discNumber: 5,
+				discsTotal: 8,
+				lyrics: "There's no way\nThat it's not going there",
+				raw: {
+					'AIGC': 'Mediabunny epic own encoder'
+				}
+			},
+			trim: {
+				start: 5,
+				end: 10,
+				//start: 0,
+				//end: 5,
+				//start: 25,
+				//end: 35,
+				//start: -60,
+				//end: 60,
+				//start: -2,
+				//end: 10,
+				//start: 300.14984567374756 - 100,
+				//end: 310.1548298151939 - 100,
+				//end: 10,
+				//start: startTime,
+				//end: startTime + 2,
+			},
+			copy: false,
 		});
-		console.log(conversion);
+		//console.log(conversion);
+		console.log(conversion.discardedTracks);
 
 		let progress = 0;
 		conversion.onProgress = newProgress => progress = newProgress;
@@ -119,6 +217,7 @@
 		console.timeEnd()
 
 		console.log("Done", target.buffer);
+		input.dispose()
 
 		const video = document.createElement('video');
 		video.src = URL.createObjectURL(new Blob([target.buffer], { type: outputFormat.mimeType }));	
@@ -136,5 +235,9 @@
 			a.click();
 			URL.revokeObjectURL(url);
 		}
-	});
+
+		conversion.onProgress = null;
+		conversion = null;
+		input = null;
+	}, { once: true });
 </script>

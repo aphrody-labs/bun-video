@@ -10,6 +10,8 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, extname, join, resolve } from "node:path";
 import { parseSubtitle } from "../scripts/episode-subtitles";
+import "./image-compat";
+import { Video } from "./native-video";
 import { downloadYtDlp, extractYtDlp, type YtDlpResult } from "./ytdlp";
 
 export type WatchDetail = "transcript" | "efficient" | "balanced" | "token-burner";
@@ -531,9 +533,7 @@ export interface NativeVideo {
   audio(options: { start: number; duration: number; sampleRate: number }): Promise<Uint8Array>;
 }
 
-const NativeVideoClass = (
-  Bun as unknown as { Video?: { readonly available: boolean; new (input: string): NativeVideo } }
-).Video;
+const NativeVideoClass = Video as unknown as { readonly available: boolean; new (input: string): NativeVideo };
 
 interface NativeImage {
   resize(width: number, height?: number, options?: { fit?: "fill" | "inside" }): NativeImage;
@@ -571,7 +571,7 @@ class FrameSource {
     private readonly meta: NativeVideoMetadata,
     resolution: number,
   ) {
-    if (!NativeVideoClass) throw new Error("Native Bun.Video provider unavailable in this runtime");
+    if (!NativeVideoClass.available) throw new Error("No video provider: install FFmpeg/FFprobe or run a runtime that provides Bun.Video");
     this.video = new NativeVideoClass(path);
     this.outWidth = Math.min(resolution, meta.width);
     this.outHeight = Math.min(MAX_READ_DIMENSION, Math.round((this.outWidth * meta.height) / meta.width));
@@ -772,7 +772,7 @@ async function transcribeAudio(
 // --- Orchestration ------------------------------------------------------------------------------
 
 export async function watch(options: WatchOptions): Promise<WatchReport> {
-  if (!NativeVideoClass?.available) throw new Error("Native Bun.Video provider unavailable in this runtime");
+  if (!NativeVideoClass.available) throw new Error("No video provider: install FFmpeg/FFprobe or run a runtime that provides Bun.Video");
   const detail = options.detail ?? "balanced";
   const resolution = options.resolution ?? 512;
   if (!Number.isInteger(resolution) || resolution < 2)
@@ -810,7 +810,7 @@ export async function watch(options: WatchOptions): Promise<WatchReport> {
   let meta: NativeVideoMetadata | null = null;
   if (acquired.videoPath) {
     try {
-      const native = new NativeVideoClass!(acquired.videoPath);
+      const native = new NativeVideoClass(acquired.videoPath);
       meta = await native.metadata();
       source = new FrameSource(acquired.videoPath, meta, resolution);
     } catch (error) {

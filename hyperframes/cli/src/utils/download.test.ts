@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { ensureModel } from "../whisper/manager.js";
+import { MODELS_DIR, ensureModel } from "../whisper/manager.js";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import fs, { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
@@ -10,16 +11,7 @@ import type { ClientRequest, IncomingMessage } from "node:http";
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { downloadFile, REDIRECT_CODES, redirectTarget } from "./download.js";
 
-const { unlinkSyncMock } = vi.hoisted(() => ({
-  unlinkSyncMock: vi.fn(),
-}));
-
 vi.mock("node:https", () => ({ get: vi.fn() }));
-vi.mock("node:fs", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:fs")>();
-  unlinkSyncMock.mockImplementation(actual.unlinkSync);
-  return { ...actual, unlinkSync: unlinkSyncMock };
-});
 
 const mockGet = vi.mocked(httpsGet);
 const tempDirs: string[] = [];
@@ -51,10 +43,46 @@ function httpsResponse(
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
+  syncBuiltinESMExports();
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 describe("downloadFile", () => {
+  it("hands https.get the caller's signal, so aborting a model download removes the partial file", async () => {
+    let seen: AbortSignal | undefined;
+    mockGet.mockImplementation(((
+      _url: string,
+      options: { signal?: AbortSignal },
+      callback: (response: IncomingMessage) => void,
+    ) => {
+      seen = options.signal;
+      const response = Object.assign(new PassThrough(), { statusCode: 200, headers: {} });
+      const request = new EventEmitter() as ClientRequest;
+      request.setTimeout = vi.fn();
+      callback(response as unknown as IncomingMessage);
+      response.write("partial");
+      // What Node does with a request whose signal aborts.
+      options.signal?.addEventListener("abort", () =>
+        request.emit(
+          "error",
+          Object.assign(new Error("The operation was aborted"), { name: "AbortError" }),
+        ),
+      );
+      return request;
+    }) as unknown as typeof httpsGet);
+    const controller = new AbortController();
+    const model = `test-${randomUUID()}`;
+
+    const download = ensureModel(model, { signal: controller.signal });
+    await new Promise((resolve) => setImmediate(resolve));
+    controller.abort();
+
+    await expect(download).rejects.toThrow("The operation was aborted");
+    expect(seen).toBe(controller.signal);
+    expect(readdirSync(MODELS_DIR).filter((name) => name.includes(model))).toEqual([]);
+  });
+
   it("carries model download progress through the real pipeline and stays quiet on cache hits", async () => {
     mockGet.mockImplementation(httpsResponse(200, { "content-length": "5" }, "hello"));
     const events: unknown[] = [];
@@ -123,16 +151,18 @@ describe("downloadFile", () => {
   });
 
   it("rejects an idle response and removes the partial file", async () => {
-    const actualFs = await vi.importActual<typeof import("node:fs")>("node:fs");
     let responseClosed = false;
-    unlinkSyncMock.mockImplementation((path) => {
+    const realUnlinkSync = fs.unlinkSync;
+    vi.spyOn(fs, "unlinkSync").mockImplementation((path) => {
       if (!responseClosed) {
         const error = new Error("file is locked");
         Object.assign(error, { code: "EBUSY" });
         throw error;
       }
-      actualFs.unlinkSync(path);
+      realUnlinkSync(path);
     });
+    // Node's named exports of a builtin follow its default export only once synced.
+    syncBuiltinESMExports();
 
     mockGet.mockImplementation(((_url: string, callback: (response: IncomingMessage) => void) => {
       const response = new PassThrough() as PassThrough & {
@@ -179,6 +209,210 @@ describe("downloadFile", () => {
     ).rejects.toThrow("Download timed out after 10ms");
     expect(existsSync(`${dest}.tmp`)).toBe(false);
     expect(existsSync(dest)).toBe(false);
+  });
+});
+
+describe("stalled downloads", () => {
+  // A host whose every connection stops after `cut` bytes until the idle timeout fires.
+  function stallingHost(
+    content: Buffer,
+    cut: number,
+    honourRange: boolean,
+    ranges: (string | undefined)[],
+  ) {
+    return ((_url: string, optionsOrCallback: unknown, maybeCallback?: unknown) => {
+      const callback = (
+        typeof optionsOrCallback === "function" ? optionsOrCallback : maybeCallback
+      ) as (response: IncomingMessage) => void;
+      const range = (optionsOrCallback as { headers?: { Range?: string } }).headers?.Range;
+      ranges.push(range);
+      const start = honourRange && range ? Number(/bytes=(\d+)-/.exec(range)?.[1]) : 0;
+      const response = new PassThrough() as PassThrough & {
+        statusCode: number;
+        headers: Record<string, string>;
+      };
+      response.statusCode = start > 0 ? 206 : 200;
+      response.headers = {
+        "content-length": String(content.length - start),
+        ...(start > 0
+          ? { "content-range": `bytes ${start}-${content.length - 1}/${content.length}` }
+          : {}),
+      };
+      class FakeRequest extends EventEmitter {
+        private timeout: ReturnType<typeof setTimeout> | undefined;
+        setTimeout(ms: number, onTimeout: () => void): this {
+          this.timeout = setTimeout(onTimeout, ms);
+          return this;
+        }
+        destroy(error: Error): void {
+          clearTimeout(this.timeout);
+          response.destroy(error);
+          this.emit("error", error);
+        }
+      }
+      const request = new FakeRequest();
+      callback(response as unknown as IncomingMessage);
+      const end = Math.min(start + cut, content.length);
+      queueMicrotask(() => {
+        response.write(content.subarray(start, end));
+        if (end === content.length) {
+          clearTimeout((request as unknown as { timeout: ReturnType<typeof setTimeout> }).timeout);
+          response.end();
+        }
+      });
+      return request as unknown as ClientRequest;
+    }) as typeof httpsGet;
+  }
+
+  it("resumes a download that stalls at the same byte count on every connection", async () => {
+    const content = Buffer.from(Array.from({ length: 1000 }, (_, i) => i % 251));
+    const ranges: (string | undefined)[] = [];
+    mockGet.mockImplementation(stallingHost(content, 300, true, ranges));
+    const dir = mkdtempSync(join(tmpdir(), "hyperframes-download-"));
+    tempDirs.push(dir);
+    const dest = join(dir, "model.onnx");
+    const progress: number[] = [];
+
+    await downloadFile("https://example.test/model.onnx", dest, {
+      timeoutMs: 10,
+      onProgress: (received) => progress.push(received),
+    });
+
+    expect(readFileSync(dest).equals(content)).toBe(true);
+    expect(ranges).toEqual([undefined, "bytes=300-", "bytes=600-", "bytes=900-"]);
+    expect(progress.at(-1)).toBe(1000);
+    expect(readdirSync(dir)).toEqual(["model.onnx"]);
+  });
+
+  it("resumes from the bytes on disk when a reset drops chunks the file had not written", async () => {
+    const chunk = 64 * 1024;
+    const content = Buffer.from(Array.from({ length: 64 * chunk }, (_, i) => (i * 7) % 256));
+    const ranges: (string | undefined)[] = [];
+    const dir = mkdtempSync(join(tmpdir(), "hyperframes-download-"));
+    tempDirs.push(dir);
+    const dest = join(dir, "model.onnx");
+    mockGet.mockImplementation(((
+      _url: string,
+      optionsOrCallback: unknown,
+      maybeCallback?: unknown,
+    ) => {
+      const callback = (
+        typeof optionsOrCallback === "function" ? optionsOrCallback : maybeCallback
+      ) as (response: IncomingMessage) => void;
+      const range = (optionsOrCallback as { headers?: { Range?: string } }).headers?.Range;
+      ranges.push(range);
+      const start = range ? Number(/bytes=(\d+)-/.exec(range)?.[1]) : 0;
+      const response = new PassThrough({ highWaterMark: chunk }) as PassThrough & {
+        statusCode: number;
+        headers: Record<string, string>;
+      };
+      response.statusCode = start > 0 ? 206 : 200;
+      response.headers = {
+        "content-length": String(content.length - start),
+        ...(start > 0
+          ? { "content-range": `bytes ${start}-${content.length - 1}/${content.length}` }
+          : {}),
+      };
+      const request = new EventEmitter() as ClientRequest;
+      request.setTimeout = vi.fn().mockReturnValue(request);
+      callback(response as unknown as IncomingMessage);
+      queueMicrotask(() => {
+        if (start > 0) {
+          response.end(content.subarray(start));
+          return;
+        }
+        // A quarter lands on disk; then a burst arrives and the connection resets before the file writes it.
+        const quarter = content.length / 4;
+        for (let at = 0; at < quarter; at += chunk)
+          response.write(content.subarray(at, at + chunk));
+        const written = setInterval(() => {
+          const partial = readdirSync(dir).find((name) => name.endsWith(".tmp"));
+          if (!partial || fs.statSync(join(dir, partial)).size < quarter) return;
+          clearInterval(written);
+          for (let at = quarter; at < 2 * quarter; at += chunk)
+            response.write(content.subarray(at, at + chunk));
+          response.destroy(new Error("socket hang up"));
+        }, 1);
+      });
+      return request;
+    }) as typeof httpsGet);
+
+    await downloadFile("https://example.test/model.onnx", dest, { timeoutMs: 1000 });
+
+    expect(ranges).toHaveLength(2);
+    expect(readFileSync(dest).equals(content)).toBe(true);
+  });
+
+  it("keeps a slow download going past the timeout while bytes still arrive", async () => {
+    const content = Buffer.alloc(200, 3);
+    mockGet.mockImplementation(((_url: string, callback: (response: IncomingMessage) => void) => {
+      const response = new PassThrough() as PassThrough & {
+        statusCode: number;
+        headers: Record<string, string>;
+      };
+      response.statusCode = 200;
+      response.headers = { "content-length": "200" };
+      class FakeRequest extends EventEmitter {
+        private timeout: ReturnType<typeof setTimeout> | undefined;
+        private onTimeout = () => {};
+        private ms = 0;
+        // Like a socket idle timeout: each received chunk re-arms it.
+        setTimeout(ms: number, onTimeout: () => void): this {
+          this.ms = ms;
+          this.onTimeout = onTimeout;
+          this.rearm();
+          return this;
+        }
+        rearm(): void {
+          clearTimeout(this.timeout);
+          this.timeout = setTimeout(this.onTimeout, this.ms);
+        }
+        destroy(error: Error): void {
+          clearTimeout(this.timeout);
+          clearInterval(drip);
+          response.destroy(error);
+          this.emit("error", error);
+        }
+      }
+      const request = new FakeRequest();
+      callback(response as unknown as IncomingMessage);
+      let sent = 0;
+      const drip = setInterval(() => {
+        response.write(content.subarray(sent, sent + 10));
+        sent += 10;
+        request.rearm();
+        if (sent >= content.length) {
+          clearInterval(drip);
+          request.destroy = () => {};
+          response.end();
+        }
+      }, 5);
+      return request as unknown as ClientRequest;
+    }) as typeof httpsGet);
+    const dir = mkdtempSync(join(tmpdir(), "hyperframes-download-"));
+    tempDirs.push(dir);
+    const dest = join(dir, "model.onnx");
+    const started = Date.now();
+
+    await downloadFile("https://example.test/model.onnx", dest, { timeoutMs: 25 });
+
+    expect(Date.now() - started).toBeGreaterThan(25 * 2);
+    expect(readFileSync(dest).equals(content)).toBe(true);
+  });
+
+  it("gives up when a retry brings no new bytes", async () => {
+    const content = Buffer.alloc(1000, 7);
+    const ranges: (string | undefined)[] = [];
+    mockGet.mockImplementation(stallingHost(content, 300, false, ranges));
+    const dir = mkdtempSync(join(tmpdir(), "hyperframes-download-"));
+    tempDirs.push(dir);
+    const dest = join(dir, "model.onnx");
+
+    await expect(
+      downloadFile("https://example.test/model.onnx", dest, { timeoutMs: 10 }),
+    ).rejects.toThrow("Download timed out after 10ms");
+    expect(ranges).toEqual([undefined, "bytes=300-"]);
+    expect(readdirSync(dir)).toEqual([]);
   });
 });
 
@@ -238,6 +472,24 @@ describe("redirect handling", () => {
     expect(responses).toHaveLength(11);
     expect(responses.every((response) => response.destroyed)).toBe(true);
     expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it("keeps a signed query out of the redirect-limit error", async () => {
+    mockGet.mockImplementation(httpsResponse(302, { location: "/loop" }));
+    const dir = mkdtempSync(join(tmpdir(), "hyperframes-download-redirect-"));
+    tempDirs.push(dir);
+
+    const error = await downloadFile(
+      "https://example.test/handler.zip?X-Amz-Signature=secret",
+      join(dir, "handler.zip"),
+    ).then(
+      () => {
+        throw new Error("expected the download to fail");
+      },
+      (caught: unknown) => caught as Error,
+    );
+    expect(error.message).toContain("https://example.test/handler.zip");
+    expect(error.message).not.toContain("secret");
   });
 
   it.each([302, 404, 503])("closes rejected HTTP %s responses", async (status) => {

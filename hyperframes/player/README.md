@@ -28,6 +28,8 @@ If you need a classic `<script>` tag instead of ESM, use the explicit global bui
 
 The player loads the composition in a sandboxed iframe, auto-detects its dimensions and duration, and scales it responsively to fit the container.
 
+Add or remove `controls` at any time. When shown, the controls reflect the current playback state, position and speed.
+
 ### With a framework
 
 ```typescript
@@ -84,6 +86,7 @@ Show a static image before playback starts:
 | `assets-loading-ui`     | `player \| none`                | `player`      | `none` never shows the loading-assets card; asset events still fire         |
 | `low-power-idle`        | boolean                         | false         | While paused, check in once a second, not every 80 ms (many-player pages)   |
 | `disable-click-to-play` | boolean                         | false         | A click on the player no longer plays or pauses (host overlays own clicks)  |
+| `no-load-timeout`       | boolean                         | false         | Slow loads never fail at 8 s; the page owns the deadline. Errors still fail |
 | `range-start`           | number                          | —             | Film second where playback starts, loops back to and parks when paused      |
 | `range-end`             | number                          | —             | Film second the range ends before: it stops or loops on the frame before it |
 

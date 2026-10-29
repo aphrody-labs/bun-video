@@ -34,7 +34,11 @@ describe("runEnvironmentChecks", () => {
   const originalFfmpegPath = process.env.HYPERFRAMES_FFMPEG_PATH;
   const originalFfprobePath = process.env.HYPERFRAMES_FFPROBE_PATH;
 
+  const realPlatform = process.platform;
+
   beforeEach(() => {
+    // The `--version` tests below describe the Unix path; the Windows block sets its own platform.
+    Object.defineProperty(process, "platform", { value: "linux", configurable: true });
     process.env.HYPERFRAMES_FFMPEG_PATH = process.execPath;
     process.env.HYPERFRAMES_FFPROBE_PATH = process.execPath;
     runProcess.mockReset();
@@ -42,6 +46,7 @@ describe("runEnvironmentChecks", () => {
   });
 
   afterEach(() => {
+    Object.defineProperty(process, "platform", { value: realPlatform, configurable: true });
     if (originalFfmpegPath === undefined) delete process.env.HYPERFRAMES_FFMPEG_PATH;
     else process.env.HYPERFRAMES_FFMPEG_PATH = originalFfmpegPath;
     if (originalFfprobePath === undefined) delete process.env.HYPERFRAMES_FFPROBE_PATH;
@@ -60,7 +65,7 @@ describe("runEnvironmentChecks", () => {
     expect(runProcess).toHaveBeenCalledWith(
       process.execPath,
       ["-version"],
-      expect.objectContaining({ timeoutMs: 5000 }),
+      expect.objectContaining({ timeoutMs: 60_000 }),
     );
   });
 
@@ -211,6 +216,48 @@ describe("runEnvironmentChecks", () => {
     expect(result.browserInstall).toMatchObject({ pathAscii: true });
   });
 
+  describe("on Windows", () => {
+    beforeEach(() => {
+      Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    });
+
+    it("reads Chrome's version from the file, never from a `--version` run that exits 21", async () => {
+      runProcess.mockImplementation((binaryPath: string, args: string[]) => {
+        if (binaryPath === process.execPath && args[0] === "--version")
+          throw Object.assign(new Error("exit 21"), { status: 21 });
+        if (binaryPath === "powershell.exe")
+          return Promise.resolve({ stdout: "131.0.6778.85\r\n", stderr: "" });
+        return Promise.resolve({ stdout: "ffmpeg version 7.1.1\n", stderr: "" });
+      });
+
+      const result = await runEnvironmentChecks({
+        includeBrowser: true,
+        browserPath: process.execPath,
+      });
+
+      expect(result.outcomes.find((outcome) => outcome.name === "Chrome")).toMatchObject({
+        ok: true,
+        versionMajor: 131,
+      });
+    });
+
+    it("still reports Chrome usable when its version cannot be read", async () => {
+      runProcess.mockImplementation((binaryPath: string) => {
+        if (binaryPath === "powershell.exe") throw new Error("powershell unavailable");
+        return Promise.resolve({ stdout: "ffmpeg version 7.1.1\n", stderr: "" });
+      });
+
+      const result = await runEnvironmentChecks({
+        includeBrowser: true,
+        browserPath: process.execPath,
+      });
+
+      const chrome = result.outcomes.find((outcome) => outcome.name === "Chrome");
+      expect(chrome?.ok).toBe(true);
+      expect(chrome?.versionMajor).toBeUndefined();
+    });
+  });
+
   it("reports Chrome as not found (no throw) when browser discovery throws on a corrupt cache", async () => {
     const spy = vi.spyOn(manager, "findBrowser").mockRejectedValue(
       Object.assign(new Error("ENOTDIR: not a directory, scandir 'chrome-headless-shell'"), {
@@ -258,7 +305,7 @@ describe("runEnvironmentChecks", () => {
         process.execPath,
         ["--version"],
         expect.objectContaining({
-          timeoutMs: 5000,
+          timeoutMs: 60_000,
           maxBufferBytes: 64 * 1024,
         }),
       );
@@ -378,11 +425,24 @@ describe("parseToolVersion", () => {
       "ffprobe 7.1.1-essentials_build-www.gyan.dev",
     );
   });
+
+  it("keeps the n prefix of release-branch builds", () => {
+    expect(parseToolVersion("ffmpeg version n8.0.1-66-g27b8d1a017-20260228 Copyright")).toBe(
+      "ffmpeg n8.0.1-66-g27b8d1a017-20260228",
+    );
+  });
 });
 
 describe("extractMajorVersion", () => {
   it("reads the major from an ffmpeg banner", () => {
     expect(extractMajorVersion("ffmpeg version 7.1.1-essentials_build")).toBe(7);
+  });
+
+  it("reads the major from a release-branch build with an n prefix", () => {
+    expect(
+      extractMajorVersion("ffmpeg version n8.0.1-66-g27b8d1a017-20260228 Copyright (c) 2000-2025"),
+    ).toBe(8);
+    expect(extractMajorVersion("ffmpeg version n7.1.3-46-g957b06a788-20260430")).toBe(7);
   });
 
   it("reads the major from a Chrome/HeadlessShell banner", () => {

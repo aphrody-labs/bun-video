@@ -1,142 +1,149 @@
 /*!
- * Copyright (c) 2025-present, Vanilagy and contributors
+ * Copyright (c) 2026-present, Vanilagy and contributors
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import { Reader } from '../reader';
+import { RichImageData } from '../metadata';
+import { TextDecoder, textDecoder } from '../misc';
+import { FileSlice, readAscii, readBytes, readI32Be, readU16Be, readU32Be, readU64Be, readU8 } from '../reader';
 
 export const MIN_BOX_HEADER_SIZE = 8;
 export const MAX_BOX_HEADER_SIZE = 16;
 
-export class IsobmffReader {
-	pos = 0;
+export const readBoxHeader = (slice: FileSlice) => {
+	let totalSize = readU32Be(slice);
+	const name = readAscii(slice, 4);
+	let headerSize = 8;
 
-	constructor(public reader: Reader) {}
-
-	readBytes(length: number) {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + length);
-		this.pos += length;
-
-		return new Uint8Array(view.buffer, offset, length);
+	const hasLargeSize = totalSize === 1;
+	if (hasLargeSize) {
+		totalSize = readU64Be(slice);
+		headerSize = 16;
 	}
 
-	readU8() {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + 1);
-		this.pos++;
-
-		return view.getUint8(offset);
+	const contentSize = totalSize - headerSize;
+	if (contentSize < 0) {
+		return null; // Hardly a box is it
 	}
 
-	readU16() {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + 2);
-		this.pos += 2;
+	return { name, totalSize, headerSize, contentSize };
+};
 
-		return view.getUint16(offset, false);
-	}
+export const readFixed_16_16 = (slice: FileSlice) => {
+	return readI32Be(slice) / 0x10000;
+};
 
-	readI16() {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + 2);
-		this.pos += 2;
+export const readFixed_2_30 = (slice: FileSlice) => {
+	return readI32Be(slice) / 0x40000000;
+};
 
-		return view.getInt16(offset, false);
-	}
+export const readIsomVariableInteger = (slice: FileSlice) => {
+	let result = 0;
 
-	readU24() {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + 3);
-		this.pos += 3;
+	for (let i = 0; i < 4; i++) {
+		result <<= 7;
+		const nextByte = readU8(slice);
+		result |= nextByte & 0x7f;
 
-		const high = view.getUint16(offset, false);
-		const low = view.getUint8(offset + 2);
-		return high * 0x100 + low;
-	}
-
-	readU32() {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + 4);
-		this.pos += 4;
-
-		return view.getUint32(offset, false);
-	}
-
-	readI32() {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + 4);
-		this.pos += 4;
-
-		return view.getInt32(offset, false);
-	}
-
-	readU64() {
-		const high = this.readU32();
-		const low = this.readU32();
-		return high * 0x100000000 + low;
-	}
-
-	readI64() {
-		const high = this.readI32();
-		const low = this.readU32();
-		return high * 0x100000000 + low;
-	}
-
-	readF64() {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + 8);
-		this.pos += 8;
-
-		return view.getFloat64(offset, false);
-	}
-
-	readFixed_16_16() {
-		return this.readI32() / 0x10000;
-	}
-
-	readFixed_2_30() {
-		return this.readI32() / 0x40000000;
-	}
-
-	readAscii(length: number) {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + length);
-		this.pos += length;
-
-		let str = '';
-		for (let i = 0; i < length; i++) {
-			str += String.fromCharCode(view.getUint8(offset + i));
+		if ((nextByte & 0x80) === 0) {
+			break;
 		}
-		return str;
 	}
 
-	readIsomVariableInteger() {
-		let result = 0;
+	return result;
+};
 
-		for (let i = 0; i < 4; i++) {
-			result <<= 7;
-			const nextByte = this.readU8();
-			result |= nextByte & 0x7f;
+export const readEsDescriptor = (slice: FileSlice) => {
+	const tag = readU8(slice);
+	if (tag !== 0x03) {
+		throw new Error('Invalid esds: expected ES_Descriptor.');
+	}
 
-			if ((nextByte & 0x80) === 0) {
-				break;
-			}
+	readIsomVariableInteger(slice); // Length
+
+	slice.skip(2); // ES ID
+	const mixed = readU8(slice);
+
+	const streamDependenceFlag = (mixed & 0x80) !== 0;
+	const urlFlag = (mixed & 0x40) !== 0;
+	const ocrStreamFlag = (mixed & 0x20) !== 0;
+
+	if (streamDependenceFlag) {
+		slice.skip(2);
+	}
+	if (urlFlag) {
+		const urlLength = readU8(slice);
+		slice.skip(urlLength);
+	}
+	if (ocrStreamFlag) {
+		slice.skip(2);
+	}
+
+	const decoderConfigTag = readU8(slice);
+	if (decoderConfigTag !== 0x04) {
+		throw new Error('Invalid esds: expected DecoderConfigDescriptor.');
+	}
+
+	const decoderConfigDescriptorLength = readIsomVariableInteger(slice); // Length
+
+	const payloadStart = slice.filePos;
+
+	const objectTypeIndication = readU8(slice);
+
+	slice.skip(1 + 3 + 4 + 4);
+
+	let decoderSpecificInfo: Uint8Array | null = null;
+	if (decoderConfigDescriptorLength > slice.filePos - payloadStart) {
+		// There's a DecoderSpecificInfo at the end, let's read it
+
+		const decoderSpecificInfoTag = readU8(slice);
+		if (decoderSpecificInfoTag !== 0x05) {
+			throw new Error('Invalid esds: expected DecoderSpecificInfo.');
 		}
 
-		return result;
+		const decoderSpecificInfoLength = readIsomVariableInteger(slice);
+		decoderSpecificInfo = readBytes(slice, decoderSpecificInfoLength);
 	}
 
-	readBoxHeader() {
-		let totalSize = this.readU32();
-		const name = this.readAscii(4);
-		let headerSize = 8;
+	return {
+		objectTypeIndication,
+		decoderSpecificInfo,
+	};
+};
 
-		const hasLargeSize = totalSize === 1;
-		if (hasLargeSize) {
-			totalSize = this.readU64();
-			headerSize = 16;
-		}
+export const readMetadataStringShort = (slice: FileSlice) => {
+	let stringLength = readU16Be(slice);
+	slice.skip(2); // Language
 
-		const contentSize = totalSize - headerSize;
-		if (contentSize < 0) {
-			return null; // Hardly a box is it
-		}
+	stringLength = Math.min(stringLength, slice.remainingLength);
+	return textDecoder.decode(readBytes(slice, stringLength));
+};
 
-		return { name, totalSize, headerSize, contentSize };
+export const readDataBox = (slice: FileSlice) => {
+	const header = readBoxHeader(slice);
+	if (!header || header.name !== 'data') {
+		return null;
 	}
-}
+
+	if (header.contentSize < 8 || slice.remainingLength < 8) {
+		// Box is too small
+		return null;
+	}
+
+	const typeIndicator = readU32Be(slice);
+	slice.skip(4); // Locale indicator
+	const data = readBytes(slice, header.contentSize - 8);
+
+	switch (typeIndicator) {
+		case 1: return textDecoder.decode(data); // UTF-8
+		case 2: return new TextDecoder('utf-16be').decode(data); // UTF-16-BE
+		case 13: return new RichImageData(data, 'image/jpeg');
+		case 14: return new RichImageData(data, 'image/png');
+		case 27: return new RichImageData(data, 'image/bmp');
+
+		default: return data;
+	}
+};

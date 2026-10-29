@@ -1,6 +1,7 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, vi } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -17,6 +18,7 @@ import {
   injectTailwindBrowserScript,
   nameTooLongMessage,
   resolveVideoDurationSeconds,
+  transcodeToMp4,
 } from "./init.js";
 
 const cliEntry = resolve(fileURLToPath(import.meta.url), "..", "..", "cli.ts");
@@ -28,13 +30,20 @@ const tailwindScript =
 // TypeScript-aware runtime. vitest runs under node, so `process.execPath`
 // would be node and couldn't load the entry. This repo hard-depends on bun
 // (package.json scripts), so assuming it's on PATH is safe.
-function runInit(args: string[]): { status: number; stdout: string; stderr: string } {
+function runInit(
+  args: string[],
+  opts: { skillsEnvOptOut?: boolean } = {},
+): { status: number; stdout: string; stderr: string } {
+  const env = { ...process.env, HYPERFRAMES_SKIP_SKILLS: "1" } as Record<
+    string,
+    string | undefined
+  >;
+  // Default keeps tests offline and fast; a test passes false to rely on the flag alone.
+  if (opts.skillsEnvOptOut === false) delete env.HYPERFRAMES_SKIP_SKILLS;
   const res = spawnSync("bun", ["run", cliEntry, "init", ...args], {
     encoding: "utf-8",
     timeout: 30_000,
-    // The `--skip-skills` flag is neutered (see init.ts); the GitHub skills check
-    // is opted out only via this env var, so tests stay offline and fast.
-    env: { ...process.env, HYPERFRAMES_SKIP_SKILLS: "1" },
+    env,
   });
   return {
     status: res.status ?? -1,
@@ -75,7 +84,7 @@ describe("hyperframes init flag rename", () => {
       expect(html).toContain('data-composition-id="main"');
       expect(html).toContain("display: flex");
       expect(html).toContain("align-items: center");
-      expect(html).toContain("font-family: Inter");
+      expect(html).toContain("font-family: var(--font-display)");
       expect(html).toContain("tl.seek(0)");
       expect(html).not.toMatch(/transform:\s*translate\(-50%/);
       expect(html).toMatch(/#root\s*\{[^}]*width:\s*100%/);
@@ -91,7 +100,7 @@ describe("hyperframes init flag rename", () => {
     const target = join(dir, "proj");
     try {
       const res = runInit([target, "--example", "--non-interactive"]);
-      expect(res.status).toBe(1);
+      expect(res.status).toBe(2);
       expect(res.stderr).toContain("Missing value for --example");
       expect(existsSync(target)).toBe(false);
     } finally {
@@ -106,7 +115,7 @@ describe("hyperframes init flag rename", () => {
       const res = runInit([target, "--agent"]);
       expect(res.status).toBe(0);
       const html = readFileSync(join(target, "index.html"), "utf-8");
-      expect(html).toContain("font-family: Inter");
+      expect(html).toContain("font-family: var(--font-display)");
       expect(html).toContain("tl.seek(0)");
       expectScaffoldedScripts(target);
     } finally {
@@ -132,6 +141,21 @@ describe("hyperframes init flag rename", () => {
       expect(pkg.private).toBe(true);
       expect(pkg.type).toBe("module");
       expectScaffoldedScripts(target);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("--skip-skills alone leaves skills alone, without the env opt-out", () => {
+    const dir = mkdtempSync(join(tmpdir(), "hf-init-test-"));
+    const target = join(dir, "proj");
+    try {
+      const res = runInit([target, "--example", "blank", "--non-interactive", "--skip-skills"], {
+        skillsEnvOptOut: false,
+      });
+      expect(res.status).toBe(0);
+      expect(res.stdout).not.toContain("Checking AI coding skills");
+      expect(res.stdout).not.toContain("temporarily ignored");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -233,6 +257,31 @@ describe("hyperframes init flag rename", () => {
     }
   });
 
+  it.each([
+    ["portrait.mp4", "1080", "1920"],
+    ["rotated-portrait.mp4", "1080", "1920"],
+    ["three-four.mp4", "1080", "1440"],
+    ["four-three.mp4", "1440", "1080"],
+    ["square.mp4", "1080", "1080"],
+    ["anamorphic.mp4", "1920", "1080"],
+  ])("sizes the project to the --video's shape as it plays (%s)", (fixture, width, height) => {
+    const dir = mkdtempSync(join(tmpdir(), "hf-init-portrait-"));
+    const target = join(dir, "proj");
+    const clip = join(dir, fixture);
+    copyFileSync(resolve(fileURLToPath(import.meta.url), `../__fixtures__/${fixture}`), clip);
+    try {
+      const res = runInit([target, "--non-interactive", "--skip-transcribe", "--video", clip]);
+      expect(res.status).toBe(0);
+      const root = readFileSync(join(target, "index.html"), "utf-8").match(
+        /<div\b[^>]*data-composition-id="main"[^>]*>/,
+      )?.[0];
+      expect(root).toContain(`data-width="${width}"`);
+      expect(root).toContain(`data-height="${height}"`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("scaffolds a silent --video as a muted clip with no audio element", () => {
     const dir = mkdtempSync(join(tmpdir(), "hf-init-silent-"));
     const target = join(dir, "proj");
@@ -246,6 +295,47 @@ describe("hyperframes init flag rename", () => {
       expect(video).toMatch(/\bmuted\b/);
       expect(video).not.toContain("data-has-audio");
       expect(html).not.toMatch(/<audio\b/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("converts a Theora --video to H.264 MP4", () => {
+    const dir = mkdtempSync(join(tmpdir(), "hf-init-theora-"));
+    const target = join(dir, "proj");
+    const clip = join(dir, "clip.ogv");
+    copyFileSync(resolve(fileURLToPath(import.meta.url), "../__fixtures__/theora.ogv"), clip);
+    try {
+      const res = runInit([target, "--non-interactive", "--skip-transcribe", "--video", clip]);
+      expect(res.status).toBe(0);
+      const video = readFileSync(join(target, "index.html"), "utf-8").match(/<video\b[^>]*>/)?.[0];
+      expect(video).toContain('src="clip.mp4"');
+      expect(existsSync(join(target, "clip.ogv"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("--keep-original copies a non-web --video as is instead of converting it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "hf-init-keep-"));
+    const target = join(dir, "proj");
+    const clip = join(dir, "clip.mov");
+    const fixture = resolve(fileURLToPath(import.meta.url), "../__fixtures__/mpeg4.mp4");
+    copyFileSync(fixture, clip);
+    try {
+      const res = runInit([
+        target,
+        "--non-interactive",
+        "--skip-transcribe",
+        "--keep-original",
+        "--video",
+        clip,
+      ]);
+      expect(res.status).toBe(0);
+      const video = readFileSync(join(target, "index.html"), "utf-8").match(/<video\b[^>]*>/)?.[0];
+      expect(video).toContain('src="clip.mov"');
+      expect(readFileSync(join(target, "clip.mov"))).toEqual(readFileSync(fixture));
+      expect(existsSync(join(target, "clip.mp4"))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -355,7 +445,7 @@ describe("hyperframes init flag rename", () => {
         "--audio",
         "track.mp3",
       ]);
-      expect(res.status).toBe(1);
+      expect(res.status).toBe(2);
       expect(res.stderr).toContain("Cannot use --video and --audio together");
       expect(existsSync(target)).toBe(false);
     } finally {
@@ -439,19 +529,19 @@ describe("hyperframes init flag rename", () => {
         "-V",
         "missing.mp4",
       ]);
-      expect(res.status).toBe(1);
+      expect(res.status).toBe(2);
       expect(res.stderr).toContain("The -V short flag no longer maps to --video");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it("--template prints a rename hint and exits non-zero", () => {
+  it("--template prints a rename hint and exits 2", () => {
     const dir = mkdtempSync(join(tmpdir(), "hf-init-test-"));
     const target = join(dir, "proj");
     try {
       const res = runInit([target, "--template", "blank", "--non-interactive", "--skip-skills"]);
-      expect(res.status).toBe(1);
+      expect(res.status).toBe(2);
       expect(res.stderr).toContain("--template flag was renamed to --example");
       expect(res.stderr).toContain(`--example "blank"`);
       expect(existsSync(target)).toBe(false);
@@ -592,7 +682,7 @@ describe("applyResolutionPreset", () => {
         "--non-interactive",
         "--skip-skills",
       ]);
-      expect(res.status).toBe(1);
+      expect(res.status).toBe(2);
       expect(res.stderr).toContain("Invalid --resolution");
       expect(existsSync(target)).toBe(false);
     } finally {
@@ -656,4 +746,31 @@ describe("applyResolutionPreset", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+
+describe("transcodeToMp4", () => {
+  it.skipIf(process.platform === "win32")(
+    "finishes when ffmpeg logs far more than a pipe buffer holds",
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), "hf-init-ffmpeg-log-"));
+      const ffmpeg = join(dir, "ffmpeg");
+      const output = join(dir, "out.mp4");
+      // Blocking writes, like ffmpeg's own log: 1 MB stalls on a pipe nobody reads.
+      const script = `const fs = require("node:fs");
+const line = Buffer.alloc(1024, "x");
+for (let i = 0; i < 1024; i++) fs.writeSync(2, line);
+fs.writeFileSync(process.argv.at(-1), "");`;
+      writeFileSync(ffmpeg, `#!${process.execPath}\n${script}\n`);
+      chmodSync(ffmpeg, 0o755);
+      vi.stubEnv("HYPERFRAMES_FFMPEG_PATH", ffmpeg);
+      try {
+        await expect(transcodeToMp4(join(dir, "in.mov"), output)).resolves.toBe(true);
+        expect(existsSync(output)).toBe(true);
+      } finally {
+        vi.unstubAllEnvs();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+    5_000,
+  );
 });

@@ -1,4 +1,5 @@
 import { isHtmlElement } from "@hyperframes/core/runtime/dom-realm";
+import { applyAuthoredTiming } from "@hyperframes/core/studio-preview-mark";
 import { type TimelineElement, usePlayerStore } from "../player/store/playerStore";
 import { toAuthoredStart } from "../player/store/timelineElement";
 import {
@@ -180,7 +181,7 @@ export function patchIframeDomTiming(
   try {
     const el = findTimelineElementInIframe(iframe, element, activeCompositionPath);
     if (!el) return;
-    for (const [name, value] of attrs) el.setAttribute(name, value);
+    applyAuthoredTiming(el, attrs);
   } catch {
     // Cross-origin or mid-navigation — file save is enqueued; iframe patch is best-effort.
   }
@@ -236,7 +237,7 @@ export function applyTimelineMoveAttributes(
 ): string {
   if (!Number.isFinite(start) || !Number.isFinite(duration)) {
     console.warn(
-      `[Timeline] applyTimelineMoveAttributes: non-finite timing (start=${start}, duration=${duration}) — patch skipped`,
+      `[Timeline] applyTimelineMoveAttributes: non-finite timing (start=${start}, duration=${duration}). Patch skipped`,
     );
     return original;
   }
@@ -350,7 +351,6 @@ export async function persistTimelineEdit(input: PersistTimelineEditInput): Prom
     throw new Error(`Timeline element ${input.element.id} is missing a patchable target`);
   }
 
-  input.pendingTimelineEditPathRef.current.add(targetPath);
   await saveProjectFilesWithHistory({
     projectId: input.projectId,
     label: input.label,
@@ -358,10 +358,10 @@ export async function persistTimelineEdit(input: PersistTimelineEditInput): Prom
     coalesceMs: input.coalesceMs,
     files: {
       [targetPath]: (current) => {
-        const patched = input.buildPatches(current, patchTarget);
-        if (patched === current) {
-          throw new Error(`Unable to patch timeline element ${input.element.id} in ${targetPath}`);
-        }
+        const patched = patchTimelineChangesInSource(current, targetPath, [
+          { element: input.element, buildPatches: input.buildPatches },
+        ]);
+        if (patched !== current) input.pendingTimelineEditPathRef.current.add(targetPath);
         return patched;
       },
     },
@@ -387,6 +387,20 @@ export function operationChanges(
   }));
 }
 
+const RENAMED_MOUNT = /__hf\d+"?\]?$/;
+const lookup = (value: string, kind: string) =>
+  RENAMED_MOUNT.test(value) ? `runtime-renamed ${kind}` : kind;
+const selectorLookup = (selector: string) =>
+  selector.startsWith("[data-composition-id=")
+    ? lookup(selector, "composition id")
+    : /^\.[\w-]+$/.test(selector) && "class";
+
+function missedLookups(element: Pick<TimelineElement, "sourceFile">, target: PatchTarget): string {
+  const kinds = [target.hfId && "hf-id", target.id && lookup(target.id, "id")];
+  const by = [...kinds, target.selector && selectorLookup(target.selector)].filter(Boolean);
+  return `by ${by.join(", ") || "nothing"}; ${element.sourceFile ? "file from the clip" : "no file on the clip"}`;
+}
+
 /** Patches each change into `source`, failing loudly on a target the file does not hold. */
 export function patchTimelineChangesInSource(
   source: string,
@@ -399,7 +413,9 @@ export function patchTimelineChangesInSource(
     if (!target) throw new Error(`Timeline element ${element.id} is missing a patchable target`);
     // Resolve first: a member already at its target values patches to the same string, a missing one must throw.
     if (!findTagByTarget(current, target)) {
-      throw new Error(`Unable to patch timeline element ${element.id} in ${targetPath}`);
+      throw new Error(
+        `Unable to patch timeline element ${element.id} in ${targetPath} (${missedLookups(element, target)})`,
+      );
     }
     current = buildPatches(current, target);
   }

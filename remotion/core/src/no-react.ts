@@ -1,15 +1,25 @@
+import type {
+	ArtifactAsset,
+	AudioOrVideoAsset as InternalAudioOrVideoAsset,
+	InlineAudioAsset,
+} from './CompositionManager';
 import {
 	evaluateSourceNumericValue,
 	evaluateSourcePropStatuses,
 } from './evaluate-source-expressions.js';
 import type {} from './index.js';
 import {DEFAULT_SEQUENCE_ACTIVITY_LIMIT} from './sequence-activity-defaults.js';
-export type {
-	ArtifactAsset,
-	AudioOrVideoAsset,
-	InlineAudioAsset,
-	TRenderAsset,
-} from './CompositionManager';
+export type {ArtifactAsset, InlineAudioAsset} from './CompositionManager';
+
+// Older consumers can still supply assets without a pitch preference.
+export type AudioOrVideoAsset = Omit<
+	InternalAudioOrVideoAsset,
+	'preservePitch'
+> & {
+	preservePitch?: boolean | null;
+};
+
+export type TRenderAsset = AudioOrVideoAsset | ArtifactAsset | InlineAudioAsset;
 export type {DownloadBehavior} from './download-behavior';
 export {
 	assertValidInterpolateEasingOption,
@@ -29,6 +39,7 @@ export type {VideoConfig} from './video-config';
 
 import {
 	DEFAULT_PREMOUNT_IN_SECONDS,
+	DEFAULT_STUDIO_PREMOUNT_IN_SECONDS,
 	validateDefaultPremountInSeconds,
 } from './default-premount-in-seconds';
 import {
@@ -65,6 +76,7 @@ import {getOffthreadVideoSource} from './video/offthread-video-source';
 
 export const NoReactInternals = {
 	DEFAULT_PREMOUNT_IN_SECONDS,
+	DEFAULT_STUDIO_PREMOUNT_IN_SECONDS,
 	DEFAULT_SEQUENCE_ACTIVITY_LIMIT,
 	validateDefaultPremountInSeconds,
 	evaluateSourceNumericValue,

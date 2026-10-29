@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { Video } from "../src/native-video";
 import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createVideoWebApp } from "../src/web-app";
 
 const fixture = join(import.meta.dir, "../hyperframes/player/tests/perf/fixtures/10-video-grid/sample.mp4");
-const nativeVideo = (Bun as unknown as { Video?: { available: boolean } }).Video;
+const nativeVideo = Video;
 
 describe.skipIf(!nativeVideo?.available)("GET /api/video/watch", () => {
   test("returns timestamped inline frames for library media and rejects bad input", async () => {

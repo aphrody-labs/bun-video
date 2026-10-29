@@ -1,10 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import {
+  accessSync,
+  constants,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import {
   DEFAULT_HISTORY_ROOT,
+  HistoryBusyError,
   MAX_WINDOW_IDLE_MS,
   openProjectHistory,
+  readProjectHistory,
   type HistoryEntry,
   type HistoryListItem,
   type HistoryResult,
@@ -38,17 +48,28 @@ export interface Owner {
   undo(id: string, who: HistoryWho, mode?: UndoMode): Promise<HistoryResult>;
   restore(point: string, who: HistoryWho): Promise<HistoryEntry | null>;
   pin(id: string, pinned: boolean): Promise<void>;
-  begin(who: HistoryWho, label: string): Promise<{ id: string; startedAt: number }>;
+  begin(
+    who: HistoryWho,
+    label: string,
+    exclusive?: boolean,
+  ): Promise<{ id: string; startedAt: number }>;
   end(id: string): Promise<HistoryEntry | null>;
+  checkpoint(): Promise<void>;
   close(): Promise<void>;
 }
 
+export type Reader = Pick<Owner, "via" | "list" | "peek" | "blob">;
+
 /** Swapped by tests. */
 export const historyDeps = {
-  historyRoot: DEFAULT_HISTORY_ROOT,
-  findServer: (projectDir: string) => findPreviewServerForProject(projectDir),
+  historyRoot: resolve(process.env.HYPERFRAMES_HISTORY_ROOT || DEFAULT_HISTORY_ROOT),
+  findServer: async (projectDir: string) =>
+    process.env.HYPERFRAMES_NO_PREVIEW_DISCOVERY === "1"
+      ? null
+      : findPreviewServerForProject(projectDir),
   /** A turn with no write for this long has ended, through a preview or not. */
   turnIdleMs: MAX_WINDOW_IDLE_MS,
+  ownerWaitMs: undefined as number | undefined,
   now: () => Date.now(),
 };
 
@@ -118,18 +139,22 @@ export async function endTurn(
 }
 
 function previewOwner(route: (path: string) => string): Owner {
-  const call = async (path: string, body?: object) => {
-    const init = body && {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
+  const call = async (path: string, body?: object, signal?: AbortSignal) => {
+    const init = {
+      ...(body && {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+      ...(signal && { signal }),
     };
     const response = await fetch(route(path), init);
     if (response.ok) return response;
     const error = (await response.json().catch(() => null)) as { error?: string } | null;
     throw new Refusal(error?.error ?? `The preview answered ${response.status}.`);
   };
-  const json = async (path: string, body?: object) => (await call(path, body)).json();
+  const json = async (path: string, body?: object, signal?: AbortSignal) =>
+    (await call(path, body, signal)).json();
   const list = async () => (await json("")).entries as HistoryListItem[];
   return {
     via: "preview",
@@ -139,8 +164,13 @@ function previewOwner(route: (path: string) => string): Owner {
     undo: (id, who, mode) => json("/undo", { entryId: id, who, mode }),
     restore: (point, who) => json("/restore", { point, who }),
     pin: async (id, pinned) => void (await json("/pin", { entryId: id, pinned })),
-    begin: async (who, label) => {
-      const opened = await json("/window", { who, label, idleMs: historyDeps.turnIdleMs });
+    begin: async (who, label, exclusive) => {
+      const opened = await json("/window", {
+        who,
+        label,
+        idleMs: historyDeps.turnIdleMs,
+        ...(exclusive && { exclusive: true }),
+      });
       return { id: opened.windowId, startedAt: opened.startedAt ?? historyDeps.now() };
     },
     // A preview restarted since begin committed the window on its way down.
@@ -148,45 +178,60 @@ function previewOwner(route: (path: string) => string): Owner {
       json(`/window/${id}/close`, {})
         .then((closed) => closed.entry as HistoryEntry | null)
         .catch(async () => (await list()).find((entry) => entry.id === id) ?? null),
+    checkpoint: async () => void (await json("/checkpoint", {}, AbortSignal.timeout(5_000))),
     close: async () => {},
   };
 }
 
-async function directOwner(projectDir: string, turn: Turn | null): Promise<Owner> {
+async function directOwner(
+  projectDir: string,
+  ownerWaitMs = historyDeps.ownerWaitMs,
+): Promise<{ owner: Owner; turn: Turn | null }> {
+  let turn: Turn | null = null;
   const history = await openProjectHistory({
     projectDir,
     historyRoot: historyDeps.historyRoot,
     now: () => historyDeps.now(),
     pruneGoneProjectsBudgetMs: 1000,
-    // A turn begun through a preview that has since stopped is still the agent's, until its idle limit.
-    ...(turn && {
-      closedWindow: {
-        id: turn.id,
-        who: turn.who,
-        label: turn.label,
-        startedAt: turn.startedAt,
-        lastWriteAt: turn.lastWriteAt,
-        idleMs: historyDeps.turnIdleMs,
-      },
-    }),
+    ownerWaitMs,
+    closedWindowAfterOwnership: () => {
+      turn = readTurn(projectDir);
+      return turn
+        ? {
+            id: turn.id,
+            who: turn.who,
+            label: turn.label,
+            startedAt: turn.startedAt,
+            lastWriteAt: turn.lastWriteAt,
+            idleMs: historyDeps.turnIdleMs,
+          }
+        : undefined;
+    },
   });
   return {
-    via: "direct",
-    list: async () => history.list(),
-    peek: async (point) => history.peek(point),
-    blob: (hash) => history.readBlob(hash),
-    undo: (id, who, mode) => history.undo(id, { who, ...(mode && { mode }) }),
-    restore: (point, who) => history.restore(point, who),
-    pin: async (id, pinned) => history.pin(id, pinned),
-    // Opening filed every earlier write; the turn's own writes are filed to it when the next open passes it.
-    begin: async () => ({ id: randomUUID(), startedAt: historyDeps.now() }),
-    end: async (id) => history.list().find((entry) => entry.id === id) ?? null,
-    close: () => history.close(),
+    turn,
+    owner: {
+      via: "direct",
+      list: async () => history.list(),
+      peek: async (point) => history.peek(point),
+      blob: (hash) => history.readBlob(hash),
+      undo: (id, who, mode) => history.undo(id, { who, ...(mode && { mode }) }),
+      restore: (point, who) => history.restore(point, who),
+      pin: async (id, pinned) => history.pin(id, pinned),
+      // Opening filed every earlier write; the turn's own writes are filed to it when the next open passes it.
+      begin: async () => ({ id: randomUUID(), startedAt: historyDeps.now() }),
+      end: async (id) => history.list().find((entry) => entry.id === id) ?? null,
+      checkpoint: () => history.checkpoint(),
+      close: () => history.close(),
+    },
   };
 }
 
 /** One owner: a preview that keeps this project's history, else the engine, which refuses a second opener. */
-async function connect(projectDir: string, turn: Turn | null): Promise<Owner> {
+async function connect(
+  projectDir: string,
+  ownerWaitMs?: number,
+): Promise<{ owner: Owner; turn: Turn | null }> {
   const server = await historyDeps.findServer(projectDir);
   if (server) {
     const route = (path: string) => studioApiUrl(server, `history${path}`);
@@ -195,34 +240,102 @@ async function connect(projectDir: string, turn: Turn | null): Promise<Owner> {
       (response) => response.status,
       () => 404,
     );
-    if (status !== 404) return previewOwner(route);
+    if (status !== 404) return { owner: previewOwner(route), turn: readTurn(projectDir) };
   }
-  return directOwner(projectDir, turn);
+  return directOwner(projectDir, ownerWaitMs);
 }
 
 /** Runs `task` with the project's history. ponytail: with no preview, a command mid-turn splits the turn in two. */
 export async function withOwner<T>(
   dir: string | undefined,
   task: (owner: Owner, turn: Turn | null, projectDir: string) => Promise<T>,
+  { ownerWaitMs }: { ownerWaitMs?: number } = {},
 ): Promise<T> {
   const { dir: projectDir } = resolveProject(dir);
-  const turn = readTurn(projectDir);
-  const owner = await connect(projectDir, turn);
+  const { owner, turn } = await connect(projectDir, ownerWaitMs);
   try {
     return await task(owner, turn, projectDir);
   } finally {
     // This open filed the turn so far under its id; the turn goes on under a fresh one, from its last write.
-    const direct = owner.via === "direct" && turn;
-    let kept: HistoryListItem | undefined;
     try {
-      kept = direct ? (await owner.list()).find((entry) => entry.id === turn.id) : undefined;
+      if (owner.via === "direct" && turn) {
+        const kept = (await owner.list()).find((entry) => entry.id === turn.id);
+        if (readTurn(projectDir)?.id === turn.id) {
+          const lastWriteAt = kept ? kept.endedAt : turn.lastWriteAt;
+          const parts = kept ? [...turn.parts, kept.id] : turn.parts;
+          writeTurn(projectDir, { ...turn, via: "direct", id: randomUUID(), lastWriteAt, parts });
+        }
+      }
     } finally {
       await owner.close();
     }
-    if (direct && readTurn(projectDir)?.id === turn.id) {
-      const lastWriteAt = kept ? kept.endedAt : turn.lastWriteAt;
-      const parts = kept ? [...turn.parts, kept.id] : turn.parts;
-      writeTurn(projectDir, { ...turn, via: "direct", id: randomUUID(), lastWriteAt, parts });
-    }
   }
+}
+
+const CANNOT_WRITE = new Set(["ENOSPC", "EDQUOT", "EACCES", "EPERM", "EROFS"]);
+const WRITE_CALLS = new Set([
+  "mkdir",
+  "write",
+  "rename",
+  "unlink",
+  "link",
+  "copyfile",
+  "rmdir",
+  "symlink",
+  "utime",
+  "ftruncate",
+  "fsync",
+]);
+
+function openedForWriting(path: string): boolean {
+  try {
+    accessSync(path, constants.R_OK);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT";
+  }
+}
+
+/** A write the history could not make, never a read: a denied `open` of a missing or readable file was a write. */
+function failedWrite(error: unknown): boolean {
+  const { code = "", syscall = "", path } = error as NodeJS.ErrnoException;
+  if (!CANNOT_WRITE.has(code)) return false;
+  return (
+    WRITE_CALLS.has(syscall) || (syscall === "open" && path !== undefined && openedForWriting(path))
+  );
+}
+
+export async function withReader<T>(
+  dir: string | undefined,
+  task: (reader: Reader) => Promise<T>,
+): Promise<T> {
+  let ran = false;
+  try {
+    return await withOwner(dir, (owner) => {
+      ran = true;
+      return task(owner);
+    });
+  } catch (error) {
+    const unwritable = failedWrite(error);
+    if (ran || !(error instanceof HistoryBusyError || unwritable)) throw error;
+    if (unwritable)
+      console.error(
+        `[hyperframes] Could not write this project's history (${(error as Error).message}); showing it as last recorded.`,
+      );
+  }
+  // Opening failed, so the task has not run; an open turn's marker is left as it is.
+  const view = readProjectHistory({
+    projectDir: resolveProject(dir).dir,
+    historyRoot: historyDeps.historyRoot,
+  });
+  return task({
+    via: "direct",
+    list: async () => view.list(),
+    peek: async (point) => view.peek(point),
+    // The owner may have pruned a blob since its log was read.
+    blob: (hash) =>
+      view.readBlob(hash).catch((error: NodeJS.ErrnoException) => {
+        throw error.code === "ENOENT" ? new Refusal("That point is no longer kept") : error;
+      }),
+  });
 }

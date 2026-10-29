@@ -3,36 +3,76 @@
 [![](https://img.shields.io/npm/v/mediabunny)](https://www.npmjs.com/package/mediabunny)
 [![](https://img.shields.io/bundlephobia/minzip/mediabunny)](https://bundlephobia.com/package/mediabunny)
 [![](https://img.shields.io/npm/dm/mediabunny)](https://www.npmjs.com/package/mediabunny)
+[![](https://img.shields.io/discord/1390044844285497344?logo=discord&label=Discord)](https://discord.gg/hmpkyYuS4U)
 
 <div align="center">
     <img src="./docs/public/mediabunny-logo.svg" width="180" height="180">
 </div>
 
-Mediabunny is a JavaScript library for reading, writing, and converting media files (like MP4, WebM, MP3), directly in the browser. It aims to be a complete toolkit for high-performance media operations on the web. It's written from scratch in pure TypeScript, has zero dependencies, is very performant, and is extremely tree-shakable, meaning you only include what you use. You can think of it a bit like [FFmpeg](https://ffmpeg.org/), but built from the ground up for the web.
+Mediabunny is a JavaScript library for reading, writing, and converting media (like MP4, WebM, MP3, HLS), directly in the browser. It aims to be a complete toolkit for high-performance media operations on the web. It's written from scratch in pure TypeScript, has zero dependencies, is very performant, and is extremely tree-shakable, meaning you only include what you use. You can think of it a bit like [FFmpeg](https://ffmpeg.org/), but built from the ground up for the web.
 
 [Documentation](https://mediabunny.dev) | [Examples](https://mediabunny.dev/examples) | [Sponsoring](#sponsoring) | [License](#license) | [Discord](https://discord.gg/hmpkyYuS4U)
+
+### Platinum sponsors
+
+<div align="center">
+  <a href="https://www.figma.com/" target="_blank" rel="sponsored">
+    <img src="./docs/public/sponsors/figma.png" width="80" height="80" alt="Figma">
+  </a>
+</div>
 
 ### Gold sponsors
 
 <div align="center">
-  <a href="https://www.gling.ai/" target="_blank">
-    <img src="./docs/public/sponsors/gling.svg" width="60" height="60" alt="Gling AI">
+  <a href="https://remotion.dev/" target="_blank" rel="sponsored">
+    <picture>
+      <source srcset="./docs/public/sponsors/remotion-dark.png" media="(prefers-color-scheme: dark)">
+      <img src="./docs/public/sponsors/remotion-light.png" width="60" height="60" alt="Remotion">
+    </picture>
   </a>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://diffusion.studio/" target="_blank">
+  <a href="https://diffusion.studio/" target="_blank" rel="sponsored">
     <img src="./docs/public/sponsors/diffusionstudio.png" width="60" height="60" alt="Diffusion Studio">
   </a>
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://kino.ai/" target="_blank">
+  <a href="https://kino.ai/" target="_blank" rel="sponsored">
     <img src="./docs/public/sponsors/kino.jpg" width="60" height="60" alt="Kino">
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://screen.studio/" target="_blank" rel="sponsored">
+    <img src="./docs/public/sponsors/screen-studio.webp" width="60" height="60" alt="Screen Studio">
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.tella.com/" target="_blank" rel="sponsored">
+    <img src="./docs/public/sponsors/tella.svg" width="60" height="60" alt="Tella">
+  </a>
+</div>
+
+### Silver sponsors
+
+<div align="center">
+  <a href="https://jitter.video/" target="_blank" rel="sponsored">
+    <img src="./docs/public/sponsors/jitter.png" width="50" height="50" alt="Jitter">
   </a>
 </div>
 
 ### Bronze sponsors
 
 <div align="center">
-  <a href="https://www.reactvideoeditor.com/" target="_blank">
-    <img src="./docs/public/sponsors/rve.svg" width="40" height="40" alt="React Video Editor">
+  <a href="https://www.reactvideoeditor.com/" target="_blank" rel="sponsored">
+    <img src="./docs/public/sponsors/rve.png" width="40" height="40" alt="React Video Editor">
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.mux.com/" target="_blank" rel="sponsored">
+    <img src="./docs/public/sponsors/mux.jpg" width="40" height="40" alt="Mux">
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://jellypod.ai/" target="_blank" rel="sponsored">
+    <img src="./docs/public/sponsors/jellypod.png" width="40" height="40" alt="Jellypod">
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.photocircleapp.com/" target="_blank" rel="sponsored">
+    <img src="./docs/public/sponsors/photocircle.png" width="40" height="40" alt="PhotoCircle">
   </a>
 </div>
 
@@ -42,14 +82,14 @@ Mediabunny is a JavaScript library for reading, writing, and converting media fi
 
 Core features include:
 
-- **Wide format support**: Read and write MP4, WebM, WAVE, MP3, Ogg, and more
-- **Built-in encoding & decoding**: Supports 25+ video, audio, and subtitle codecs, hardware-accelerated using the WebCodecs API
-- **High precision**: Fine-grained, microsecond-accurate reading and writing operations
-- **Conversion API**: Easy-to-use API with features such as transmuxing, transcoding, resizing, rotation, resampling, trimming, and more
-- **Streaming I/O**: Handle reading & writing files of any size with memory-efficient streaming
-- **Tree-shakable**: Only bundle what you use (as small as 5 kB gzipped)
-- **Zero dependencies**: Implemented in highly performant TypeScript
-- **Cross-platform**: Works in browsers and Node.js
+- Wide format support: Read _and_ write MP4, MOV, WebM, MKV, HLS, WAVE, MP3, Ogg, ADTS, FLAC, MPEG-TS
+- Built-in encoding & decoding: Supports 25+ video, audio, and subtitle codecs, hardware-accelerated using the WebCodecs API
+- High precision: Fine-grained, microsecond-accurate reading and writing operations
+- Conversion API: Easy-to-use API with features such as transmuxing, transcoding, resizing, rotation, cropping, resampling, trimming, and more
+- Streaming I/O: Handle reading & writing files of any size with memory-efficient streaming
+- Cross-platform: Works in all browsers as well as in Node, Bun, and Deno using [`@mediabunny/server`](https://github.com/Vanilagy/mediabunny/blob/main/packages/server/README.md)
+- Tree-shakable: Only bundle what you use (as small as 5 kB gzipped)
+- Zero dependencies: Implemented in highly performant TypeScript
 
 [See full feature list](https://mediabunny.dev/guide/introduction#features)
 
@@ -75,22 +115,30 @@ Requires any JavaScript environment that can run ECMAScript 2021 or later. Media
 ```js
 import { Input, ALL_FORMATS, BlobSource } from 'mediabunny';
 
+// Reading from disk
 const input = new Input({
-    source: new BlobSource(file), // Reading from disk
+    source: new BlobSource(file),
     formats: ALL_FORMATS,
 });
 
 const duration = await input.computeDuration(); // in seconds
 const videoTrack = await input.getPrimaryVideoTrack();
 const audioTrack = await input.getPrimaryAudioTrack();
-const { displayWidth, displayHeight, rotation } = videoTrack;
-const { sampleRate, numberOfChannels } = audioTrack;
+
+const displayWidth = await videoTrack.getDisplayWidth();
+const displayHeight = await videoTrack.getDisplayHeight();
+const rotation = await videoTrack.getRotation();
+
+const sampleRate = await audioTrack.getSampleRate();
+const numberOfChannels = await audioTrack.getNumberOfChannels();
+
+const { title, artist, album } = await input.getMetadataTags();
 ```
 
 ### Create new media files
 
 ```js
-import { Output, Mp4OutputFormat, BufferTarget, CanvasSource, QUALITY_HIGH } from 'mediabunny';
+import { Output, Mp4OutputFormat, BufferTarget, CanvasSource, Quality } from 'mediabunny';
 
 const output = new Output({
     format: new Mp4OutputFormat(),
@@ -100,7 +148,7 @@ const output = new Output({
 // Add a video track backed by a canvas element
 const videoSource = new CanvasSource(canvas, {
     codec: 'avc',
-    bitrate: QUALITY_HIGH,
+    bitrate: new Quality('high'),
 });
 output.addVideoTrack(videoSource);
 
@@ -180,8 +228,9 @@ npm run build # Production build with type definitions
 npm run check # Type checking
 bun lint # ESLint
 
+npm run docs:generate # Generates API docs
 npm run docs:dev # Start docs development server
-npm run dev # Start examples development server
-
+npm run dev # Start examples development server, will run at http://localhost:5173/examples/[name]/
+  
 npm run docs:build # Build docs and examples
 ```

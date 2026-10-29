@@ -1,13 +1,16 @@
 {
 	"repository": "https://github.com/remotion-dev/remotion",
-	"sha": "32af7e8f8ac67493ef81498d311af3dc9ca953a6",
-	"date": "2026-10-10",
+	"sha": "e50b41a410933aa807515335d1c04dbba1b8b93f",
+	"date": "2026-10-26",
 	"license": "LICENSE.md",
-	"sourceFiles": 12497,
-	"sourceBytes": 120155339,
-	"upstreamFiles": 14938,
-	"excludedFiles": 2441,
 	"exclusions": ".aphrody/excluded-files.json",
 	"baseline": "../../../tmp/remotion-upstream-32af7e8",
-	"migration": "bun n2b --aggressive (without --migrate)"
+	"migration": "bun n2b --aggressive (without --migrate)",
+	"tag": "v4.0.539",
+	"base": {
+		"sha": "32af7e8f8ac67493ef81498d311af3dc9ca953a6",
+		"date": "2026-10-10"
+	},
+	"mergedDate": "2026-10-29",
+	"mergeMethod": "per-file 3-way merge of packages/<dir> into <dir> (git merge-file); conflicts resolved to upstream, test imports vitest->bun:test; excluded media/binaries not re-added"
 }

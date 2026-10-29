@@ -7,6 +7,11 @@ export const PLAYER_STYLES = /* css */ `
     contain: layout style;
   }
 
+  /* The only in-flow child: with no height set, the player takes the composition's shape. */
+  .hfp-sizer {
+    aspect-ratio: 16 / 9;
+  }
+
   .hfp-container {
     position: absolute;
     inset: 0;
@@ -24,7 +29,7 @@ export const PLAYER_STYLES = /* css */ `
   }
 
   /* Opt-in: an interactive composition (e.g. a live slideshow/app with playable
-     media or controls) — let pointer events reach the iframe content. */
+     media or controls): let pointer events reach the iframe content. */
   :host([interactive]) .hfp-container,
   :host([interactive]) .hfp-iframe {
     pointer-events: auto;

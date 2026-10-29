@@ -2,7 +2,7 @@
 
 The npm package keeps TypeScript source and the frame-worker.ts entry point.
 No package import may refer to the monorepo's vendor or sibling packages.
-Remotion 4.0.534 and HyperFrames 0.8.144 use their official npm distributions;
+Remotion 4.0.539 and HyperFrames 0.8.214 use their official npm distributions;
 only the bounded native capture adapters and orchestration are copied locally.
 The published HyperFrames engine does not export native-webview-capture.
 
@@ -29,7 +29,7 @@ source-pinned staging directory and test an isolated consumer, including all
 public subpaths and lazy library loaders. This avoids altering or publishing
 concurrent monorepo work. Required native tests use the fork's bun bd gates.
 
-The official Remotion renderer 4.0.534 rejects Bun prerelease versions such as
+The official Remotion renderer 4.0.539 rejects Bun prerelease versions such as
 1.4.4-debug and 1.4.3-aphrody.4 at import: its minimum-version check excludes
 prereleases. `loadRemotionRenderer()` preserves that upstream check. The three
 other library loaders and package utilities are qualified separately; importing

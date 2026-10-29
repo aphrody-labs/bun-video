@@ -1,6 +1,7 @@
 {
 	"compilerOptions": {
 		"target": "ES2021",
+		"module": "esnext",
 		"strict": true,
 		"noImplicitAny": true,
 		"noImplicitOverride": true,
@@ -8,9 +9,11 @@
 		"noPropertyAccessFromIndexSignature": true,
 		"skipLibCheck": true,
 		"allowJs": true,
-		"noEmit": true
+		"noEmit": true,
 	},
+	"include": [],
 	"references": [
-		{ "path": "./tsconfig.vite.json" }
+		{ "path": "./tsconfig.vite.json" },
+		{ "path": "./tsconfig.vitest.json" }
 	]
 }

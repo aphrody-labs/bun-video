@@ -1,3 +1,7 @@
+---
+description: Efficiently extract metadata, video frames, and audio samples from any media file, such as MP4 or WebM.
+---
+
 # Reading media files
 
 Mediabunny allows you to read media files with great control and efficiency. You can use it to extract metadata (such as duration or resolution), as well as to read actual media data from video and audio tracks with frame-accurate timing. Many commonly used [input file formats](./input-formats) are supported. Using [input sources](#input-sources), data can be read from multiple sources, such as directly from memory, from the user's disk, or even over the network.
@@ -44,6 +48,11 @@ Simply creating an instance of `Input` will perform zero reads and is practicall
 
 With our instance of `Input` created, you can now start reading file-level metadata.
 
+You can check if Mediabunny can read the file:
+```ts
+await input.canRead();
+```
+
 You can query the concrete format of the file like this:
 ```ts
 await input.getFormat(); // => Mp4InputFormat
@@ -60,7 +69,32 @@ await input.computeDuration(); // => 1905.4615
 ```
 More specifically, the duration is defined as the maximum end timestamp across all tracks.
 
+If you only need an approximate duration and want to avoid expensive scanning operations, you can read it directly from file metadata (where available):
+```ts
+await input.getDurationFromMetadata(); // => number | null
+```
+This resolves to `null` if the file doesn't expose its duration as metadata.
+
+Both `computeDuration` and `getDurationFromMetadata` will not resolve if the underlying media is live (because the duration is not yet known!). To get the duration *up to the known point* (the live edge), do this:
+```ts
+await input.computeDuration(undefined, { skipLiveWait: true });
+await input.getDurationFromMetadata(undefined, { skipLiveWait: true });
+```
+
+Since not all media files begin at time zero, you can also retrieve the *starting timestamp* of the media file in seconds:
+```ts
+await input.getFirstTimestamp(); // => 0.0
+```
+
+Mediabunny also lets you read descriptive metadata tags from media files, such as title, artist, or cover art:
+```ts
+await input.getMetadataTags(); // => MetadataTags
+```
+For more info, see [`MetadataTags`](../api/MetadataTags).
+
 ## Reading track metadata
+
+### Extracting tracks
 
 You can extract the list of all media tracks in the file like so:
 ```ts
@@ -80,12 +114,40 @@ await input.getPrimaryAudioTrack(); // => InputAudioTrack | null
 Subtitle tracks are currently not supported for reading.
 :::
 
+These methods accept an optional [`InputTrackQuery`](../api/InputTrackQuery) parameter for filtering and sorting tracks. This query system is especially useful for inputs with many tracks such as HLS playlists. The helpers `asc`, `desc`, and `prefer` make it easy to express sorting logic.
+
+```ts
+import { desc, prefer } from 'mediabunny';
+
+// Get the highest-resolution video track:
+await input.getPrimaryVideoTrack({
+	sortBy: async track => [
+		desc(await track.getDisplayWidth()),
+		desc(await track.getBitrate()), // If resolution matches, prefer the highest bitrate
+	],
+});
+
+// Get only English audio tracks:
+await input.getAudioTracks({
+	filter: async track => await track.getLanguageCode() === 'eng',
+});
+
+// Get an English track but only if one exists:
+await input.getAudioTracks({
+	sortBy: async track => prefer(await track.getLanguageCode() === 'eng'),
+});
+```
+
 ### Common track metadata
 
 Once you have an `InputTrack`, you can start extracting metadata from it.
 ```ts
 // Get a unique ID for this track in the input file:
 track.id; // => number
+
+// Get the 1-based index of this track among all tracks of the same type
+// (e.g., first video track is 1, second video track is 2, etc.):
+track.number; // => number
 
 // Check the track's type:
 track.type; // => 'video' | 'audio' | 'subtitle';
@@ -96,18 +158,40 @@ track.isAudioTrack(); // => boolean
 
 // Retrieve the track's language as an ISO 639-2/T language code.
 // Resolves to 'und' (undetermined) if the language isn't known.
-track.languageCode; // => string
+await track.getLanguageCode(); // => string
+
+// A user-defined name for this track.
+await track.getName(); // => string | null
+
+// Information about the intended usage of the track
+// (default, commentary, hearing-impaired, visually-impaired, etc.)
+await track.getDisposition(); // TrackDisposition
+
+// The track's peak bitrate, if exposed by the file metadata:
+await track.getBitrate(); // => number | null
+
+// The track's average bitrate, if exposed by the file metadata:
+await track.getAverageBitrate(); // => number | null
+
+// Whether all packets in the track are key packets:
+await track.hasOnlyKeyPackets(); // => boolean
+
+// Whether the track is currently live (meaning new media data is still being added):
+await track.isLive(); // => boolean
+
+// If the track is live, returns the interval in seconds at which new data is expected:
+await track.getLiveRefreshInterval(); // => number | null
 ```
 
 #### Codec information
 
 You can query metadata related to the track's codec:
 ```ts
-track.codec; // => MediaCodec | null
+await track.getCodec(); // => MediaCodec | null
 ```
-This field is `null` when the track's codec couldn't be recognized or is not supported by Mediabunny. See [Codecs](./supported-formats-and-codecs#codecs) for the full list of supported codecs.
+This field is `null` when the track's codec couldn't be recognized or is not supported by Mediabunny. See [Codecs](./supported-formats-and-codecs#codecs) for the full list of supported codecs. When Mediabunny doesn't recognize the format, you can still use the `internalCodecId` field to figure out the codec of the track, although its format depends on the container format used and is not homogenized by Mediabunny.
 
-You can also extract the full codec parameter string from the track, as specified in the [WebCodecs Codec Registry](https://www.w3.org/TR/webcodecs-codec-registry/):
+You can also extract the full codec parameter string from the track, as specified in the [Mediabunny Codec Registry](/codec-registry/overview):
 ```ts
 await track.getCodecParameterString(); // => 'avc1.42001f'
 ```
@@ -129,6 +213,11 @@ await track.computeDuration(); // => 1902.4615
 ```
 Analogous to the `Input`'s duration, this is identical to the end timestamp of the last sample. A track's duration may be shorter than the `Input`'s total duration if the `Input` has multiple tracks which differ in length.
 
+You can also retrieve the approximate duration based on metadata in the file:
+```ts
+await track.getDurationFromMetadata(); // => number | null
+```
+
 You can also retrieve the track's *start timestamp* in seconds:
 ```ts
 await track.getFirstTimestamp(); // => 0.041666666666666664
@@ -145,15 +234,20 @@ A _negative start timestamp_ means the track begins *before* the composition doe
 
 Another metric related to track timing info is its *time resolution*, which is given in hertz:
 ```ts
-track.timeResolution; // => 24
+await track.getTimeResolution(); // => 24
 ```
 Intuitively, this is the maximum possible "frame rate" of the track (assuming that no two samples have the same timestamp). Mathematically, if $x$ is equal to a track's time resolution, then all timestamps and durations of that track can be expressed as:
 
 $$ \frac{k}{x},\quad k \in \mathbb{Z} $$
 
 ::: info
-This field only gives an upper bound on a track's frame rate. To get a track's actual frame rate based on its samples, compute its [packet statistics](#packet-statistics).
+This field only gives an upper bound on a track's frame rate. To determine a video track's actual frame rate based on its frames, compute its [frame rate metrics](#frame-rate-metrics).
 :::
+
+Some tracks (especially live tracks) have timestamps which are relative to the Unix epoch (Jan 1 1970, midnight UTC). In other words, their timestamps *are* Unix timestamps. This allows you to map the media data to a definitive point in wall-clock time. To see if this is the case, use:
+```ts
+await track.isRelativeToUnixEpoch(); // => boolean
+```
 
 #### Packet statistics
 
@@ -187,31 +281,44 @@ This means the video track has a total of 14315 frames, a frame rate of exactly 
 ```ts
 await track.computePacketStats(50);
 ```
-This will only look at the first ~50 packets and then return the result. This is great for quickly getting an estimate of frame rate and bitrate, without having to scan through the entire file. For videos with a constant frame rate, this will also always return the correct frame rate.
+This will only look at the first ~50 packets and then return the result. This is great for quickly getting an estimate of bitrate, without having to scan through the entire file. To determine a video track's frame rate, prefer using [frame rate metrics](#frame-rate-metrics) instead.
 
 ### Video track metadata
 
 In addition to the [common track metadata](#common-track-metadata), video tracks have additional metadata you can query:
 
 ```ts
-// Get the raw pixel dimensions of the track's coded samples, before rotation:
-videoTrack.codedWidth; // => number
-videoTrack.codedHeight; // => number
+// Get the raw pixel dimensions of the track's coded samples:
+await videoTrack.getCodedWidth(); // => number
+await videoTrack.getCodedHeight(); // => number
 
-// Get the displayed pixel dimensions of the track's samples, after rotation:
-videoTrack.displayWidth; // => number
-videoTrack.displayHeight; // => number
+// Get the pixel dimensions of the track after aspect ratio adjustments,
+// but before rotation:
+await videoTrack.getSquarePixelWidth(); // => number
+await videoTrack.getSquarePixelHeight(); // => number
+
+// Get the displayed pixel dimensions of the track's samples, after
+// aspect ratio adjustments and rotation:
+await videoTrack.getDisplayWidth(); // => number
+await videoTrack.getDisplayHeight(); // => number
 
 // Get the clockwise rotation in degrees by which the
 // track's frames should be rotated:
-videoTrack.rotation; // => 0 | 90 | 180 | 270
+await videoTrack.getRotation(); // => 0 | 90 | 180 | 270
+
+// Get whether the track's frames should be flipped horizontally
+// (after rotation):
+await videoTrack.getFlip(); // => boolean
+
+// Get the full transformation matrix that rotation and flip are
+// derived from:
+await videoTrack.getTransformationMatrix(); // => TransformationMatrix
+
+// Get the aspect ratio of the track's pixels (usually 1:1):
+await videoTrack.getPixelAspectRatio(); // => { num: number, den: number }
 ```
 
-To compute a video track's average frame rate (FPS), use [`computePacketStats`](#packet-statistics):
-```ts
-const stats = await videoTrack.computePacketStats(100);
-const frameRate = stats.averagePacketRate; // Approximate, but often exact
-```
+To determine a video track's frame rate (FPS), compute its [frame rate metrics](#frame-rate-metrics).
 
 You can retrieve the track's decoder configuration, which is a `VideoDecoderConfig` from the WebCodecs API for usage within `VideoDecoder`:
 ```ts
@@ -247,16 +354,31 @@ await videoTrack.hasHighDynamicRange(); // => boolean
 ```
 This method compares with the available color space metadata. If it resolves to `true`, then the video is HDR; if it resolves to `false`, the video may or may not be HDR.
 
+#### Frame rate metrics
+
+You can compute metrics about a video track's frame rate (FPS):
+```ts
+const metrics = await videoTrack.computeFrameRateMetrics(); // => FrameRateMetrics
+metrics.bestGuessFrameRate; // => number
+```
+
+Frame rate is never determined from file metadata (which is unreliable) but is always deduced directly from the actual frame timestamps. See [`FrameRateMetrics`](../api/FrameRateMetrics) for more.
+
+By default, this method probes the first 256 packets of the track, which is enough for a reliable estimate. You can control this number using the `targetPacketCount` option, but note that increasing it makes the call more expensive:
+```ts
+await videoTrack.computeFrameRateMetrics({ targetPacketCount: 1024 });
+```
+
 ### Audio track metadata
 
 In addition to the [common track metadata](#common-track-metadata), audio tracks have additional metadata you can query:
 
 ```ts
 // Get the number of audio channels:
-audioTrack.numberOfChannels; // => number
+await audioTrack.getNumberOfChannels(); // => number
 
 // Get the audio sample rate in hertz:
-audioTrack.sampleRate; // => number
+await audioTrack.getSampleRate(); // => number
 ```
 
 You can retrieve the track's decoder configuration, which is an `AudioDecoderConfig` from the WebCodecs API for usage within `AudioDecoder`:
@@ -276,6 +398,34 @@ For example, here's the decoder configuration for an AAC audio track:
 		17, 144,
 	]),
 }
+```
+
+### Track pairability
+
+Mediabunny has a concept of "track pairability". Two different tracks are considered _pairable_ if they are compatible with each other, meaning they can be presented together. For example, in a normal file, the video track can be paired with the audio track. If it has multiple audio tracks, the video track can be paired with each one of them, but the audio tracks cannot be paired with each other; they're not intended to be played at the same time.
+
+This concept is needed to model the more complex track configurations found in many-track formats such as HLS. Here, an audio track may be pairable with all video tracks or just one; it depends on the master playlist. These inter-track relations are exactly what track pairability describes.
+
+To see if two tracks are pairable, do:
+```ts
+const canPair = trackA.canBePairedWith(trackB);
+```
+
+Each track also provides utilities that let you find its pairable tracks easily:
+```ts
+// These return an array of tracks
+await track.getPairableTracks();
+await track.getPairableVideoTracks();
+await track.getPairableAudioTracks();
+
+// These return one track or null
+await track.getPrimaryPairableVideoTrack();
+await track.getPrimaryPairableAudioTrack();
+
+// These resolve to booleans:
+await track.hasPairableTrack();
+await track.hasPairableVideoTrack();
+await track.hasPairableAudioTrack();
 ```
 
 ## Reading media data
@@ -385,15 +535,47 @@ await decoder.flush();
 
 As you can see, media sinks are incredibly versatile and allow for efficient, sparse reading of media data within the input file.
 
+## Disposing inputs
+
+When you're not using them anymore, `Input` instances will automatically get cleaned up by garbage collection. However, sometimes you may want to prematurely dispose of an `Input` and all its connected resources, or cancel any ongoing operation. You can do it like so:
+
+```ts
+input.dispose();
+```
+
+When an `Input` is disposed, ongoing read operations will be canceled, all future read operations will fail, any open decoders will be closed, and all ongoing media sink operations will be canceled. Disallowed and canceled operations will throw an `InputDisposedError`.
+
+You are expected not to use an `Input` after disposing it. While some operations may still work, it is not specified and may change in any future update.
+
+`Input` also implements `Disposable`, meaning you can use it with JavaScript Explicit Resource Management features such as the [`using` keyword](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/using):
+```ts
+{
+	using input = new Input(...);
+
+	// `input` will automatically be disposed
+}
+```
+
+Using `using` is recommended over `const` if you only need the `Input` momentarily within a single scope.
+
 ## Input sources
 
 The _input source_ determines where the `Input` reads data from.
 
-All sources have an `onread` callback property you can set to inspect which areas of the file are being read:
+All sources have a `read` event you can use to inspect which areas of the file are being read:
 ```ts
-source.onread = (start, end) => {
+source.on('read', ({ start, end }) => {
 	console.log(`Reading byte range [${start}, ${end})`);
-};
+});
+```
+
+You can derive a `RangedSource` representing only a sub-section of an existing source via `slice`:
+```ts
+// A source over only the first 1024 bytes:
+const sliced = source.slice(0, 1024);
+
+// A source that starts 8192 bytes into the original source:
+const sliced2 = source.slice(8192);
 ```
 
 ---
@@ -417,7 +599,7 @@ This source is the fastest but requires the entire input file to be held in memo
 
 ### `BlobSource`
 
-This source is backed by an underlying [`Blob`](https://developer.mozilla.org/en-US/docs/Web/API/Blob) object. Since [`File`](https://developer.mozilla.org/en-US/docs/Web/API/File) extends `Blob`, this source is perfect for reading data directly from disk.
+This source is backed by an underlying [`Blob`](https://developer.mozilla.org/en-US/docs/Web/API/Blob) object. Since [`File`](https://developer.mozilla.org/en-US/docs/Web/API/File) extends `Blob`, this source is perfect for reading data directly from disk (in the browser).
 ```ts
 import { BlobSource } from 'mediabunny';
 
@@ -427,20 +609,28 @@ fileInput.addEventListener('change', (event) => {
 });
 ```
 
-### `UrlSource` <Badge type="warning" text="beta" />
+`BlobSource` accepts additional options as a second parameter:
+```ts
+type BlobSourceOptions = {
+	// The maximum number of bytes the cache is allowed to hold
+	// in memory. Defaults to 8 MiB.
+	maxCacheSize?: number;
 
-::: warning
-This is a **beta** feature. `UrlSource` tends to make tons of requests and is potentially slow. This is something that will be fixed in the near future.
+	// Handles errors that occur while no read is pending
+	handleUnhandledError?: (error: unknown) => unknown;
+};
+```
 
-It still works, but keep in mind it's going to be much higher-latency than reading directly from disk or from memory.
-:::
+### `UrlSource`
 
-This source fetches data from a URL. This is useful for reading files over the network.
+This source fetches data from a remote URL, useful for reading files over the network.
 ```ts
 import { UrlSource } from 'mediabunny';
 
 const source = new UrlSource('https://example.com/bigbuckbunny.mp4');
 ```
+
+`UrlSource` will do some pretty crazy stuff to prefetch data intelligently based on observed access patterns to minimize request count and latency.
 
 ::: warning
 If you're using this source in the browser and the URL is on a different origin, make sure [CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS) is properly configured.
@@ -450,7 +640,20 @@ If you're using this source in the browser and the URL is on a different origin,
 ```ts
 type UrlSourceOptions = {
 	requestInit?: RequestInit;
-	getRetryDelay?: (previousAttempts: number) => number | null;
+	getRetryDelay?: (previousAttempts: number, error: unknown, url: string | URL | Request) => number | null;
+
+	// The maximum number of bytes the cache is allowed to hold
+	// in memory. Defaults to 8 MiB.
+	maxCacheSize?: number;
+
+	// The maximum number of parallel requests to use for fetching. Defaults to 2.
+	parallelism?: number;
+
+	// Used to provide a custom fetch function
+	fetchFn?: typeof fetch;
+
+	// Handles errors that occur while no read is pending
+	handleUnhandledError?: (error: unknown) => unknown;
 };
 ```
 
@@ -465,6 +668,10 @@ const source = new UrlSource('https://example.com/bigbuckbunny.mp4', {
 });
 ```
 
+::: info
+All `requestInit` fields are respected except for `signal`, which is overridden by Mediabunny. The same applies to the `signal` value of a `Request` passed as the first constructor argument. To cancel ongoing requests, [dispose of the input](#disposing-inputs).
+:::
+
 `getRetryDelay` can be used to control the retry logic used should a request fail. When a request fails, `getRetryDelay` should return the time to wait in seconds before the request will be retried. Returning `null` prevents further retries.
 ```ts
 // UrlSource using retry logic with exponential backoff:
@@ -473,20 +680,66 @@ const source = new UrlSource('https://example.com/bigbuckbunny.mp4', {
 });
 ```
 
-Not setting `getRetryDelay` means requests will not be retried.
+Not setting `getRetryDelay` will lead to the default being used:
+- Infinite exponential backoff pattern, capped at 16 seconds.  
+- If a CORS error is suspected (`fetch()` did reject even though `navigator.onLine` is true and origin is different), no further retries will be made.
 
-### `StreamSource`
+---
 
-This is a general-purpose input source you can use to read data from anywhere. All other input sources can be implemented on top of `StreamSource`.
-
-For example, here we're reading a file from disk using the Node.js file system:
+Use `fetchFn` to provide a custom fetch function, usually for polyfill reasons. For example, React Native's `fetch` does not support streamable response bodies, a feature that `UrlSource` requires. In this case, you could use [Expo's `fetch` function](https://docs.expo.dev/versions/latest/sdk/expo/#expofetch-api) instead:
 ```ts
-import { StreamSource } from 'mediabunny';
+import { UrlSource } from 'mediabunny';
+import { fetch } from 'expo/fetch';
+
+const source = new UrlSource('https://example.com/bigbuckbunny.mp4', {
+	fetchFn: (input, init) => {
+		if (typeof input !== 'string') {
+			// Expo requires string URLs
+			throw new Error('Expected a string URL.');
+		}
+
+		return fetch(input, init);
+	},
+});
+```
+
+### `FilePathSource`
+
+This input source can be used to load data directly from a file, given a file path. It requires a server-side environment such as Node, Bun, or Deno.
+```ts
+import { FilePathSource } from 'mediabunny';
+
+const source = new FilePathSource('/home/david/Downloads/bigbuckbunny.mp4');
+```
+
+`FilePathSource` accepts additional options as a second parameter:
+```ts
+type FilePathSourceOptions = {
+	// The maximum number of bytes the cache is allowed to hold
+	// in memory. Defaults to 8 MiB.
+	maxCacheSize?: number;
+
+	// Handles errors that occur while no read is pending
+	handleUnhandledError?: (error: unknown) => unknown;
+};
+```
+
+::: warning
+When using this source, make sure to manually [dispose of the Input](#disposing-inputs) when you are done with it to properly close the internal file handle held by this source.
+:::
+
+### `CustomSource`
+
+This is a general-purpose input source you can use to read data from anywhere.
+
+For example, here we're reading a file from disk using the Node.js file system (although you should use the existing [`FilePathSource`](#filepathsource) for that):
+```ts
+import { CustomSource } from 'mediabunny';
 import { open } from 'node:fs/promises';
 
 const fileHandle = await open('bigbuckbunny.mp4', 'r');
 
-const source = new StreamSource({
+const source = new CustomSource({
 	read: async (start, end) => {
 		const buffer = Buffer.alloc(end - start);
 		await fileHandle.read(buffer, 0, end - start, start);
@@ -499,14 +752,171 @@ const source = new StreamSource({
 });
 ```
 
-The options of `StreamSource` have the following type:
+The options of `CustomSource` have the following type:
 ```ts
-type StreamSourceOptions = {
-	// Called when data is requested.
-	// Should return or resolve to the bytes from the specified byte range.
-	read: (start: number, end: number) => Uint8Array | Promise<Uint8Array>;
-	// Called when the size of the entire file is requested.
-	// Should return or resolve to the size in bytes.
-	getSize: () => number | Promise<number>;
+type CustomSourceOptions = {
+	getSize: () => MaybePromise<number>;
+	read: (start: number, end: number) => MaybePromise<Uint8Array | ReadableStream<Uint8Array>>;
+	dispose?: () => unknown;
+	maxCacheSize?: number;
+	prefetchProfile?: 'none' | 'fileSystem' | 'network';
+	handleUnhandledError?: (error: unknown) => unknown;
 };
+
+type MaybePromise<T> = T | Promise<T>;
+```
+
+- `getSize`\
+	Called when the size of the entire file is requested. Must return or resolve to the size in bytes. This function is guaranteed to be called before `read`.
+- `read`\
+	Called when data is requested. Must return or resolve to the bytes from the specified byte range, or a stream that yields these bytes. You are guaranteed that `0 <= start < end < fileSize`.
+- `dispose`\
+	Called when the `Input` driven by this source is disposed.
+- `maxCacheSize`\
+	The maximum number of bytes the cache is allowed to hold in memory. Defaults to 8 MiB.
+- `prefetchProfile`\
+	Specifies the prefetch profile that the reader should use with this source. A prefetch propfile specifies the pattern with which bytes outside of the requested range are preloaded to reduce latency for future reads.
+	- `'none'` (default): No prefetching; only the data needed in the moment is requested.
+	- `'fileSystem'`: File system-optimized prefetching: a small amount of data is prefetched bidirectionally, aligned with page boundaries.
+	- `'network'`: Network-optimized prefetching, or more generally, prefetching optimized for any high-latency environment: tries to minimize the amount of read calls and aggressively prefetches data when sequential access patterns are detected.
+- `handleUnhandledError`\
+	Handles errors that occur while no read is pending. By default, these become unhandled promise rejections.
+
+::: info
+`CustomSource` was previously known as `StreamSource` and is still available under that alias, but usage of `StreamSource` is deprecated.
+:::
+
+### `ReadableStreamSource`
+
+This is a source backed by a `ReadableStream` of `Uint8Array`, representing an append-only byte stream of unknown length. This is the source to use for incrementally streaming in input files that are still being constructed and whose size we don't yet know. You could also use it to stream in existing files, but other sources (such as [`BlobSource`](#blobsource) or [`FilePathSource`](#filepathsource)) are recommended instead because they offer random access.
+
+```ts
+import { ReadableStreamSource } from 'mediabunny';
+
+const { writable, readable } = new TransformStream<Uint8Array, Uint8Array>();
+const source = new ReadableStreamSource(readable);
+
+// Append chunks of data
+const writer = writable.getWriter();
+writer.write(chunk1);
+writer.write(chunk2);
+writer.close();
+```
+
+This source is *unsized*, meaning calls to `.getSize()` will throw and readers are more limited due to the lack of random file access. You should only use this source with sequential access patterns, such as reading all packets from start to end or doing conversions. This source does not work well with random access patterns unless you increase its max cache size.
+
+```ts
+type ReadableStreamSourceOptions = {
+	// The maximum number of bytes the cache is allowed to hold
+	// in memory. Defaults to 16 MiB.
+	maxCacheSize?: number;
+
+	// Handles errors that occur while no read is pending
+	handleUnhandledError?: (error: unknown) => unknown;
+};
+```
+
+#### Use with [`MediaRecorder`](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder)
+
+You can combine `MediaRecorder` with `ReadableStreamSource` to stream recorded data into Mediabunny while the recording is taking place. Here's an example where we pipe `MediaRecorder`'s output into Mediabunny's Conversion API to create a WAVE file:
+```ts
+import {
+	Input, 
+	Output, 
+	Conversion, 
+	ReadableStreamSource, 
+	ALL_FORMATS, 
+	WavOutputFormat, 
+	BufferTarget,
+} from 'mediabunny';
+
+// Set up a TransformStream to convert MediaRecorder's Blobs into Uint8Arrays
+const { writable, readable } = new TransformStream<Blob, Uint8Array>({
+	async transform(chunk, controller) {
+		const arrayBuffer = await chunk.arrayBuffer();
+		controller.enqueue(new Uint8Array(arrayBuffer));
+	},
+});
+
+const input = new Input({
+	source: new ReadableStreamSource(readable),
+	formats: ALL_FORMATS,
+});
+const output = new Output({
+	format: new WavOutputFormat(),
+	target: new BufferTarget(),
+});
+
+const conversionPromise = Conversion.init({ input, output })
+	.then(conversion => conversion.execute());
+
+const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+const recorder = new MediaRecorder(micStream);
+const writer = writable.getWriter();
+
+recorder.ondataavailable = e => writer.write(e.data);
+recorder.onstop = async () => {
+	await writer.close();
+	await conversionPromise;
+
+	// Get the final .wav file
+	const wavFile = output.target.buffer!; // => ArrayBuffer
+};
+
+recorder.start(1000);
+setTimeout(() => recorder.stop(), 10_000); // Stop recording after 10s
+```
+
+### `PathedSource`
+
+Some media formats reference more than one file. For example, an HLS stream consists of a master playlist that points to one or more media playlists, each of which in turn references many media segment files. To read this kind of multi-file media, Mediabunny needs a way to resolve a source for each file path. 
+
+This can be done with `PathedSource`. A `PathedSource` wraps a *root path* (the entry file of the media) together with a callback that produces a `Source` for each requested file path. It is an abstract class, so you can't use it directly, but it provides the necessary interface to read multi-file media. It is implemented by:
+- [`UrlSource`](#urlsource)
+- [`FilePathSource`](#filepathsource)
+- [`CustomPathedSource`](#custompathedsource)
+
+### `CustomPathedSource`
+
+Allows you to implement a user-defined [`PathedSource`](#pathedsource) to provide an arbitrary "file path to data" mapping function. Useful when your data is stored in a custom structure, for example OPFS:
+
+```ts
+import { Input, CustomPathedSource, BlobSource } from 'mediabunny';
+
+const root = await navigator.storage.getDirectory();
+
+const input = new Input({
+	source: new CustomPathedSource(
+		'master.m3u8',
+		async ({ path }) => {
+			const handle = await root.getFileHandle(path);
+			const file = await handle.getFile();
+			return new BlobSource(file);
+		},
+	),
+	// ...
+});
+```
+
+The callback is called once per requested file (lazily, only when needed) and receives a `SourceRequest`:
+```ts
+type SourceRequest = {
+	path: FilePath; // The requested file path
+	isRoot: boolean; // Whether the requested file is the root file
+};
+```
+
+## Init inputs
+
+Some file formats contain track initialization info in a *separate* file; CMAF is one example. To supply these to Mediabunny, load the initialization file as a separate `Input` and then pass it as an `initInput`:
+```ts
+const initInput = new Input({
+	source: new FilePathSource('init.mp4'),
+	formats: ALL_FORMATS,
+});
+const input = new Input({
+	source: new FilePathSource('data.mp4'),
+	formats: ALL_FORMATS,
+	initInput,
+});
 ```

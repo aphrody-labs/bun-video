@@ -1,12 +1,12 @@
 /*!
- * Copyright (c) 2025-present, Vanilagy and contributors
+ * Copyright (c) 2026-present, Vanilagy and contributors
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import { Reader } from '../reader';
+import { FileSlice, readI64Le, readU32Le, readU8 } from '../reader';
 import { OGGS } from './ogg-misc';
 
 export const MIN_PAGE_HEADER_SIZE = 27;
@@ -26,118 +26,84 @@ export type Page = {
 	lacingValues: Uint8Array;
 };
 
-export class OggReader {
-	pos = 0;
-	constructor(public reader: Reader) {}
+export const readPageHeader = (slice: FileSlice): Page | null => {
+	const startPos = slice.filePos;
 
-	readBytes(length: number) {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + length);
-		this.pos += length;
-
-		return new Uint8Array(view.buffer, offset, length);
+	const capturePattern = readU32Le(slice);
+	if (capturePattern !== OGGS) {
+		return null;
 	}
 
-	readU8() {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + 1);
-		this.pos += 1;
+	slice.skip(1); // Version
+	const headerType = readU8(slice);
+	const granulePosition = readI64Le(slice);
+	const serialNumber = readU32Le(slice);
+	const sequenceNumber = readU32Le(slice);
+	const checksum = readU32Le(slice);
 
-		return view.getUint8(offset);
+	const numberPageSegments = readU8(slice);
+	if (numberPageSegments === 0 || slice.remainingLength < numberPageSegments) {
+		// Either a page that carries nothing (and would only trip up the packet logic) or a cut-off one
+		return null;
 	}
 
-	readU32() {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + 4);
-		this.pos += 4;
+	const lacingValues = new Uint8Array(numberPageSegments);
 
-		return view.getUint32(offset, true);
+	for (let i = 0; i < numberPageSegments; i++) {
+		lacingValues[i] = readU8(slice);
 	}
 
-	readI32() {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + 4);
-		this.pos += 4;
+	const headerSize = 27 + numberPageSegments;
+	const dataSize = lacingValues.reduce((a, b) => a + b, 0);
+	const totalSize = headerSize + dataSize;
 
-		return view.getInt32(offset, true);
-	}
+	return {
+		headerStartPos: startPos,
+		totalSize,
+		dataStartPos: startPos + headerSize,
+		dataSize,
+		headerType,
+		granulePosition,
+		serialNumber,
+		sequenceNumber,
+		checksum,
+		lacingValues,
+	};
+};
 
-	readI64() {
-		const low = this.readU32();
-		const high = this.readI32();
-		return high * 0x100000000 + low;
-	}
+export const findNextPageHeader = (slice: FileSlice, until: number, serialNumber?: number) => {
+	while (slice.filePos < until - (4 - 1)) { // Size of word minus 1
+		const word = readU32Le(slice);
+		const firstByte = word & 0xff;
+		const secondByte = (word >>> 8) & 0xff;
+		const thirdByte = (word >>> 16) & 0xff;
+		const fourthByte = (word >>> 24) & 0xff;
 
-	readAscii(length: number) {
-		const { view, offset } = this.reader.getViewAndOffset(this.pos, this.pos + length);
-		this.pos += length;
-
-		let str = '';
-		for (let i = 0; i < length; i++) {
-			str += String.fromCharCode(view.getUint8(offset + i));
-		}
-		return str;
-	}
-
-	readPageHeader(): Page | null {
-		const startPos = this.pos;
-
-		const capturePattern = this.readU32();
-		if (capturePattern !== OGGS) {
-			return null;
-		}
-
-		this.pos += 1; // Version
-		const headerType = this.readU8();
-		const granulePosition = this.readI64();
-		const serialNumber = this.readU32();
-		const sequenceNumber = this.readU32();
-		const checksum = this.readU32();
-
-		const numberPageSegments = this.readU8();
-		const lacingValues = new Uint8Array(numberPageSegments);
-
-		for (let i = 0; i < numberPageSegments; i++) {
-			lacingValues[i] = this.readU8();
+		const O = 0x4f; // 'O'
+		if (firstByte !== O && secondByte !== O && thirdByte !== O && fourthByte !== O) {
+			continue;
 		}
 
-		const headerSize = 27 + numberPageSegments;
-		const dataSize = lacingValues.reduce((a, b) => a + b, 0);
-		const totalSize = headerSize + dataSize;
+		slice.skip(-4);
 
-		return {
-			headerStartPos: startPos,
-			totalSize,
-			dataStartPos: startPos + headerSize,
-			dataSize,
-			headerType,
-			granulePosition,
-			serialNumber,
-			sequenceNumber,
-			checksum,
-			lacingValues,
-		};
-	}
-
-	findNextPageHeader(until: number) {
-		while (this.pos < until - (4 - 1)) { // Size of word minus 1
-			const word = this.readU32();
-			const firstByte = word & 0xff;
-			const secondByte = (word >>> 8) & 0xff;
-			const thirdByte = (word >>> 16) & 0xff;
-			const fourthByte = (word >>> 24) & 0xff;
-
-			const O = 0x4f; // 'O'
-			if (firstByte !== O && secondByte !== O && thirdByte !== O && fourthByte !== O) {
-				continue;
+		if (word === OGGS) {
+			// We have found the capture pattern
+			if (serialNumber === undefined || slice.filePos + 18 > slice.end) {
+				return true; // Can't check the serial number here, leave it to the caller
 			}
 
-			this.pos -= 4;
+			// Skipping other streams' pages right here is much cheaper than having the caller check each one
+			slice.skip(14);
+			const pageSerialNumber = readU32Le(slice);
+			slice.skip(-18);
 
-			if (word === OGGS) {
-				// We have found the capture pattern
+			if (pageSerialNumber === serialNumber) {
 				return true;
 			}
-
-			this.pos += 1;
 		}
 
-		return false;
+		slice.skip(1);
 	}
-}
+
+	return false;
+};

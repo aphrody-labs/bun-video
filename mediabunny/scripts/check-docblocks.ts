@@ -23,34 +23,16 @@ const checkDocblocks = (filePath: string) => {
 			|| ts.isFunctionDeclaration(node)
 			|| ts.isTypeAliasDeclaration(node)
 			|| ts.isEnumDeclaration(node)
+			|| ts.isEnumMember(node)
 			|| ts.isPropertySignature(node)
 			|| ts.isMethodSignature(node)
-			|| ts.isVariableStatement(node)
 			|| ts.isVariableDeclaration(node)
 			|| (ts.isParameter(node) && ts.isPropertyDeclaration(node.parent))
 		) {
 			let symbol: ts.Symbol | undefined;
 
 			try {
-				if (ts.isVariableStatement(node)) {
-					node.declarationList.declarations.forEach((declaration) => {
-						const declSymbol = checker.getSymbolAtLocation(declaration.name);
-						if (declSymbol) {
-							const docStatus = checkDocumentationContent(declSymbol, declaration);
-							if (docStatus.hasProblem) {
-								const name = declaration.name.getText(sourceFile);
-								const line = sourceFile.getLineAndCharacterOfPosition(declaration.getStart()).line + 1;
-								missingDocblocks.push({
-									name,
-									kind: 'variable',
-									line,
-									reason: docStatus.reason,
-								});
-							}
-						}
-					});
-					return;
-				} else if ('name' in node && node.name) {
+				if ('name' in node && node.name) {
 					symbol = checker.getSymbolAtLocation(node.name);
 				}
 			} catch {
@@ -137,9 +119,22 @@ const checkDocblocks = (filePath: string) => {
 
 		for (const node of jsDocNodes) {
 			if (ts.isJSDoc(node)) {
-				const commentText = node.comment ?? '';
-				if (typeof commentText !== 'string') {
-					throw new Error('Can\'t handle this yet!');
+				let commentText = '';
+
+				if (typeof node.comment === 'string') {
+					commentText = node.comment;
+				} else if (Array.isArray(node.comment)) {
+					// Handle JSDoc comment parts (including @link tags)
+					commentText = node.comment
+						.map((part) => {
+							if (typeof part === 'string') {
+								return part;
+							} else if (part && typeof part === 'object' && 'text' in part) {
+								return part.text || '';
+							}
+							return '';
+						})
+						.join('');
 				}
 
 				// Remove all @tags with regex
@@ -187,11 +182,11 @@ const main = () => {
 			console.log(`✅ All symbols in ${filePath} have meaningful docblocks.`);
 		} else {
 			console.log(
-				`❌ Found ${result.missingDocblocks.length} symbols with insufficient docblocks in ${filePath}:`,
+				`❌ Found ${result.missingDocblocks.length} symbols with insufficient docblocks:`,
 			);
 
 			result.missingDocblocks.forEach((item) => {
-				console.log(`  - ${item.kind} '${item.name}' at line ${item.line}: ${item.reason}`);
+				console.log(`  - ${item.kind} '${item.name}' at ${filePath}:${item.line}: ${item.reason}`);
 			});
 
 			process.exit(1);

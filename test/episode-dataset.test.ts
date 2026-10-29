@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { deflateSync } from "node:zlib";
 import {
   assessAsrRepetition,
   cueFrameCandidates,
@@ -132,7 +133,7 @@ test.skipIf(typeof Bun.Image.prototype.rgba !== "function")(
     const png = joinBytes([
       new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
       chunk("IHDR", header),
-      chunk("IDAT", Bun.deflateSync(rows, { windowBits: 15 })),
+      chunk("IDAT", deflateSync(rows)),
       chunk("IEND", new Uint8Array()),
     ]);
     expect(await thumbnailPixels(png)).toEqual({
@@ -141,7 +142,7 @@ test.skipIf(typeof Bun.Image.prototype.rgba !== "function")(
       rgba: new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255]),
     });
     const corrupt = new Uint8Array(png);
-    // The native owner deliberately ignores CRC; invalidate the real zlib header.
+    // Invalidate the real zlib header (Bun.deflateSync emits raw deflate, so node:zlib builds the IDAT).
     corrupt[41] = 0;
     await expect(thumbnailPixels(corrupt)).rejects.toThrow();
     const invalidRows = new Uint8Array(1024 * 1024);
@@ -149,7 +150,7 @@ test.skipIf(typeof Bun.Image.prototype.rgba !== "function")(
     const bomb = joinBytes([
       new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
       chunk("IHDR", header),
-      chunk("IDAT", Bun.deflateSync(invalidRows, { windowBits: 15 })),
+      chunk("IDAT", deflateSync(invalidRows)),
       chunk("IEND", new Uint8Array()),
     ]);
     await expect(thumbnailPixels(bomb)).rejects.toThrow();

@@ -28,7 +28,6 @@ import {
   explainStreamingEncodeGate,
   collectVideoMetadataHints,
   collectVideoReadinessSkipIds,
-  extractStandaloneEntryFromIndex,
   findMissingFrameRanges,
   getNextRetryWorkerCount,
   isRecoverableParallelCaptureError,
@@ -50,18 +49,22 @@ import {
   envInt,
   isDeParallelRouterEnabled,
   mergeWorkerInitObservability,
+  PROBE_READ_TIMEOUT_MS,
   resolveCompositionElementCount,
   detectAdaptersStatic,
   resolveAdaptersUsed,
   resolveDeShortBand,
   shouldClampDefaultDrawElement,
+  calibrationCaptureConfig,
   shouldPreferParallelDrawElement,
   shouldPreferSingleWorkerDrawElement,
+  resolveDeSingleMinFrames,
   isCaptureParallelStreamRouterEnabled,
   shouldSegmentCapture,
   SEGMENTED_MIN_SECONDS_AFTER_SOAK,
   resolveParallelCaptureMode,
   shouldStreamParallelCapture,
+  isAppleGpuDiskCapture,
   shouldUseStreamingEncode,
   resolveObservedCaptureMode,
   createCaptureObservabilityUpdater,
@@ -99,102 +102,19 @@ describe("resolveRenderWorkDirPrefix", () => {
       join("C:/Temp", "hf-render-"),
     );
   });
-});
 
-describe("extractStandaloneEntryFromIndex", () => {
-  it("reuses the index wrapper and keeps only the requested composition host", () => {
-    const indexHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>body { background: #111; }</style>
-</head>
-<body>
-  <div id="main" data-composition-id="root" data-width="1920" data-height="1080">
-    <div id="intro" data-composition-id="intro" data-composition-src="compositions/intro.html" data-start="5"></div>
-    <div id="outro" data-composition-id="outro" data-composition-src="compositions/outro.html" data-start="12"></div>
-  </div>
-</body>
-</html>`;
+  it("keeps macOS frames out of the project folder, which a sync client may be watching", () => {
+    const outputPath = join("/Users/me/Nextcloud/project", "renders", "final.mp4");
 
-    const extracted = extractStandaloneEntryFromIndex(indexHtml, "compositions/outro.html");
-
-    expect(extracted).toContain('data-composition-id="root"');
-    expect(extracted).toContain('id="outro"');
-    expect(extracted).toContain('data-composition-src="compositions/outro.html"');
-    expect(extracted).toContain('data-start="0"');
-    expect(extracted).not.toContain('id="intro"');
-    expect(extracted).toContain("<style>body { background: #111; }</style>");
-  });
-
-  it("matches normalized data-composition-src paths", () => {
-    const indexHtml = `<!DOCTYPE html>
-<html>
-<body>
-  <div data-composition-id="root" data-width="1920" data-height="1080">
-    <div id="intro" data-composition-id="intro" data-composition-src="./compositions/intro.html" data-start="3"></div>
-  </div>
-</body>
-</html>`;
-
-    const extracted = extractStandaloneEntryFromIndex(indexHtml, "compositions/intro.html");
-
-    expect(extracted).not.toBeNull();
-    expect(extracted).toContain('data-start="0"');
-    expect(extracted).toContain('data-composition-src="./compositions/intro.html"');
-  });
-
-  it("returns null when index.html does not mount the requested entry file", () => {
-    const indexHtml = `<!DOCTYPE html>
-<html>
-<body>
-  <div data-composition-id="root" data-width="1920" data-height="1080">
-    <div id="intro" data-composition-id="intro" data-composition-src="compositions/intro.html"></div>
-  </div>
-</body>
-</html>`;
-
-    const extracted = extractStandaloneEntryFromIndex(indexHtml, "compositions/outro.html");
-
-    expect(extracted).toBeNull();
-  });
-
-  it("re-points the wrapper duration at the scene's own, not the master's", () => {
-    const indexHtml = `<!DOCTYPE html>
-<html>
-<body>
-  <div data-composition-id="master" data-width="640" data-height="360" data-duration="12">
-    <div id="scene1" data-composition-id="scene1" data-composition-src="compositions/scene1.html" data-start="0" data-duration="2"></div>
-  </div>
-</body>
-</html>`;
-    const sceneHtml = `<template id="scene1-template"><div data-composition-id="scene1" data-width="640" data-height="360" data-duration="3"></div></template>`;
-
-    const extracted = extractStandaloneEntryFromIndex(
-      indexHtml,
-      "compositions/scene1.html",
-      sceneHtml,
+    expect(resolveRenderWorkDirPrefix(outputPath, "job-id", "darwin", "/var/folders/x/T")).toBe(
+      join("/var/folders/x/T", "hf-render-"),
     );
-
-    // The extracted standalone advertises the scene file's 3s, not the mount's 2s or master's 12s.
-    expect(extracted).toContain('data-duration="3"');
-    expect(extracted).not.toContain('data-duration="12"');
   });
 
-  it("falls back to the mount's data-duration when the scene file isn't supplied", () => {
-    const indexHtml = `<!DOCTYPE html>
-<html>
-<body>
-  <div data-composition-id="master" data-width="640" data-height="360" data-duration="12">
-    <div id="scene1" data-composition-id="scene1" data-composition-src="compositions/scene1.html" data-start="0" data-duration="2"></div>
-  </div>
-</body>
-</html>`;
-
-    const extracted = extractStandaloneEntryFromIndex(indexHtml, "compositions/scene1.html");
-
-    expect(extracted).toContain('data-duration="2"');
-    expect(extracted).not.toContain('data-duration="12"');
+  it("keeps Linux frames beside the output, where a container's small /tmp cannot fill", () => {
+    expect(resolveRenderWorkDirPrefix("/work/renders/final.mp4", "job-id", "linux", "/tmp")).toBe(
+      join("/work/renders", "work-job-id-"),
+    );
   });
 });
 
@@ -260,6 +180,93 @@ describe("executeDiskCaptureWithAdaptiveRetry — zero-progress bail (integratio
       expect(executeParallelCapture).toHaveBeenCalledTimes(1);
     } finally {
       rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    { interleaveFrames: true, strides: [3, 3, 3], starts: [10, 11, 12] },
+    {
+      interleaveFrames: undefined,
+      strides: [undefined, undefined, undefined],
+      starts: [10, 14, 18],
+    },
+  ])(
+    "hands workers $starts as start frames when interleaveFrames=$interleaveFrames",
+    async ({ interleaveFrames, strides, starts }) => {
+      vi.mocked(executeParallelCapture).mockResolvedValue([]);
+      vi.mocked(mergeWorkerFrames).mockResolvedValue(undefined);
+      const workDir = mkdtempSync(join(tmpdir(), "hf-dist-work-"));
+      const framesDir = mkdtempSync(join(tmpdir(), "hf-dist-frames-"));
+      try {
+        await executeDiskCaptureWithAdaptiveRetry({
+          serverUrl: "http://localhost:0",
+          workDir,
+          framesDir,
+          totalFrames: 12,
+          initialWorkerCount: 3,
+          allowRetry: false,
+          frameExt: "jpg",
+          captureOptions: {} as CaptureOptions,
+          createBeforeCaptureHook: () => null,
+          cfg: {} as EngineConfig,
+          log: makeLog(),
+          dedupPerfs: [],
+          frameRangeStart: 10,
+          interleaveFrames,
+        }).catch(() => {});
+        const tasks = vi.mocked(executeParallelCapture).mock.calls[0]?.[2] ?? [];
+        expect(tasks.map((t) => t.startFrame)).toEqual(starts);
+        expect(tasks.map((t) => t.frameStride)).toEqual(strides);
+      } finally {
+        rmSync(workDir, { recursive: true, force: true });
+        rmSync(framesDir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("retries a dead interleaved worker's frames as one stride task, not one batch per frame", async () => {
+    // 4 workers over 24 frames: worker 2 owns 2, 6, 10, 14, 18, 22 and dies after 10.
+    const workDir = mkdtempSync(join(tmpdir(), "hf-il-retry-work-"));
+    const framesDir = mkdtempSync(join(tmpdir(), "hf-il-retry-frames-"));
+    const write = (frames: number[]) =>
+      frames.forEach((i) =>
+        writeFileSync(join(framesDir, formatCaptureFrameName(i, "jpg")), "captured-frame"),
+      );
+    const all = Array.from({ length: 24 }, (_, i) => i);
+    vi.mocked(mergeWorkerFrames).mockResolvedValue(undefined);
+    vi.mocked(executeParallelCapture)
+      .mockImplementationOnce(async () => {
+        write(all.filter((i) => ![14, 18, 22].includes(i)));
+        throw new Error("Protocol error (Page.captureScreenshot): Target closed");
+      })
+      .mockImplementation(async () => {
+        write(all);
+        return [];
+      });
+    try {
+      await executeDiskCaptureWithAdaptiveRetry({
+        serverUrl: "http://localhost:0",
+        workDir,
+        framesDir,
+        totalFrames: 24,
+        initialWorkerCount: 4,
+        allowRetry: true,
+        frameExt: "jpg",
+        captureOptions: {} as CaptureOptions,
+        createBeforeCaptureHook: () => null,
+        cfg: {} as EngineConfig,
+        log: makeLog(),
+        dedupPerfs: [],
+        interleaveFrames: true,
+      });
+      expect(executeParallelCapture).toHaveBeenCalledTimes(2);
+      const retryTasks = vi.mocked(executeParallelCapture).mock.calls[1]?.[2] ?? [];
+      expect(retryTasks.map((t) => [t.startFrame, t.endFrame, t.frameStride])).toEqual([
+        [14, 23, 4],
+      ]);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+      rmSync(framesDir, { recursive: true, force: true });
     }
   });
 
@@ -1400,6 +1407,26 @@ describe("resolveRenderWorkerCount", () => {
     expect(log.warn).toHaveBeenCalledOnce();
   });
 
+  it("does not pin a capture-motion-blur page to one worker", () => {
+    const log = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
+
+    const workers = resolveRenderWorkerCount(
+      900,
+      4,
+      cfg,
+      {
+        hasShaderTransitions: false,
+        renderModeHints: {
+          recommendScreenshot: true,
+          reasons: [{ code: "captureMotionBlur", message: "data-motion-blur" }],
+        },
+      },
+      log,
+    );
+
+    expect(workers).toBe(4);
+  });
+
   // fallow-ignore-next-line code-duplication
   it("pins to 1 worker in low-memory mode when no explicit --workers is set", () => {
     const log = {
@@ -1695,6 +1722,23 @@ describe("adaptive missing-frame retry helpers", () => {
     ]);
   });
 
+  it("packs each dead interleaved worker's frames into one stride task, offset by the chunk start", () => {
+    const missing = [2, 6, 10, 14, 3, 7]
+      .sort((x, y) => x - y)
+      .map((f) => ({ startFrame: f, endFrame: f + 1 }));
+    const tasks = (maxWorkers: number) =>
+      buildMissingFrameRetryBatches(missing, maxWorkers, "/w", 1, 100, 4).map((batch) =>
+        batch.map((t) => [t.startFrame, t.endFrame, t.frameStride, t.outputFrameOffset]),
+      );
+    expect(tasks(4)).toEqual([
+      [
+        [102, 115, 4, 100],
+        [103, 108, 4, 100],
+      ],
+    ]);
+    expect(tasks(1)).toEqual([[[102, 115, 4, 100]], [[103, 108, 4, 100]]]);
+  });
+
   it("retries a worker placeholder instead of accepting a truncated sequence", () => {
     const framesDir = makeFramesDir();
     for (let frameIndex = 0; frameIndex < 4; frameIndex++) {
@@ -1859,15 +1903,26 @@ describe("resolveDeviceScaleFactor", () => {
     );
   });
 
-  it("rejects downsampling (4K composition → 1080p output)", () => {
-    expect(() =>
+  it("returns 0.5 for a 4K composition → 1080p output", () => {
+    expect(
       resolveDeviceScaleFactor({
         ...defaults,
         compositionWidth: 3840,
         compositionHeight: 2160,
         outputResolution: "landscape",
       }),
-    ).toThrow(/Downsampling/);
+    ).toBe(0.5);
+  });
+
+  it("scales 1080p down for 720p and 480p, so 480p frames are 854×480", () => {
+    const scale = (outputResolution: "landscape-720p" | "landscape-480p") =>
+      resolveDeviceScaleFactor({ ...defaults, outputResolution });
+    expect(scale("landscape-720p")).toBeCloseTo(2 / 3);
+    expect(scale("landscape-480p")).toBe(854 / 1920);
+    expect([
+      Math.round(1920 * scale("landscape-480p")),
+      Math.round(1080 * scale("landscape-480p")),
+    ]).toEqual([854, 480]);
   });
 
   it("rejects non-integer scale factors", () => {
@@ -1921,7 +1976,6 @@ describe("resolveDeviceScaleFactor", () => {
 describe("shouldPreferSingleWorkerDrawElement (DE priority inversion)", () => {
   const eligible = {
     workerCount: 5,
-    requestedWorkers: "auto" as const,
     useDrawElement: true,
     deCompileGate: undefined,
     forceScreenshot: false,
@@ -1982,7 +2036,6 @@ describe("shouldPreferSingleWorkerDrawElement (DE priority inversion)", () => {
 
     it("is NOT decisive when the render is ineligible for any other reason — the attribution cohort must exclude renders the band cannot affect", () => {
       for (const over of [
-        { requestedWorkers: 3 as const },
         { useDrawElement: false },
         { deCompileGate: "css_effect:filter" },
         { forceScreenshot: true },
@@ -2552,6 +2605,27 @@ describe("shouldPreferSingleWorkerDrawElement (DE priority inversion)", () => {
   });
 
   describe("resolveCompositionElementCount", () => {
+    it("returns the static answer and warns when the live read never answers", async () => {
+      vi.useFakeTimers();
+      try {
+        const warn = vi.fn();
+        const session = {
+          isInitialized: true,
+          page: { evaluate: () => new Promise<never>(() => {}) },
+        };
+        const pending = resolveCompositionElementCount(session, "<div><span></span></div>", {
+          warn,
+        });
+        await vi.advanceTimersByTimeAsync(PROBE_READ_TIMEOUT_MS);
+        const resolved = await pending;
+        expect(resolved.source).toBe("static");
+        expect(resolved.count).toBe(2);
+        expect(warn).toHaveBeenCalledOnce();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     // Review finding (R3): a static scan of SOURCE markup cannot see DOM a
     // composition's own script creates at runtime (document.createElement) —
     // an unbounded undercount no regex can close. style-10-prod's real
@@ -2726,6 +2800,23 @@ describe("shouldPreferSingleWorkerDrawElement (DE priority inversion)", () => {
   });
 
   describe("resolveAdaptersUsed", () => {
+    it("returns the static adapters and warns when the live read never answers", async () => {
+      vi.useFakeTimers();
+      try {
+        const warn = vi.fn();
+        const session = {
+          isInitialized: true,
+          page: { evaluate: () => new Promise<never>(() => {}) },
+        };
+        const pending = resolveAdaptersUsed(session, "<script>gsap.timeline();</script>", { warn });
+        await vi.advanceTimersByTimeAsync(PROBE_READ_TIMEOUT_MS);
+        expect(await pending).toEqual(["gsap"]);
+        expect(warn).toHaveBeenCalledOnce();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("falls back to the static scan when there is no probe session", async () => {
       const html = "<script>gsap.timeline();</script>";
       expect(await resolveAdaptersUsed(null, html)).toEqual(["gsap"]);
@@ -2788,14 +2879,14 @@ describe("shouldPreferSingleWorkerDrawElement (DE priority inversion)", () => {
     });
   });
 
-  it("honors explicitly requested workers", () => {
-    expect(shouldPreferSingleWorkerDrawElement({ ...eligible, requestedWorkers: 3 })).toBe(false);
+  it("inverts whatever worker count the render asked for: an explicit --workers N is a ceiling", () => {
+    for (const workerCount of [2, 3, 4, 24]) {
+      expect(shouldPreferSingleWorkerDrawElement({ ...eligible, workerCount })).toBe(true);
+    }
   });
 
-  it("inverts for requestedWorkers undefined — the value production actually passes for auto", () => {
-    expect(shouldPreferSingleWorkerDrawElement({ ...eligible, requestedWorkers: undefined })).toBe(
-      true,
-    );
+  it("leaves a one-worker render alone", () => {
+    expect(shouldPreferSingleWorkerDrawElement({ ...eligible, workerCount: 1 })).toBe(false);
   });
 
   it("skips comps routed to layered/HDR/shader paths (drawElement never runs there)", () => {
@@ -2821,6 +2912,15 @@ describe("shouldPreferSingleWorkerDrawElement (DE priority inversion)", () => {
   it("skips below the amortization threshold (measured crossover ~900 frames)", () => {
     expect(shouldPreferSingleWorkerDrawElement({ ...eligible, totalFrames: 360 })).toBe(false);
     expect(shouldPreferSingleWorkerDrawElement({ ...eligible, totalFrames: 900 })).toBe(true);
+  });
+
+  it("is off unless HF_DE_SINGLE_MIN_FRAMES sets a floor", () => {
+    expect(resolveDeSingleMinFrames({})).toBe(0);
+    expect(resolveDeSingleMinFrames({ HF_DE_SINGLE_MIN_FRAMES: "" })).toBe(0);
+    expect(resolveDeSingleMinFrames({ HF_DE_SINGLE_MIN_FRAMES: "900" })).toBe(900);
+    expect(
+      shouldPreferSingleWorkerDrawElement({ ...eligible, minFrames: resolveDeSingleMinFrames({}) }),
+    ).toBe(false);
   });
 
   it("is disabled by minFrames <= 0 (HF_DE_SINGLE_MIN_FRAMES=0 kill switch)", () => {
@@ -3386,7 +3486,7 @@ describe("sequential capture stall recovery", () => {
 describe("resolveParallelCaptureMode", () => {
   const beginframe = {
     platform: "linux" as NodeJS.Platform,
-    headlessShell: true,
+    headlessShellPath: "/cache/chrome-headless-shell" as string | undefined,
     forceScreenshot: false,
     deviceScaleFactor: 1,
   };
@@ -3401,7 +3501,9 @@ describe("resolveParallelCaptureMode", () => {
     // System Chrome on linux: resolveObservedCaptureMode calls this beginframe,
     // the engine launches screenshot. Getting this wrong would default-enable
     // the router for a cohort whose real path is the screenshot one.
-    expect(resolveParallelCaptureMode({ ...beginframe, headlessShell: false })).toBe("screenshot");
+    expect(resolveParallelCaptureMode({ ...beginframe, headlessShellPath: undefined })).toBe(
+      "screenshot",
+    );
     expect(resolveParallelCaptureMode({ ...beginframe, forceScreenshot: true })).toBe("screenshot");
     // Supersampling: BeginFrame ignores deviceScaleFactor, so preMode falls back.
     expect(resolveParallelCaptureMode({ ...beginframe, deviceScaleFactor: 2 })).toBe("screenshot");
@@ -3545,6 +3647,39 @@ describe("shouldStreamParallelCapture (non-DE parallel streaming router)", () =>
 
   it("skips HDR-layered and shader-transition routes", () => {
     expect(shouldStreamParallelCapture({ ...eligible, layeredOrEffectRoute: true })).toBe(false);
+  });
+});
+
+describe("calibrationCaptureConfig", () => {
+  const drawElementCfg = () => ({ ...createConfig(), useDrawElement: true });
+
+  it("measures screenshot capture, the mode parallel workers use", () => {
+    const cfg = drawElementCfg();
+    expect(calibrationCaptureConfig(cfg, {}).useDrawElement).toBe(false);
+    expect(cfg.useDrawElement).toBe(true);
+  });
+
+  it("keeps drawElement when parallel drawElement was opted into", () => {
+    const cfg = drawElementCfg();
+    expect(calibrationCaptureConfig(cfg, { PRODUCER_EXPERIMENTAL_FAST_CAPTURE: "true" })).toBe(cfg);
+    expect(calibrationCaptureConfig(cfg, { HF_DE_PARALLEL_STREAM: "true" })).toBe(cfg);
+  });
+});
+
+describe("isAppleGpuDiskCapture", () => {
+  const disk = {
+    platform: "darwin",
+    browserGpuMode: "hardware",
+    layered: false,
+    parallelStream: false,
+  } as const;
+
+  it("holds only for hardware-GPU Mac renders that write frames to disk", () => {
+    expect(isAppleGpuDiskCapture(disk)).toBe(true);
+    expect(isAppleGpuDiskCapture({ ...disk, layered: true })).toBe(false);
+    expect(isAppleGpuDiskCapture({ ...disk, parallelStream: true })).toBe(false);
+    expect(isAppleGpuDiskCapture({ ...disk, browserGpuMode: "software" })).toBe(false);
+    expect(isAppleGpuDiskCapture({ ...disk, platform: "win32" })).toBe(false);
   });
 });
 

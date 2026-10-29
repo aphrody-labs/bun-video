@@ -10,7 +10,6 @@ export default defineConfig({
   },
   format: ["esm"],
   dts: true,
-  sourcemap: true,
   clean: false,
   splitting: true,
   external: [
@@ -29,7 +28,6 @@ export default defineConfig({
     "@hyperframes/sdk",
     "@lezer/highlight",
     "@phosphor-icons/react",
-    "bpm-detective",
     "mediabunny",
     "react",
     "react-dom",
