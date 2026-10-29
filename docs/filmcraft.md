@@ -70,3 +70,9 @@ crates are linked; the GPU, editor and UI crates are not.
 
 The GPU and time source files remain reference material: no GPU composition is wired into
 Bun Video yet.
+
+## Revision
+
+`vendor/filmcraft` pins aphrody-labs/filmcraft `bun-runtime-0.9.0` at `f73a0fdb`, which merges
+storytold/filmcraft `main` (0.14.0). Matroska muxing now comes from craft-libs, whose muxer does not
+yet write `Colour` or display size: MP4-to-Matroska remux drops HDR and pixel-aspect metadata until it does.
